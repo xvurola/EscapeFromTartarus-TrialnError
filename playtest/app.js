@@ -290,6 +290,41 @@
     return [targetTileId];
   }
 
+  function getOppositeAdjacentNeighbor(tileId, cameFromNeighborId) {
+    const nbs = (ADJ_MAP[tileId] || []).filter((id) => id !== "T0");
+    if (!cameFromNeighborId) return (PREV_MAP[tileId] && PREV_MAP[tileId][0]) || nbs[0] || null;
+    const other = nbs.find((id) => id !== cameFromNeighborId);
+    return other || (PREV_MAP[tileId] && PREV_MAP[tileId][0]) || null;
+  }
+
+  function computeConsistentLastTileIdAfterJump(startTileId, destTileId, startLastTileId = null, isBackwardMove = false) {
+    if (!destTileId || !TILE_MAP[destTileId]) return startLastTileId;
+    if (startTileId === destTileId) return startLastTileId;
+    const initDir = isBackwardMove ? -1 : 1;
+    const visited = new Set([`${startTileId}|${startLastTileId || ""}`]);
+    const queue = [[startTileId, startLastTileId, 0]];
+    while (queue.length > 0) {
+      const [curr, prev, dist] = queue.shift();
+      if (dist >= 12) continue;
+      const stepDir = dist === 0 ? initDir : 1;
+      const opts = getNextPlayableOptions(curr, prev, stepDir);
+      for (const opt of opts) {
+        const nid = opt.tileId;
+        if (nid === "T0" || isSplitTile(nid)) continue;
+        const arrivalPrev = opt.viaSplitId || curr;
+        if (nid === destTileId) {
+          return isBackwardMove ? getOppositeAdjacentNeighbor(destTileId, arrivalPrev) : arrivalPrev;
+        }
+        const stKey = `${nid}|${arrivalPrev}`;
+        if (!visited.has(stKey)) {
+          visited.add(stKey);
+          queue.push([nid, arrivalPrev, dist + 1]);
+        }
+      }
+    }
+    return (PREV_MAP[destTileId] && PREV_MAP[destTileId][0]) || startLastTileId;
+  }
+
   // ============================================================================
   // MAIN GAME STATE, ADMIN GATE & DYNAMIC CAMERA STATE
   // ============================================================================
@@ -334,8 +369,12 @@
   let turnReminderFadeTimeoutId = null;
   let lastTrackedTurnTimerKey = null;
   let localTurnKeyStartedAt = 0;
+  let turnThinkingRemainingMs = TURN_TIME_LIMIT_SEC * 1000;
+  let lastTurnTimerTickAt = 0;
   let lastTimerWarnSec = -1;
   let autoEndTurnTimerId = null;
+  let lastRenderedTileModalKey = null;
+  let tileModalAutoCloseTimerId = null;
   let isInitializingMatch = false;
   let seenActivityLogIds = new Set();
   let activeCompendiumFilter = "all";
@@ -353,16 +392,34 @@
 
   function getFullCycleTurns() {
     if (!state) return 16;
-    const rounds = state.rules && state.rules.turnsPerCycle ? state.rules.turnsPerCycle : 4;
+    const totalRounds = state.rules && state.rules.turnsPerCycle ? state.rules.turnsPerCycle : 4;
+    const curRound = state.roundInCycle || 1;
     const playersCount = state.players && state.players.length ? state.players.length : 4;
-    return rounds * playersCount;
+    const curPlayerIdx = typeof state.activePlayerIndex === "number" ? state.activePlayerIndex : 0;
+    const remainingRoundsAfterThis = Math.max(0, totalRounds - curRound);
+    const remainingTurnsThisRound = Math.max(1, playersCount - curPlayerIdx);
+    return remainingRoundsAfterThis * playersCount + remainingTurnsThisRound;
+  }
+
+  function getActiveCycleDurationLabel(copiedTurns = null) {
+    if (copiedTurns) {
+      return copiedTurns === 1 ? "1 Turn" : "1 Ronde";
+    }
+    if (!state) return "1 Cycle";
+    const totalRounds = state.rules && state.rules.turnsPerCycle ? state.rules.turnsPerCycle : 4;
+    const curRound = state.roundInCycle || 1;
+    const roundsLeft = Math.max(1, totalRounds - curRound + 1);
+    return `Cycle ${state.cycle} (${curRound}/${totalRounds} · Sisa ${roundsLeft} Ronde)`;
   }
 
   function addOrRefreshPassive(player, passiveObj) {
     if (!player || !passiveObj) return;
     player.passives = (player.passives || []).filter((p) => p.key !== passiveObj.key);
+    const expiresOnCycleEnd = passiveObj.expiresOnCycleEnd !== undefined ? !!passiveObj.expiresOnCycleEnd : true;
     player.passives.push({
       ...passiveObj,
+      expiresOnCycleEnd,
+      activatedCycle: state ? state.cycle : 1,
       activatedOnTurn: state ? state.totalTurnsCompleted : -1
     });
   }
@@ -1272,8 +1329,8 @@
 
   function createShopState(rules) {
     return {
-      1: { drawStock: rules.drawShopStock, actAgainStock: rules.actAgainStock, playerBuys: {} },
-      2: { drawStock: rules.drawShopStock, actAgainStock: rules.actAgainStock, playerBuys: {} }
+      1: { ultStock: 1, drawStock: rules.drawShopStock, actAgainStock: rules.actAgainStock, playerBuys: {} },
+      2: { ultStock: 1, drawStock: rules.drawShopStock, actAgainStock: rules.actAgainStock, playerBuys: {} }
     };
   }
 
@@ -1379,6 +1436,7 @@
       lastTileEffectReveal: null,
       lastPurchasedShard: null,
       activeMinigame: null,
+      activeTileModal: null,
       turnTimerKey: "tk_init_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
       shops: createShopState(rules),
       winner: null,
@@ -1388,7 +1446,12 @@
     lastShownSkillEventId = null;
     lastShownTileEffectRevealId = null;
     lastTrackedTurnTimerKey = null;
+    lastRenderedTileModalKey = null;
+    clearTimeout(tileModalAutoCloseTimerId);
+    tileModalAutoCloseTimerId = null;
     localTurnKeyStartedAt = Date.now();
+    turnThinkingRemainingMs = TURN_TIME_LIMIT_SEC * 1000;
+    lastTurnTimerTickAt = Date.now();
     lastTimerWarnSec = -1;
     clearTimeout(autoEndTurnTimerId);
     autoEndTurnTimerId = null;
@@ -1588,9 +1651,13 @@
     }
     const removed = [];
     for (let i = 0; i < count; i++) {
-      if (player.hand.length === 0) break;
-      const idx = Math.floor(Math.random() * player.hand.length);
-      const c = player.hand.splice(idx, 1)[0];
+      const eligibleIndices = [];
+      player.hand.forEach((c, idx) => {
+        if (c && c.rarity !== "Ultimate") eligibleIndices.push(idx);
+      });
+      if (eligibleIndices.length === 0) break;
+      const pickIdx = eligibleIndices[Math.floor(Math.random() * eligibleIndices.length)];
+      const c = player.hand.splice(pickIdx, 1)[0];
       player.discard.push(c);
       removed.push(c);
     }
@@ -1987,9 +2054,11 @@
     }
 
     let direction = 1;
+    player.isBackwardMovement = false;
     if (player.reverseNextRoll) {
       direction = -1;
       player.reverseNextRoll = false;
+      player.isBackwardMovement = true;
       addLog(`Mind Deviation: ${player.name} moves BACKWARD ${totalSteps} steps.`);
     }
 
@@ -2192,10 +2261,16 @@
     saveSnapshot();
     playSfx("step");
     applySkillPathPassChecks(player, fromTileId, tileId);
+    const stepDelta = tileStepLabels && tileStepLabels[tileId] ? tileStepLabels[tileId] : "";
+    player.lastTileId = computeConsistentLastTileIdAfterJump(
+      fromTileId,
+      tileId,
+      player.lastTileId,
+      String(stepDelta).startsWith("-")
+    );
     player.tileId = tileId;
     if (player.inSpawn && tileId !== "T0") player.inSpawn = false;
     const destTile = TILE_MAP[tileId];
-    const stepDelta = tileStepLabels && tileStepLabels[tileId] ? tileStepLabels[tileId] : "";
     if (stepDelta) {
       addLog(`[The Stage Is Mine]: ${player.name} pindah ${stepDelta} tile ke [${tileId}: ${destTile.name}] dan mengaktifkan efek block!`);
     } else {
@@ -2685,6 +2760,10 @@
     activeStepsRemaining = 0;
     pendingInteraction = null;
     hoveredBranchTileId = null;
+    if (player && player.isBackwardMovement) {
+      player.lastTileId = getOppositeAdjacentNeighbor(player.tileId, player.lastTileId);
+      player.isBackwardMovement = false;
+    }
     const tile = TILE_MAP[player.tileId];
     if (camera.mode === "follow") {
       focusCameraOnTile(player.tileId);
@@ -2805,7 +2884,7 @@
         if (tile.warpTarget) {
           const dest = tile.warpTarget;
           player.tileId = dest;
-          player.lastTileId = null;
+          player.lastTileId = (PREV_MAP[dest] && PREV_MAP[dest][0]) || null;
           addLog(`Warp Teleporter: ${player.name} teleported to [${dest}].`);
           showEffectSpotlight("Warp Teleporter", `${player.name} -> ${dest}`, "Instant dimensional warp triggered.", null);
           if (camera.mode === "follow") focusCameraOnTile(dest);
@@ -2891,7 +2970,9 @@
   function reshufflePlayerCycleDeck(p) {
     const retained = p.hand.filter((c) => c.retain || c.rarity === "Ultimate");
     const nonRetained = p.hand.filter((c) => !c.retain && c.rarity !== "Ultimate");
-    const fullPool = [...p.deck, ...p.discard, ...nonRetained];
+    const cleanDeck = (p.deck || []).filter((c) => c.rarity !== "Ultimate");
+    const cleanDiscard = (p.discard || []).filter((c) => c.rarity !== "Ultimate");
+    const fullPool = [...cleanDeck, ...cleanDiscard, ...nonRetained];
     p.deck = shuffleArray(fullPool);
     p.discard = [];
     p.hand = [...retained];
@@ -2956,6 +3037,17 @@
     return true;
   }
 
+  function isTurnTimerPausedForAnimation() {
+    if (!state || state.winner || state.activeMinigame) return true;
+    if (isWalkingAnim || isTileEffectAnimating || tileShuffleState) return true;
+    if (diceAnimIntervalId || diceAnimTimeoutId) return true;
+    const diceOv = document.getElementById("dice-roll-overlay");
+    if (diceOv && diceOv.classList.contains("visible")) return true;
+    const skillOv = document.getElementById("skill-dramatic-overlay");
+    if (skillOv && skillOv.classList.contains("visible")) return true;
+    return false;
+  }
+
   function scheduleAutoEndTurnIfReady() {
     clearTimeout(autoEndTurnTimerId);
     autoEndTurnTimerId = null;
@@ -2963,6 +3055,7 @@
     if (isRemoteClient()) return;
     if (state.phaseIndex !== 5) return;
     if (isWalkingAnim || isTileEffectAnimating || tileShuffleState || pendingInteraction) return;
+    if (state.activeTileModal) return;
     if (isInteractiveGameplayModalOpen()) return;
 
     autoEndTurnTimerId = setTimeout(() => {
@@ -2970,6 +3063,7 @@
       if (!state || state.winner || state.activeMinigame || isRemoteClient()) return;
       if (state.phaseIndex !== 5) return;
       if (isWalkingAnim || isTileEffectAnimating || tileShuffleState || pendingInteraction) return;
+      if (state.activeTileModal) return;
       if (isInteractiveGameplayModalOpen()) return;
       endCurrentTurn({ isAuto: true });
     }, 520);
@@ -2977,33 +3071,48 @@
 
   function updateTurnTimerUi() {
     const el = document.getElementById("metric-turn-timer");
+    const now = Date.now();
+    const dt = lastTurnTimerTickAt > 0 ? Math.max(0, Math.min(2000, now - lastTurnTimerTickAt)) : 0;
+    lastTurnTimerTickAt = now;
+
     if (!el) return;
     if (!state || state.winner || state.activeMinigame) {
       el.textContent = "03:00";
       el.classList.remove("is-warning", "is-critical");
       return;
     }
-    const elapsedSec = Math.floor((Date.now() - (localTurnKeyStartedAt || Date.now())) / 1000);
-    const remainingSec = Math.max(0, TURN_TIME_LIMIT_SEC - elapsedSec);
+
+    if (!isTurnTimerPausedForAnimation()) {
+      turnThinkingRemainingMs = Math.max(0, turnThinkingRemainingMs - dt);
+    }
+
+    const remainingSec = Math.max(0, Math.ceil(turnThinkingRemainingMs / 1000));
     el.textContent = formatTurnCountdown(remainingSec);
     el.classList.toggle("is-warning", remainingSec <= 30 && remainingSec > 10);
     el.classList.toggle("is-critical", remainingSec <= 10);
 
-    if (remainingSec <= 10 && remainingSec >= 1 && remainingSec !== lastTimerWarnSec && canLocalPlayerAct()) {
+    if (
+      !isTurnTimerPausedForAnimation() &&
+      remainingSec <= 10 &&
+      remainingSec >= 1 &&
+      remainingSec !== lastTimerWarnSec &&
+      canLocalPlayerAct()
+    ) {
       lastTimerWarnSec = remainingSec;
       playSfx("timer_warn");
     }
 
-    if (remainingSec <= 0 && !isRemoteClient()) {
+    if (turnThinkingRemainingMs <= 0 && !isRemoteClient()) {
       forceExpireCurrentTurn();
     }
   }
 
   function ensureTurnCountdownLoop() {
     if (turnTimerIntervalId) clearInterval(turnTimerIntervalId);
+    lastTurnTimerTickAt = Date.now();
     turnTimerIntervalId = setInterval(() => {
       updateTurnTimerUi();
-    }, 500);
+    }, 250);
   }
 
   function forceExpireCurrentTurn() {
@@ -3013,13 +3122,16 @@
 
     clearTimeout(stepTimerId);
     clearTimeout(autoEndTurnTimerId);
+    clearTimeout(tileModalAutoCloseTimerId);
     autoEndTurnTimerId = null;
+    tileModalAutoCloseTimerId = null;
     clearDiceOverlay();
     cancelTileEffectShuffle(true);
     dismissSkillPopup(true, true);
     isWalkingAnim = false;
     activeStepsRemaining = 0;
     pendingInteraction = null;
+    state.activeTileModal = null;
     hoveredBranchTileId = null;
     if (isInteractiveGameplayModalOpen()) {
       closeModal();
@@ -3046,7 +3158,9 @@
     const player = getActivePlayer();
     if (!opts.forceTimeout && (player.rollsUsedThisTurn || 0) < 1 && state.phaseIndex !== 5) return;
     clearTimeout(autoEndTurnTimerId);
+    clearTimeout(tileModalAutoCloseTimerId);
     autoEndTurnTimerId = null;
+    tileModalAutoCloseTimerId = null;
     saveSnapshot();
     selectedCardUid = null;
     player.skillsUsedThisTurn = 0;
@@ -3057,6 +3171,7 @@
     player.turnTcMultiplier = 1.0;
     player.silencedThisPhase = false;
     pendingInteraction = null;
+    state.activeTileModal = null;
 
     state.players.forEach((other) => {
       if (
@@ -3078,11 +3193,12 @@
       }
     }
 
-    const finishingTurnNum = state.totalTurnsCompleted;
     state.players.forEach((p) => {
       p.passives = p.passives.filter((pas) => {
+        if (pas.expiresOnCycleEnd) {
+          return true;
+        }
         if (typeof pas.remainingTurns === "number") {
-          if (pas.activatedOnTurn === finishingTurnNum) return true;
           pas.remainingTurns--;
           if (pas.remainingTurns <= 0) {
             addLog(`Passive [${pas.name}] milik ${p.name} telah berakhir.`);
@@ -3096,7 +3212,6 @@
 
     state.boardTokens = state.boardTokens.filter((t) => {
       if (typeof t.remainingTurns === "number") {
-        if (t.placedOnTurn === finishingTurnNum) return true;
         t.remainingTurns--;
         return t.remainingTurns > 0;
       }
@@ -3150,13 +3265,30 @@
   }
 
   function completeFullCycle() {
+    const finishedCycle = state.cycle;
     state.cycle++;
     state.roundInCycle = 1;
     state.shops = createShopState(state.rules);
+    state.recentOpponentSkills = [];
+    state.lastOpponentSkillUsed = null;
 
-    // Reshuffle decks only — active Unique Passives & turn-based board traps persist across cycle boundaries
+    // Expire all active Unique / Passive effects on cycle transition & reshuffle decks
     state.players.forEach((p) => {
+      if (Array.isArray(p.passives) && p.passives.length > 0) {
+        p.passives.forEach((pas) => {
+          addLog(`Passive [${pas.name}] milik ${p.name} hangus karena pergantian Cycle (${finishedCycle} -> ${state.cycle}).`);
+        });
+        p.passives = [];
+      }
       reshufflePlayerCycleDeck(p);
+    });
+
+    state.boardTokens = state.boardTokens.filter((t) => {
+      if (typeof t.remainingCycles === "number") {
+        t.remainingCycles--;
+        return t.remainingCycles > 0;
+      }
+      return true;
     });
 
     if (
@@ -3166,7 +3298,7 @@
       spawnRandomShard(false);
     }
 
-    addLog(`CYCLE ${state.cycle} STARTED: Decks reshuffled, 6 cards dealt, Merchant Shops refreshed.`);
+    addLog(`CYCLE ${state.cycle} STARTED: Semua Passive Cycle ${finishedCycle} hangus, Deck dikocok ulang (6 kartu), Merchant Shop di-refresh.`);
   }
 
   function clearDiceOfFateTimers() {
@@ -3925,12 +4057,14 @@
     }
 
     player.hand.splice(cardIdx, 1);
-    player.discard.push(card);
+    if (card.rarity !== "Ultimate") {
+      player.discard.push(card);
+    }
     if (!(isAdminUnlocked && adminFreeSkillUse)) {
       player.skillsUsedThisTurn++;
     }
 
-    if (card.effectKey !== "copy_last_skill") {
+    if (card.effectKey !== "copy_last_skill" && card.rarity !== "Ultimate") {
       state.lastOpponentSkillUsed = card;
       if (!Array.isArray(state.recentOpponentSkills)) state.recentOpponentSkills = [];
       state.recentOpponentSkills.unshift({
@@ -3938,7 +4072,8 @@
         card: JSON.parse(JSON.stringify(card)),
         casterIndex: player.index,
         casterName: player.name,
-        charId: player.charId
+        charId: player.charId,
+        cycle: state.cycle
       });
       if (state.recentOpponentSkills.length > 8) state.recentOpponentSkills.pop();
     }
@@ -4041,7 +4176,16 @@
         const tgt = options.targetPlayerIndex !== undefined ? state.players[options.targetPlayerIndex] : player;
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
           const prevTileId = tgt.tileId;
+          const isBack =
+            String(options.stepDelta || "").startsWith("-") ||
+            Boolean(card.choices && card.choices.length > 0 && card.choices.every((v) => v < 0));
           applySkillPathPassChecks(tgt, prevTileId, options.targetTileId);
+          tgt.lastTileId = computeConsistentLastTileIdAfterJump(
+            prevTileId,
+            options.targetTileId,
+            tgt.lastTileId,
+            isBack
+          );
           tgt.tileId = options.targetTileId;
           if (tgt.inSpawn && options.targetTileId !== "T0") tgt.inSpawn = false;
           const destTile = TILE_MAP[options.targetTileId];
@@ -4068,6 +4212,7 @@
             return msg;
           }
           player.tileId = destTileId;
+          player.lastTileId = (PREV_MAP[destTileId] && PREV_MAP[destTileId][0]) || null;
           if (player.inSpawn && destTileId !== "T0") player.inSpawn = false;
           const destTile = TILE_MAP[destTileId];
           const msg = `${player.name} melompat ke Normal Tile [${destTileId}]!`;
@@ -4081,7 +4226,14 @@
       case "move_self_range": {
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
           const prevTileId = player.tileId;
+          const isBack = String(options.stepDelta || "").startsWith("-");
           applySkillPathPassChecks(player, prevTileId, options.targetTileId);
+          player.lastTileId = computeConsistentLastTileIdAfterJump(
+            prevTileId,
+            options.targetTileId,
+            player.lastTileId,
+            isBack
+          );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
           const destTile = TILE_MAP[options.targetTileId];
@@ -4100,8 +4252,11 @@
       case "swap_position": {
         if (targetPlayer && targetPlayer.index !== player.index) {
           const temp = player.tileId;
+          const tempLast = player.lastTileId;
           player.tileId = targetPlayer.tileId;
+          player.lastTileId = targetPlayer.lastTileId;
           targetPlayer.tileId = temp;
+          targetPlayer.lastTileId = tempLast;
           if (player.inSpawn && player.tileId !== "T0") player.inSpawn = false;
           if (targetPlayer.inSpawn && targetPlayer.tileId !== "T0") targetPlayer.inSpawn = false;
           const msg = `${player.name} (${player.tileId}) bertukar posisi dengan ${targetPlayer.name} (${targetPlayer.tileId})!`;
@@ -4112,14 +4267,16 @@
         return "Tidak ada target bertukar posisi.";
       }
       case "passive_stage_is_mine": {
+        const isCopied = Boolean(options.copiedUniqueDurationTurns);
         const turns = options.copiedUniqueDurationTurns || getFullCycleTurns();
         addOrRefreshPassive(player, {
           key: "passive_stage_is_mine",
           name: "Stage Is Mine",
-          remainingTurns: turns
+          remainingTurns: turns,
+          expiresOnCycleEnd: !isCopied
         });
-        const durLabel = options.copiedUniqueDurationTurns === 1 ? "1 Turn" : "1 Full Cycle";
-        const msg = `Passive The Stage Is Mine aktif (${durLabel})! Mendarat di Normal Tile memberi opsi pindah +1/+2/-1.`;
+        const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
+        const msg = `Passive The Stage Is Mine aktif (${durLabel} — hangus saat ganti Cycle)! Mendarat di Normal Tile memberi opsi pindah +1/+2/-1.`;
         addLog(`Passive Active: [The Stage Is Mine] (${durLabel}).`);
         return msg;
       }
@@ -4138,6 +4295,7 @@
         state.players.forEach((other) => {
           if (other.index !== player.index && !other.inSpawn) {
             other.tileId = destTileId;
+            other.lastTileId = (PREV_MAP[destTileId] && PREV_MAP[destTileId][0]) || null;
             pulledNames.push(other.name);
             resolveDirectTileEffectForPull(other, destTile);
           }
@@ -4202,15 +4360,17 @@
       }
       case "passive_ipc_gems": {
         const mult = card.passiveMultiplier || 1.3;
+        const isCopied = Boolean(options.copiedUniqueDurationTurns);
         const turns = options.copiedUniqueDurationTurns || getFullCycleTurns();
         addOrRefreshPassive(player, {
           key: "passive_ipc_gems",
           name: `IPC Gems (${mult}x)`,
           multiplier: mult,
-          remainingTurns: turns
+          remainingTurns: turns,
+          expiresOnCycleEnd: !isCopied
         });
-        const durLabel = options.copiedUniqueDurationTurns === 1 ? "1 Turn" : "1 Full Cycle";
-        const msg = `IPC Gems aktif (${durLabel}): semua perolehan TC di luar skill card x${mult}!`;
+        const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
+        const msg = `IPC Gems aktif (${durLabel} — hangus saat ganti Cycle): semua perolehan TC di luar skill card x${mult}!`;
         addLog(`Passive Active: [IPC Gems] (${mult}x TC · ${durLabel}).`);
         return msg;
       }
@@ -4249,14 +4409,15 @@
         }
       }
       case "discard_1_or_minus3_steps": {
-        if (targetPlayer.hand.length > 0) {
+        const hasDiscardable = targetPlayer.hand.some((c) => c && c.rarity !== "Ultimate");
+        if (hasDiscardable) {
           const disc = discardRandomCards(targetPlayer, 1);
           const msg = `${targetPlayer.name} membuang 1 kartu [${disc[0]?.name || "Kartu"}]!`;
           addLog(`[Marionette String]: ${msg}`);
           return msg;
         } else {
           targetPlayer.nextRollStepMod -= 3;
-          const msg = `Tangan ${targetPlayer.name} kosong -> -3 langkah pada roll berikutnya!`;
+          const msg = `Tangan ${targetPlayer.name} tidak memiliki kartu non-Ultimate -> -3 langkah pada roll berikutnya!`;
           addLog(`[Marionette String]: ${msg}`);
           return msg;
         }
@@ -4296,8 +4457,9 @@
         state.players.forEach((other) => {
           if (other.index !== player.index && !other.inSpawn) {
             const dist = getTileDistance(player.tileId, other.tileId);
-            if (dist <= rad && other.hand.length > 0) {
-              const count = applyRounding(other.hand.length * 0.5, state.rules);
+            const nonUltCards = other.hand.filter((c) => c && c.rarity !== "Ultimate");
+            if (dist <= rad && nonUltCards.length > 0) {
+              const count = applyRounding(nonUltCards.length * 0.5, state.rules);
               const removed = discardRandomCards(other, count);
               totalDestroyed += removed.length;
               if (removed.length > 0) victims.push(`${other.name} (-${removed.length})`);
@@ -4307,28 +4469,31 @@
         const msg =
           totalDestroyed > 0
             ? `Menghancurkan ${totalDestroyed} kartu (${victims.join(", ")})!`
-            : "Tidak ada lawan ber-kartu di dalam radius 8 blok.";
+            : "Tidak ada lawan ber-kartu non-Ultimate di dalam radius 8 blok.";
         addLog(`[Soul Extraction]: ${msg}`);
         return msg;
       }
       case "passive_unpredictable_tricks": {
+        const isCopied = Boolean(options.copiedUniqueDurationTurns);
         const turns = options.copiedUniqueDurationTurns || getFullCycleTurns();
-        const durLabel = options.copiedUniqueDurationTurns === 1 ? "1 Turn" : "1 Full Cycle";
+        const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
         if (state.compendiumId === "comp_v0_1") {
           addOrRefreshPassive(player, {
             key: "passive_daemonissa_domain",
             name: "Daemonissa's Domain",
-            remainingTurns: turns
+            remainingTurns: turns,
+            expiresOnCycleEnd: !isCopied
           });
           addLog(`Passive Active: [Daemonissa's Domain] (${durLabel}).`);
-          return `Passive Daemonissa's Domain aktif (${durLabel})!`;
+          return `Passive Daemonissa's Domain aktif (${durLabel} — hangus saat ganti Cycle)!`;
         } else {
           addOrRefreshPassive(player, {
             key: "passive_unpredictable_tricks",
             name: "Unpredictable Tricks",
-            remainingTurns: turns
+            remainingTurns: turns,
+            expiresOnCycleEnd: !isCopied
           });
-          const msg = `Unpredictable Tricks aktif (${durLabel}): melewati/dilewati lawan -> lawan buang 1 kartu & beri 5 TC!`;
+          const msg = `Unpredictable Tricks aktif (${durLabel} — hangus saat ganti Cycle): melewati/dilewati lawan -> lawan buang 1 kartu & beri 5 TC!`;
           addLog(`Passive Active: [Unpredictable Tricks] (${durLabel}).`);
           return msg;
         }
@@ -4363,6 +4528,7 @@
           const prevTileId = player.tileId;
           destId = options.targetTileId;
           applySkillPathPassChecks(player, prevTileId, destId);
+          player.lastTileId = computeConsistentLastTileIdAfterJump(prevTileId, destId, player.lastTileId, false);
           player.tileId = destId;
           if (player.inSpawn && destId !== "T0") player.inSpawn = false;
         } else {
@@ -4372,14 +4538,24 @@
         }
         let stealMsg = "";
         const victim = state.players.find(
-          (other) => other.index !== player.index && !other.inSpawn && other.tileId === destId && other.hand.length > 0
+          (other) =>
+            other.index !== player.index &&
+            !other.inSpawn &&
+            other.tileId === destId &&
+            other.hand.some((c) => c && c.rarity !== "Ultimate")
         );
         if (victim && !hasPassive(victim, "passive_immune_steal")) {
-          const idx = Math.floor(Math.random() * victim.hand.length);
-          const stolenCard = victim.hand.splice(idx, 1)[0];
-          if (player.hand.length < state.rules.maxHandSize) player.hand.push(stolenCard);
-          stealMsg = ` & mencuri [${stolenCard.name}] dari ${victim.name}!`;
-          addLog(`[Phantom Thief]: ${player.name} stole [${stolenCard.name}] from ${victim.name}.`);
+          const stealableIndices = [];
+          victim.hand.forEach((c, idx) => {
+            if (c && c.rarity !== "Ultimate") stealableIndices.push(idx);
+          });
+          if (stealableIndices.length > 0) {
+            const pickIdx = stealableIndices[Math.floor(Math.random() * stealableIndices.length)];
+            const stolenCard = victim.hand.splice(pickIdx, 1)[0];
+            if (player.hand.length < state.rules.maxHandSize) player.hand.push(stolenCard);
+            stealMsg = ` & mencuri [${stolenCard.name}] dari ${victim.name}!`;
+            addLog(`[Phantom Thief]: ${player.name} stole [${stolenCard.name}] from ${victim.name}.`);
+          }
         }
         if (TILE_MAP[destId]) {
           resolveExactLandingTile(player, TILE_MAP[destId]);
@@ -4395,7 +4571,12 @@
       }
       case "copy_last_skill": {
         const pool = (state.recentOpponentSkills || []).filter(
-          (e) => e.casterIndex !== player.index && e.card && e.card.effectKey !== "copy_last_skill"
+          (e) =>
+            e.casterIndex !== player.index &&
+            e.card &&
+            e.card.effectKey !== "copy_last_skill" &&
+            e.card.rarity !== "Ultimate" &&
+            (!e.cycle || e.cycle === state.cycle)
         );
         let chosenEntry = null;
         if (options.copiedSkillEntryId) {
@@ -4405,7 +4586,9 @@
 
         const copiedCard = chosenEntry
           ? chosenEntry.card
-          : state.lastOpponentSkillUsed && state.lastOpponentSkillUsed.effectKey !== "copy_last_skill"
+          : state.lastOpponentSkillUsed &&
+            state.lastOpponentSkillUsed.effectKey !== "copy_last_skill" &&
+            state.lastOpponentSkillUsed.rarity !== "Ultimate"
           ? state.lastOpponentSkillUsed
           : null;
 
@@ -4425,14 +4608,16 @@
         }
       }
       case "passive_awaken_arsene": {
+        const isCopied = Boolean(options.copiedUniqueDurationTurns);
         const turns = options.copiedUniqueDurationTurns || getFullCycleTurns();
         addOrRefreshPassive(player, {
           key: "passive_awaken_arsene",
           name: "Awaken, Arsene!",
-          remainingTurns: turns
+          remainingTurns: turns,
+          expiresOnCycleEnd: !isCopied
         });
-        const durLabel = options.copiedUniqueDurationTurns === 1 ? "1 Turn" : "1 Full Cycle";
-        const msg = `Awaken, Arsene! aktif (${durLabel}): mendarat di Event / Versus beri +1 ekstra dadu!`;
+        const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
+        const msg = `Awaken, Arsene! aktif (${durLabel} — hangus saat ganti Cycle): mendarat di Event / Versus beri +1 ekstra dadu!`;
         addLog(`Passive Active: [Awaken, Arsene!] (${durLabel}).`);
         return msg;
       }
@@ -4449,7 +4634,14 @@
       }
       case "choice_move1_2_or_10tc": {
         if (options.choiceValue === "move" && options.targetTileId && TILE_MAP[options.targetTileId]) {
-          applySkillPathPassChecks(player, player.tileId, options.targetTileId);
+          const prevTileId = player.tileId;
+          applySkillPathPassChecks(player, prevTileId, options.targetTileId);
+          player.lastTileId = computeConsistentLastTileIdAfterJump(
+            prevTileId,
+            options.targetTileId,
+            player.lastTileId,
+            false
+          );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
           addLog(`[${card.name}]: ${player.name} moved to [${options.targetTileId}].`);
@@ -4463,7 +4655,12 @@
       }
       case "reactive_negate_target":
       case "haste_negate_skill": {
-        addOrRefreshPassive(player, { key: "shield_negate_once", name: "Counter Shield", remainingTurns: 4 });
+        addOrRefreshPassive(player, {
+          key: "shield_negate_once",
+          name: "Counter Shield",
+          remainingTurns: 4,
+          expiresOnCycleEnd: false
+        });
         addLog(`[${card.name}]: Counter Shield active.`);
         return "Counter Shield aktif!";
       }
@@ -4481,7 +4678,12 @@
         return card.description;
       }
       case "passive_emperor_tax": {
-        addOrRefreshPassive(player, { key: "passive_emperor_tax", name: "Emperor's Tax", remainingTurns: 8 });
+        addOrRefreshPassive(player, {
+          key: "passive_emperor_tax",
+          name: "Emperor's Tax",
+          remainingTurns: 8,
+          expiresOnCycleEnd: false
+        });
         addLog(`Passive Active: [The Emperor's Favor].`);
         return card.description;
       }
@@ -4508,6 +4710,13 @@
       }
       case "ff_move_1_2_normal_bonus": {
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
+          const prevTileId = player.tileId;
+          player.lastTileId = computeConsistentLastTileIdAfterJump(
+            prevTileId,
+            options.targetTileId,
+            player.lastTileId,
+            false
+          );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
           resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
@@ -4564,6 +4773,13 @@
       }
       case "sam_dash_aoe_5tc": {
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
+          const prevTileId = player.tileId;
+          player.lastTileId = computeConsistentLastTileIdAfterJump(
+            prevTileId,
+            options.targetTileId,
+            player.lastTileId,
+            false
+          );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
           resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
@@ -4647,6 +4863,9 @@
       triggerUnpredictableTricksOnTile(player, curr, hitPlayers);
       checkTokensOnStep(player, curr, i === steps - 1);
     }
+    if (direction < 0 && steps > 0) {
+      player.lastTileId = getOppositeAdjacentNeighbor(player.tileId, player.lastTileId);
+    }
     if (resolveLanding && TILE_MAP[curr]) {
       resolveExactLandingTile(player, TILE_MAP[curr]);
     }
@@ -4728,6 +4947,8 @@
     if (!state.activeMinigame && !state.winner && state.turnTimerKey && state.turnTimerKey !== lastTrackedTurnTimerKey) {
       lastTrackedTurnTimerKey = state.turnTimerKey;
       localTurnKeyStartedAt = Date.now();
+      turnThinkingRemainingMs = TURN_TIME_LIMIT_SEC * 1000;
+      lastTurnTimerTickAt = Date.now();
       lastTimerWarnSec = -1;
       triggerTurnStartReminder(getActivePlayer());
     }
@@ -4742,6 +4963,7 @@
     renderPromptBar();
     renderDiceOfFateOverlay();
     renderVictoryScreenOverlay();
+    syncSharedTileModal();
     applyCameraTransform();
     scheduleAutoEndTurnIfReady();
     scheduleMultiplayerBotIfNeeded();
@@ -4888,7 +5110,11 @@
       if (p.silencedThisPhase) chips.push(`<span class="fp-effect-chip debuff">Silenced</span>`);
       p.passives.forEach((pas) => {
         let durStr = "";
-        if (typeof pas.remainingTurns === "number") {
+        if (pas.expiresOnCycleEnd) {
+          const totalR = (state.rules && state.rules.turnsPerCycle) || 4;
+          const roundsLeft = Math.max(1, totalR - (state.roundInCycle || 1) + 1);
+          durStr = ` (${roundsLeft}R)`;
+        } else if (typeof pas.remainingTurns === "number") {
           const playersCnt = Math.max(1, state.players.length || 4);
           durStr = pas.remainingTurns === 1 ? " (1T)" : ` (${Math.max(1, Math.ceil(pas.remainingTurns / playersCnt))}R)`;
         }
@@ -6096,7 +6322,7 @@
             <div><strong>Fractional Rounding:</strong> ${patch.roundingMode === "ceil" ? "Always Round Up (Ceiling Law)" : "Standard Nearest Rounding"}</div>
           </div>
           <div style="background:rgba(0,0,0,0.3);padding:12px;border-radius:10px;font-size:0.8rem;line-height:1.7;">
-            <div><strong>Cycle Deck Reset:</strong> Every ${patch.turnsPerCycle} Rounds (Deal ${patch.startHandSize} cards, Hand Limit ${patch.maxHandSize})</div>
+            <div><strong>Cycle Deck &amp; Passive Reset:</strong> Every ${patch.turnsPerCycle} Rounds (Deal ${patch.startHandSize} cards, Hand Limit ${patch.maxHandSize}, Unique/Passive effects expire on Cycle change)</div>
             <div><strong>Skill Deployment Limit:</strong> Max ${patch.maxSkillsPerTurn} Skill Cards per Turn ${patch.allowHaste ? "(+ [Haste] Reactive Cards)" : ""}</div>
             <div><strong>Merchant Shops:</strong> ${patch.independentShops ? "Independent Shop 1 & Shop 2 stocks" : "Shared Global Shop stock"}</div>
             <div><strong>Minigame Payouts:</strong> 1st: 💰 +30 TC · 2nd: +15 TC · 3rd: +15 TC · 4th: +10 TC</div>
@@ -6583,6 +6809,7 @@
       else if (act.action === "buy_shop") buyShopItem(d.shopId, d.itemType, true);
       else if (act.action === "resolve_versus") resolveVersusDuel(d.oppIdx, d.bet);
       else if (act.action === "execute_trade") executeTradeAction(d.partnerIdx, d.tradeType);
+      else if (act.action === "close_tile_modal") dismissSharedTileModal();
       else if (act.action === "stage_is_mine_choice") resolveStageIsMineChoice(d.tileId);
       else if (act.action === "forced_all_in_choice") resolveForcedAllInChoice(d.choice);
       else if (act.action === "minigame_roll") rollDiceOfFateCurrent();
@@ -6910,7 +7137,7 @@
     if (useRiver && player.tc >= state.rules.riverCost) {
       player.tc -= state.rules.riverCost;
       player.tileId = targetTileId;
-      player.lastTileId = null;
+      player.lastTileId = (PREV_MAP[targetTileId] && PREV_MAP[targetTileId][0]) || null;
       addLog(`${player.name} took River Shortcut to [${targetTileId}] (-${state.rules.riverCost} TC).`);
       if (camera.mode === "follow") focusCameraOnTile(targetTileId);
       finishMovementPhase(player, activateFinalTile);
@@ -6946,8 +7173,10 @@
     const effectiveShopId = state.rules.independentShops ? shopId : 1;
     const shop = state.shops[effectiveShopId];
     if (!shop) return;
-    if (!shop.playerBuys[player.id]) shop.playerBuys[player.id] = { draw: 0, actAgain: 0 };
+    if (shop.ultStock === undefined) shop.ultStock = 1;
+    if (!shop.playerBuys[player.id]) shop.playerBuys[player.id] = { ult: 0, draw: 0, actAgain: 0 };
     const pBuys = shop.playerBuys[player.id];
+    if (pBuys.ult === undefined) pBuys.ult = 0;
     const charDef = getCharacterForCompendium(player.charId, state.compendiumId);
     const ultDef = player.isSamMode && charDef.samUltimate ? charDef.samUltimate : charDef.ultimate;
     const ultCost = (ultDef && ultDef.cost) || charDef.ultCost || state.rules.defaultUltCost;
@@ -6959,8 +7188,12 @@
         alert("Meta-Shard hanya dapat dibeli 1 kali per game.");
         return;
       }
+      if (shop.ultStock <= 0 || pBuys.ult >= 1) {
+        alert("Stok Ultimate Card di Shop ini sudah habis untuk Cycle ini (1/Cycle).");
+        return;
+      }
       if (player.hand.some((c) => c.rarity === "Ultimate")) {
-        alert("You may only hold a maximum of 1 Ultimate Card in hand at any time.");
+        alert("Kamu hanya boleh memegang maksimal 1 Ultimate Card di tangan pada saat yang sama.");
         return;
       }
       if (player.tc < ultCost) {
@@ -6968,6 +7201,8 @@
         return;
       }
       player.tc -= ultCost;
+      shop.ultStock--;
+      pBuys.ult++;
       if (ultDef && ultDef.effectKey === "grant_meta_shard") {
         player.metaShardBought = true;
       }
@@ -7020,9 +7255,10 @@
         return;
       }
       if (pendingInteraction.type === "select_tile_target" && pendingInteraction.validTileIds.includes(tileId)) {
-        const { cardUid, options } = pendingInteraction;
+        const { cardUid, options, tileStepLabels } = pendingInteraction;
+        const stepDelta = tileStepLabels && tileStepLabels[tileId] ? tileStepLabels[tileId] : "";
         pendingInteraction = null;
-        playSkillCardFromHand(cardUid, { ...(options || {}), targetTileId: tileId });
+        playSkillCardFromHand(cardUid, { ...(options || {}), targetTileId: tileId, stepDelta });
         return;
       }
       if (pendingInteraction.type === "stage_is_mine" && pendingInteraction.validTileIds.includes(tileId)) {
@@ -7248,16 +7484,21 @@
 
     if (card.effectKey === "copy_last_skill") {
       const pool = (state.recentOpponentSkills || []).filter(
-        (e) => e.casterIndex !== player.index && e.card && e.card.effectKey !== "copy_last_skill"
+        (e) =>
+          e.casterIndex !== player.index &&
+          e.card &&
+          e.card.effectKey !== "copy_last_skill" &&
+          e.card.rarity !== "Ultimate" &&
+          (!e.cycle || e.cycle === state.cycle)
       );
       if (pool.length === 0) {
-        controlsHtml = `<div style="font-size:0.78rem;color:var(--mint-light);">Belum ada skill lawan tercatat — memakai kartu ini akan memberi +15 TC.</div>`;
+        controlsHtml = `<div style="font-size:0.78rem;color:var(--mint-light);">Belum ada skill lawan non-Ultimate pada Cycle ${state.cycle} — memakai kartu ini akan memberi +15 TC.</div>`;
       } else {
         const firstBuilt = buildSkillControlsForModal(pool[0].card, player);
         missingValidTarget = firstBuilt.missingTarget;
         controlsHtml = `
           <div class="form-field">
-            <label>Pilih Skill Lawan untuk Disalin:</label>
+            <label>Pilih Skill Lawan pada Cycle ${state.cycle} (Non-Ultimate):</label>
             <select id="card-modal-copy-skill" onchange="window.EFT_APP.onCopySkillSelectChange(${player.index})">
               ${pool
                 .map(
@@ -7269,7 +7510,7 @@
           </div>
           <div id="card-modal-copy-extra">
             <div style="font-size:0.74rem;color:var(--mint-light);margin-bottom:6px;">
-              Efek disalin: ${escapeHtml(pool[0].card.description)}${pool[0].card.rarity === "Unique" ? " (Durasi 1 Turn)" : ""}
+              Efek disalin: ${escapeHtml(pool[0].card.description)}${pool[0].card.rarity === "Unique" ? " (Durasi 1 Ronde)" : ""}
             </div>
             ${firstBuilt.html}
           </div>`;
@@ -7472,13 +7713,21 @@
     const player = getActivePlayer();
     const effectiveShopId = state.rules.independentShops ? shopId : 1;
     const shop = state.shops[effectiveShopId];
+    if (shop.ultStock === undefined) shop.ultStock = 1;
     const charDef = getCharacterForCompendium(player.charId, state.compendiumId);
     const ultDef = player.isSamMode && charDef.samUltimate ? charDef.samUltimate : charDef.ultimate;
     const ultCost = (ultDef && ultDef.cost) || charDef.ultCost || state.rules.defaultUltCost;
     const ultImg = getCardImage(ultDef, player.charId);
-    const pBuys = shop.playerBuys[player.id] || { draw: 0, actAgain: 0 };
+    const pBuys = shop.playerBuys[player.id] || { ult: 0, draw: 0, actAgain: 0 };
+    const ultUsedThisCycle = shop.ultStock <= 0 || (pBuys.ult || 0) >= 1;
+    const hasUltInHand = player.hand.some((c) => c.rarity === "Ultimate");
     const metaShardUsed =
       ultDef && ultDef.effectKey === "grant_meta_shard" && (player.metaShardBought || player.metaShard >= 1);
+    const ultDisabled = metaShardUsed || ultUsedThisCycle || hasUltInHand;
+    let ultBtnLabel = `Buy Ultimate (${ultCost} TC)`;
+    if (metaShardUsed) ultBtnLabel = "Sudah Dibeli (Max 1/Game)";
+    else if (ultUsedThisCycle) ultBtnLabel = "Stok Habis (0/1 Cycle Ini)";
+    else if (hasUltInHand) ultBtnLabel = "Sudah Pegang 1 Ultimate di Tangan";
 
     openInfoModal(
       `Merchant Shop ${shopId} — (${player.name}: 💰 ${player.tc} TC)`,
@@ -7496,9 +7745,10 @@
             <div>
               <div style="font-size:0.95rem;font-weight:800;color:var(--accent-gold);">ULTIMATE: ${ultDef.name} (💰 ${ultCost} TC)</div>
               <p style="font-size:0.82rem;color:#f8fafc;margin-top:6px;">${ultDef.description}</p>
+              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">Stock: <strong>${shop.ultStock}/1</strong> · Your Limit: <strong>${pBuys.ult || 0}/1</strong></p>
             </div>
-            <button class="btn btn-gold" ${metaShardUsed ? "disabled" : ""} onclick="window.EFT_APP.buyShopItem(${shopId}, 'ultimate')">
-              ${metaShardUsed ? "Sudah Dibeli (Max 1/Game)" : `Buy Ultimate (${ultCost} TC)`}
+            <button class="btn btn-gold" ${ultDisabled ? "disabled" : ""} onclick="window.EFT_APP.buyShopItem(${shopId}, 'ultimate')">
+              ${ultBtnLabel}
             </button>
           </div>
         </div>
@@ -7518,119 +7768,309 @@
     );
   }
 
+  function dismissSharedTileModal() {
+    if (isRemoteClient()) {
+      sendClientActionToHost("close_tile_modal", {});
+      closeModal();
+      return;
+    }
+    clearTimeout(tileModalAutoCloseTimerId);
+    tileModalAutoCloseTimerId = null;
+    if (state) {
+      state.activeTileModal = null;
+    }
+    lastRenderedTileModalKey = null;
+    closeModal();
+    renderAll();
+    broadcastMultiplayerState();
+  }
+
+  function syncSharedTileModal() {
+    if (!state) return;
+    const tm = state.activeTileModal;
+    const titleEl = document.getElementById("modal-title");
+    const curKind = titleEl && titleEl.dataset ? titleEl.dataset.modalKind || "" : "";
+
+    if (!tm) {
+      if (curKind === "shared_tile_modal") {
+        lastRenderedTileModalKey = null;
+        closeModal();
+      }
+      return;
+    }
+
+    const isActor = canLocalPlayerAct();
+    const renderKey = `${tm.id}_${tm.status}_${isActor ? "act" : "spec"}`;
+    if (lastRenderedTileModalKey === renderKey && document.getElementById("app-modal")?.classList.contains("open")) {
+      return;
+    }
+    lastRenderedTileModalKey = renderKey;
+
+    const actor = state.players[tm.actorIndex] || getActivePlayer();
+
+    if (tm.status === "resolved") {
+      openInfoModal(
+        tm.type === "versus" ? `Hasil Versus Duel — ${escapeHtml(actor.name)}` : `Hasil Trading Post — ${escapeHtml(actor.name)}`,
+        `<div style="display:flex;flex-direction:column;gap:14px;text-align:center;padding:8px 4px;">
+          <div style="background:rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);border-radius:12px;padding:14px;font-size:0.9rem;color:#ecfdf5;line-height:1.45;">
+            ${escapeHtml(tm.summaryText || "Transaksi selesai.")}
+          </div>
+          ${
+            isActor
+              ? `<button class="btn btn-emerald" onclick="window.EFT_APP.dismissSharedTileModal()">Lanjut</button>`
+              : `<div style="font-size:0.75rem;color:var(--text-muted);">Menutup otomatis...</div>`
+          }
+        </div>`,
+        "shared_tile_modal"
+      );
+      return;
+    }
+
+    if (tm.type === "versus") {
+      const rivals = state.players.filter((p) => p.index !== actor.index && !p.inSpawn);
+      if (rivals.length === 0) {
+        if (!isRemoteClient()) {
+          state.activeTileModal = null;
+        }
+        return;
+      }
+      if (isActor) {
+        openInfoModal(
+          `Versus Duel — 1v1 Wager (${escapeHtml(actor.name)})`,
+          `<div style="display:flex;flex-direction:column;gap:12px;">
+            <div class="form-grid">
+              <div class="form-field">
+                <label>Pilih Lawan Duel:</label>
+                <select id="versus-opponent-select">
+                  ${rivals.map((r) => `<option value="${r.index}">${escapeHtml(r.name)} (💰 ${r.tc} TC)</option>`).join("")}
+                </select>
+              </div>
+              <div class="form-field">
+                <label>Jumlah Taruhan (Wager):</label>
+                <select id="versus-bet-select">
+                  ${(state.rules.versusBets || [15, 30])
+                    .map((b) => `<option value="${b}">💰 ${b} TC (Total Pot ${b * 2} TC)</option>`)
+                    .join("")}
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-gold" onclick="window.EFT_APP.resolveVersusDuel()">Mulai Duel 1v1</button>
+          </div>`,
+          "shared_tile_modal"
+        );
+      } else {
+        openInfoModal(
+          `Versus Duel — ${escapeHtml(actor.name)}`,
+          `<div style="display:flex;flex-direction:column;gap:12px;text-align:center;padding:12px 6px;">
+            <div style="background:rgba(249,115,22,0.14);border:1px solid rgba(251,146,60,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ffedd5;line-height:1.45;">
+              <strong>${escapeHtml(actor.name)}</strong> mendarat di <strong>Versus Tile</strong> dan sedang memilih lawan serta jumlah taruhan TC...
+            </div>
+          </div>`,
+          "shared_tile_modal"
+        );
+      }
+    } else if (tm.type === "trading") {
+      const others = state.players.filter((p) => p.index !== actor.index);
+      if (isActor) {
+        openInfoModal(
+          `Trading Post — Barter Kartu (${escapeHtml(actor.name)})`,
+          `<div style="display:flex;flex-direction:column;gap:12px;">
+            <div class="form-grid">
+              <div class="form-field">
+                <label>Pilih Partner Barter:</label>
+                <select id="trade-partner-select">
+                  ${others
+                    .map((o) => {
+                      const nonUltCnt = (o.hand || []).filter((c) => c && c.rarity !== "Ultimate").length;
+                      return `<option value="${o.index}">${escapeHtml(o.name)} (💰 ${o.tc} TC · ${nonUltCnt} Kartu)</option>`;
+                    })
+                    .join("")}
+                </select>
+              </div>
+              <div class="form-field">
+                <label>Jenis Transaksi:</label>
+                <select id="trade-type-select">
+                  <option value="buy_card_15">Beli 1 Kartu Acak (Bayar 💰 15 TC)</option>
+                  <option value="sell_card_15">Jual 1 Kartu Acak (Terima 💰 15 TC)</option>
+                  <option value="swap_random_card">Tukar 1 Kartu Acak (1:1)</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" style="flex:1;" onclick="window.EFT_APP.executeTradeAction()">Konfirmasi Trade</button>
+              <button class="btn" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati</button>
+            </div>
+          </div>`,
+          "shared_tile_modal"
+        );
+      } else {
+        openInfoModal(
+          `Trading Post — ${escapeHtml(actor.name)}`,
+          `<div style="display:flex;flex-direction:column;gap:12px;text-align:center;padding:12px 6px;">
+            <div style="background:rgba(132,204,22,0.14);border:1px solid rgba(163,230,53,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ecfccb;line-height:1.45;">
+              <strong>${escapeHtml(actor.name)}</strong> mendarat di <strong>Trading Post</strong> dan sedang memilih partner serta jenis barter kartu...
+            </div>
+          </div>`,
+          "shared_tile_modal"
+        );
+      }
+    }
+  }
+
   function openVersusModal(challenger) {
     const rivals = state.players.filter((p) => p.index !== challenger.index && !p.inSpawn);
-    if (rivals.length === 0) return;
-
-    openInfoModal(
-      `Versus Duel — 1v1 Wager`,
-      `<div style="display:flex;flex-direction:column;gap:12px;">
-        <div class="form-grid">
-          <div class="form-field">
-            <label>Select Opponent:</label>
-            <select id="versus-opponent-select">
-              ${rivals.map((r) => `<option value="${r.index}">${r.name} (💰 ${r.tc} TC)</option>`).join("")}
-            </select>
-          </div>
-          <div class="form-field">
-            <label>Wager Amount:</label>
-            <select id="versus-bet-select">
-              ${(state.rules.versusBets || [15, 30])
-                .map((b) => `<option value="${b}">💰 ${b} TC (Total Pot ${b * 2} TC)</option>`)
-                .join("")}
-            </select>
-          </div>
-        </div>
-        <button class="btn btn-gold" onclick="window.EFT_APP.resolveVersusDuel()">Start Duel</button>
-      </div>`
-    );
+    if (rivals.length === 0) {
+      addLog(`Versus Tile: Tidak ada lawan di luar Spawn untuk ditantang oleh ${challenger.name}.`);
+      return;
+    }
+    state.activeTileModal = {
+      id: "tm_vs_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      type: "versus",
+      actorIndex: challenger.index,
+      status: "selecting",
+      summaryText: ""
+    };
+    lastRenderedTileModalKey = null;
+    syncSharedTileModal();
+    broadcastMultiplayerState();
   }
 
   function resolveVersusDuel(forcedOppIdx = null, forcedBet = null) {
     if (!canLocalPlayerAct()) return;
-    const oppIdx = forcedOppIdx !== null ? Number(forcedOppIdx) : Number(document.getElementById("versus-opponent-select").value);
-    const bet = forcedBet !== null ? Number(forcedBet) : Number(document.getElementById("versus-bet-select").value);
+    const oppEl = document.getElementById("versus-opponent-select");
+    const betEl = document.getElementById("versus-bet-select");
+    const oppIdx = forcedOppIdx !== null ? Number(forcedOppIdx) : oppEl ? Number(oppEl.value) : -1;
+    const bet = forcedBet !== null ? Number(forcedBet) : betEl ? Number(betEl.value) : 15;
     if (isRemoteClient() && forcedOppIdx === null) {
       sendClientActionToHost("resolve_versus", { oppIdx, bet });
-      closeModal();
       return;
     }
     const challenger = getActivePlayer();
     const opponent = state.players[oppIdx];
     if (!opponent) return;
 
-    const c1 = Math.floor(Math.random() * 13) + 2;
-    const c2 = Math.floor(Math.random() * 13) + 2;
+    const c1 = Math.floor(Math.random() * 12) + 1;
+    const c2 = Math.floor(Math.random() * 12) + 1;
+    let summaryText = "";
     if (c1 >= c2) {
       const taken = Math.min(bet, opponent.tc);
       opponent.tc -= taken;
       const gained = modifyPlayerTC(challenger, taken, "versus");
-      addLog(`Versus: ${challenger.name} defeated ${opponent.name} (+${gained} TC).`);
+      summaryText = `${challenger.name} (Roll ${c1}) mengalahkan ${opponent.name} (Roll ${c2}) & merebut 💰 ${gained} TC!`;
+      addLog(`Versus: ${summaryText}`);
     } else {
       const lost = Math.min(bet, challenger.tc);
       challenger.tc -= lost;
       const gained = modifyPlayerTC(opponent, lost, "versus");
-      addLog(`Versus: ${opponent.name} defeated ${challenger.name} (+${gained} TC).`);
+      summaryText = `${opponent.name} (Roll ${c2}) mengalahkan ${challenger.name} (Roll ${c1}) & memenangkan 💰 ${gained} TC!`;
+      addLog(`Versus: ${summaryText}`);
     }
-    closeModal();
+
+    state.activeTileModal = {
+      id: (state.activeTileModal && state.activeTileModal.id) || ("tm_vs_" + Date.now()),
+      type: "versus",
+      actorIndex: challenger.index,
+      status: "resolved",
+      summaryText
+    };
+    lastRenderedTileModalKey = null;
+    clearTimeout(tileModalAutoCloseTimerId);
+    tileModalAutoCloseTimerId = setTimeout(() => {
+      if (state && state.activeTileModal && state.activeTileModal.status === "resolved") {
+        dismissSharedTileModal();
+      }
+    }, 2600);
     renderAll();
     broadcastMultiplayerState();
   }
 
   function openTradingModal(trader) {
-    const others = state.players.filter((p) => p.index !== trader.index);
-    openInfoModal(
-      `Trading Tile — Player Barter`,
-      `<div style="display:flex;flex-direction:column;gap:12px;">
-        <div class="form-grid">
-          <div class="form-field">
-            <label>Trading Partner:</label>
-            <select id="trade-partner-select">
-              ${others.map((o) => `<option value="${o.index}">${o.name} (💰 ${o.tc} TC · ${o.hand.length} Cards)</option>`).join("")}
-            </select>
-          </div>
-          <div class="form-field">
-            <label>Transaction:</label>
-            <select id="trade-type-select">
-              <option value="buy_card_15">Buy 1 Random Card for 15 TC</option>
-              <option value="sell_card_15">Sell 1 Random Card for 15 TC</option>
-              <option value="swap_random_card">Swap 1 Random Card (1:1)</option>
-            </select>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="window.EFT_APP.executeTradeAction()">Confirm Trade</button>
-      </div>`
-    );
+    state.activeTileModal = {
+      id: "tm_tr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      type: "trading",
+      actorIndex: trader.index,
+      status: "selecting",
+      summaryText: ""
+    };
+    lastRenderedTileModalKey = null;
+    syncSharedTileModal();
+    broadcastMultiplayerState();
   }
 
   function executeTradeAction(forcedPartnerIdx = null, forcedTradeType = null) {
     if (!canLocalPlayerAct()) return;
-    const partnerIdx = forcedPartnerIdx !== null ? Number(forcedPartnerIdx) : Number(document.getElementById("trade-partner-select").value);
-    const tradeType = forcedTradeType !== null ? forcedTradeType : document.getElementById("trade-type-select").value;
+    const partEl = document.getElementById("trade-partner-select");
+    const typeEl = document.getElementById("trade-type-select");
+    const partnerIdx = forcedPartnerIdx !== null ? Number(forcedPartnerIdx) : partEl ? Number(partEl.value) : -1;
+    const tradeType = forcedTradeType !== null ? forcedTradeType : typeEl ? typeEl.value : "swap_random_card";
     if (isRemoteClient() && forcedPartnerIdx === null) {
       sendClientActionToHost("execute_trade", { partnerIdx, tradeType });
-      closeModal();
       return;
     }
     const trader = getActivePlayer();
     const partner = state.players[partnerIdx];
     if (!partner) return;
 
-    if (tradeType === "buy_card_15" && trader.tc >= 15 && partner.hand.length > 0) {
-      trader.tc -= 15;
-      partner.tc += 15;
-      trader.hand.push(partner.hand.pop());
-    } else if (tradeType === "sell_card_15" && partner.tc >= 15 && trader.hand.length > 0) {
-      partner.tc -= 15;
-      trader.tc += 15;
-      partner.hand.push(trader.hand.pop());
-    } else if (tradeType === "swap_random_card" && trader.hand.length > 0 && partner.hand.length > 0) {
-      const c1 = trader.hand.pop();
-      const c2 = partner.hand.pop();
-      trader.hand.push(c2);
-      partner.hand.push(c1);
+    const pickNonUltIdx = (hand) => {
+      const idxs = [];
+      (hand || []).forEach((c, i) => {
+        if (c && c.rarity !== "Ultimate") idxs.push(i);
+      });
+      if (idxs.length === 0) return -1;
+      return idxs[Math.floor(Math.random() * idxs.length)];
+    };
+
+    let summaryText = `${trader.name} melewati Trading Post tanpa transaksi.`;
+    const pCardIdx = pickNonUltIdx(partner.hand);
+    const tCardIdx = pickNonUltIdx(trader.hand);
+
+    if (tradeType === "buy_card_15") {
+      if (trader.tc >= 15 && pCardIdx !== -1) {
+        trader.tc -= 15;
+        partner.tc += 15;
+        const bought = partner.hand.splice(pCardIdx, 1)[0];
+        trader.hand.push(bought);
+        summaryText = `${trader.name} membeli 1 kartu acak dari ${partner.name} seharga 💰 15 TC!`;
+      } else {
+        summaryText = `Trade gagal: TC ${trader.name} kurang dari 15 TC atau ${partner.name} tidak punya kartu non-Ultimate.`;
+      }
+    } else if (tradeType === "sell_card_15") {
+      if (partner.tc >= 15 && tCardIdx !== -1) {
+        partner.tc -= 15;
+        trader.tc += 15;
+        const sold = trader.hand.splice(tCardIdx, 1)[0];
+        partner.hand.push(sold);
+        summaryText = `${trader.name} menjual 1 kartu acak ke ${partner.name} dan menerima 💰 15 TC!`;
+      } else {
+        summaryText = `Trade gagal: TC ${partner.name} kurang dari 15 TC atau ${trader.name} tidak punya kartu non-Ultimate.`;
+      }
+    } else if (tradeType === "swap_random_card") {
+      if (tCardIdx !== -1 && pCardIdx !== -1) {
+        const c1 = trader.hand.splice(tCardIdx, 1)[0];
+        const c2 = partner.hand.splice(pickNonUltIdx(partner.hand), 1)[0];
+        trader.hand.push(c2);
+        partner.hand.push(c1);
+        summaryText = `${trader.name} menukar 1 kartu acak (1:1) dengan ${partner.name}!`;
+      } else {
+        summaryText = `Trade gagal: salah satu pemain tidak memiliki kartu non-Ultimate untuk ditukar.`;
+      }
     }
-    closeModal();
+    addLog(`Trading Post: ${summaryText}`);
+
+    state.activeTileModal = {
+      id: (state.activeTileModal && state.activeTileModal.id) || ("tm_tr_" + Date.now()),
+      type: "trading",
+      actorIndex: trader.index,
+      status: "resolved",
+      summaryText
+    };
+    lastRenderedTileModalKey = null;
+    clearTimeout(tileModalAutoCloseTimerId);
+    tileModalAutoCloseTimerId = setTimeout(() => {
+      if (state && state.activeTileModal && state.activeTileModal.status === "resolved") {
+        dismissSharedTileModal();
+      }
+    }, 2600);
     renderAll();
     broadcastMultiplayerState();
   }
@@ -7936,6 +8376,24 @@
       if (state.activeMinigame) {
         if (state.activeMinigame.status === "rolling") rollDiceOfFateCurrent();
         else finishDiceOfFateMinigame();
+        return;
+      }
+      if (state.activeTileModal) {
+        if (state.activeTileModal.status === "resolved") {
+          dismissSharedTileModal();
+          return;
+        }
+        const actor = state.players[state.activeTileModal.actorIndex] || getActivePlayer();
+        const rivals = state.players.filter((p) => p.index !== actor.index && !p.inSpawn);
+        if (rivals.length === 0) {
+          dismissSharedTileModal();
+          return;
+        }
+        if (state.activeTileModal.type === "versus") {
+          resolveVersusDuel(rivals[0].index, 15);
+        } else if (state.activeTileModal.type === "trading") {
+          dismissSharedTileModal();
+        }
         return;
       }
       if (pendingInteraction) {
@@ -8507,6 +8965,7 @@
     resetGameToMainMenu,
     resolveVersusDuel,
     executeTradeAction,
+    dismissSharedTileModal,
     openAdminModal,
     submitAdminPassword,
     lockAdminMode,

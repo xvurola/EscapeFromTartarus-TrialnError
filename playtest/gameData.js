@@ -237,7 +237,7 @@ window.EFT_DATA = {
             multipliers: [1.25, 1.5, 2.0]
           },
           avt_uq: {
-            description: "Passive: Increase all TC earnings by 1.3x (does not apply to the results of your own skill cards). Duration: 1 Full Cycle.",
+            description: "Passive: Increase all TC earnings by 1.3x (does not apply to the results of your own skill cards). Duration: 1 Cycle (expires on Cycle transition).",
             passiveMultiplier: 1.3
           }
         },
@@ -252,7 +252,7 @@ window.EFT_DATA = {
           },
           lilith_uq: {
             name: "Unpredictable Tricks",
-            description: "Passive: When you pass an opponent or they passed you, they lose 1 random card and must give you 5 TC. Duration: 1 Full Cycle."
+            description: "Passive: When you pass an opponent or they passed you, they lose 1 random card and must give you 5 TC. Duration: 1 Cycle (expires on Cycle transition)."
           },
           lilith_ult: {
             name: "Dreamfall Showdown",
@@ -330,7 +330,7 @@ window.EFT_DATA = {
         { id: "bocchi_uc", name: "Crowd Surfing", rarity: "Uncommon", count: 3, radius: 5, targetType: "normal_tile_in_radius", effectKey: "teleport_normal_radius", description: "Move to any Normal Tile within a 5-block radius.", image: "assets/cards/characters/bocchi/uc.png" },
         { id: "bocchi_r", name: "EADBGE", rarity: "Rare", count: 2, choices: [-8, -6, -4, -2, 2, 4, 6, 8], effectKey: "move_self_range", description: "Move 1-8 blocks forward or backward.", image: "assets/cards/characters/bocchi/r.png" },
         { id: "bocchi_e", name: "Substitute Guitarist", rarity: "Epic", count: 1, activateTile: true, targetType: "other_player", effectKey: "swap_position", description: "[Activate Block Effect] Swap positions with another player.", image: "assets/cards/characters/bocchi/e.png" },
-        { id: "bocchi_uq", name: "The Stage Is Mine", rarity: "Unique", count: 1, effectKey: "passive_stage_is_mine", durationCycles: 1, description: "[Activate Block Effect] Passive: When land on Normal Tiles, choose to move (+1/+2/-1). Duration: 1 Full Cycle.", image: "assets/cards/characters/bocchi/uq.png" }
+        { id: "bocchi_uq", name: "The Stage Is Mine", rarity: "Unique", count: 1, effectKey: "passive_stage_is_mine", durationCycles: 1, description: "[Activate Block Effect] Passive: When land on Normal Tiles, choose to move (+1/+2/-1). Duration: 1 Cycle (expires on Cycle transition).", image: "assets/cards/characters/bocchi/uq.png" }
       ],
       ultimate: {
         id: "bocchi_ult", name: "Bocchi The Rock!", rarity: "Ultimate", cost: 70, retain: true, activateTile: true, targetType: "non_event_tile", effectKey: "pull_all_players", description: "[Retain] Pull all other players to one point and activate tiles effect. (except into global event tiles)", image: "assets/cards/characters/bocchi/ult.png"
@@ -355,7 +355,7 @@ window.EFT_DATA = {
         { id: "avt_uc", name: "The Red or The Black", rarity: "Uncommon", count: 3, effectKey: "turn_tc_multiplier", multipliers: [1.25, 1.5, 2.0], description: "Gain a x1.25 / x1.5 / x2 multiplier on TC earnings for this turn.", image: "assets/cards/characters/aventurine/uc.png" },
         { id: "avt_r", name: "Hand of Midas", rarity: "Rare", count: 2, effectKey: "midas_gold", baseAmounts: [15, 20, 25], multipliers: [0.75, 1.0, 1.5], description: "Gain 15/20/25 TC with a random multiplier of x0.75 / x1 / x1.5.", image: "assets/cards/characters/aventurine/r.png" },
         { id: "avt_e", name: "The House Always Wins", rarity: "Epic", count: 1, effectKey: "tax_all_opponents_15", description: "Take 15 TC from all opponent. If a player cannot pay, they must surrender 1 random card.", image: "assets/cards/characters/aventurine/e.png" },
-        { id: "avt_uq", name: "IPC Gems", rarity: "Unique", count: 1, effectKey: "passive_ipc_gems", passiveMultiplier: 1.3, durationCycles: 1, description: "Passive: Increase all TC earnings by 1.3x (does not apply to the results of your own skill cards). Duration: 1 Full Cycle.", image: "assets/cards/characters/aventurine/uq.png" }
+        { id: "avt_uq", name: "IPC Gems", rarity: "Unique", count: 1, effectKey: "passive_ipc_gems", passiveMultiplier: 1.3, durationCycles: 1, description: "Passive: Increase all TC earnings by 1.3x (does not apply to the results of your own skill cards). Duration: 1 Cycle (expires on Cycle transition).", image: "assets/cards/characters/aventurine/uq.png" }
       ],
       ultimate: {
         id: "avt_ult", name: "Forced All-In", rarity: "Ultimate", cost: 70, retain: true, targetType: "other_player", effectKey: "duel_forced_all_in", description: "[Retain] Duel 1v1 with a bet of 25% of the total of opponent's TC. If you win, you can choose to steal all opponent's TC or 1 Tartarus Shard.", image: "assets/cards/characters/aventurine/ult.png"
@@ -380,7 +380,7 @@ window.EFT_DATA = {
         { id: "lilith_uc", name: "Punishing Virus", rarity: "Uncommon", count: 3, radius: 4, targetType: "normal_tile_in_radius", effectKey: "place_trap_virus", description: "Place a trap on a Normal Tile (4-block radius). Opponents who land or pass it lose 1 dice on their next dice roll. (Trap lasted for 1 cycle)", image: "assets/cards/characters/lilith/uc.png" },
         { id: "lilith_r", name: "Mind Deviation", rarity: "Rare", count: 2, targetType: "any_player", effectKey: "debuff_reverse_move", description: "Target 1 player. The target must move backward according to their dice result in the first dice roll of their next turn.", image: "assets/cards/characters/lilith/r.png" },
         { id: "lilith_e", name: "Soul Extraction", rarity: "Epic", count: 1, radius: 8, targetType: "opponents_in_radius_aoe", effectKey: "destroy_half_hand_radius", description: "Destroy 50% of the cards in the hands of all opponents within a 8-block radius instantly.", image: "assets/cards/characters/lilith/e.png" },
-        { id: "lilith_uq", name: "Unpredictable Tricks", rarity: "Unique", count: 1, effectKey: "passive_unpredictable_tricks", durationCycles: 1, description: "Passive: When you pass an opponent or they passed you, they lose 1 random card and must give you 5 TC. Duration: 1 Full Cycle.", image: "assets/cards/characters/lilith/uq.png" }
+        { id: "lilith_uq", name: "Unpredictable Tricks", rarity: "Unique", count: 1, effectKey: "passive_unpredictable_tricks", durationCycles: 1, description: "Passive: When you pass an opponent or they passed you, they lose 1 random card and must give you 5 TC. Duration: 1 Cycle (expires on Cycle transition).", image: "assets/cards/characters/lilith/uq.png" }
       ],
       ultimate: {
         id: "lilith_ult", name: "Dreamfall Showdown", rarity: "Ultimate", cost: 70, retain: true, targetType: "any_player", effectKey: "skip_target_turn_buff_self", description: "[Retain] Target 1 player, skips their next full turn. Lilith gains +1 extra phase and +1 skill use.", image: "assets/cards/characters/lilith/ult.png"
@@ -405,7 +405,7 @@ window.EFT_DATA = {
         { id: "joker_uc", name: "Phantom Thief", rarity: "Uncommon", count: 3, choices: [1, 2, 3, 4, 5, 6], effectKey: "dash_1_6_steal_card", description: "Move 1-6 blocks. If you land on an opponent's tile, steal 1 random card from them.", image: "assets/cards/characters/joker/uc.png" },
         { id: "joker_r", name: "All-Out Attack", rarity: "Rare", count: 2, radius: 6, targetType: "any_player_in_radius", effectKey: "aoa_15tc_silence", description: "Target in a 6-block radius loses 15 TC and is forbidden from using Skill Cards for 1 Phase.", image: "assets/cards/characters/joker/r.png" },
         { id: "joker_e", name: "Will of Rebellion", rarity: "Epic", count: 1, effectKey: "copy_last_skill", description: "Choose and copy the effect of an opponent's skill card used within this turn. (When copying an unique card, the effect only last for 1 turn)", image: "assets/cards/characters/joker/e.png" },
-        { id: "joker_uq", name: "Awaken, Arsene!", rarity: "Unique", count: 1, effectKey: "passive_awaken_arsene", durationCycles: 1, description: "Passive: Each time you land on an Event or Versus tile, gain +1 extra dice roll for your next Phase. Duration: 1 Full Cycle.", image: "assets/cards/characters/joker/uq.png" }
+        { id: "joker_uq", name: "Awaken, Arsene!", rarity: "Unique", count: 1, effectKey: "passive_awaken_arsene", durationCycles: 1, description: "Passive: Each time you land on an Event or Versus tile, gain +1 extra dice roll for your next Phase. Duration: 1 Cycle (expires on Cycle transition).", image: "assets/cards/characters/joker/uq.png" }
       ],
       ultimate: {
         id: "joker_ult", name: "Meta-Shard", rarity: "Ultimate", cost: 70, retain: true, effectKey: "grant_meta_shard", description: "[Retain] Purchase 1 permanent Meta-Shard that cannot be stolen, seized, or destroyed by opponents. (Can only be bought once per game)", image: "assets/cards/characters/joker/ult.png"
