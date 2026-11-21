@@ -6239,10 +6239,46 @@
     renderCompendiumView();
   }
 
+  function buildCompendiumCardDetailHtml(selectedCard, ch) {
+    if (!selectedCard || !ch) return "";
+    return `
+      <div class="comp-exp-card-detail">
+        <img class="comp-exp-detail-thumb" src="${getCardImage(selectedCard, ch.id)}" alt="${escapeHtml(selectedCard.name)}" />
+        <div class="comp-exp-detail-body">
+          <div class="comp-exp-detail-top">
+            <span class="comp-exp-detail-name">${escapeHtml(selectedCard.name)}</span>
+            <span class="comp-exp-detail-rarity">${escapeHtml(selectedCard.rarity)}</span>
+          </div>
+          <div class="comp-exp-detail-meta">
+            ${
+              selectedCard.count
+                ? `Jumlah di Deck: ${selectedCard.count}x`
+                : `Ultimate Shop: 💰 ${selectedCard.cost || ch.ultCost || 70} TC · [Retain]`
+            }
+          </div>
+          <div class="comp-exp-detail-desc">${escapeHtml(selectedCard.description)}</div>
+        </div>
+      </div>`;
+  }
+
   function selectCompendiumSkillCard(cardId) {
     playSfx("click");
     selectedCompendiumCardId = cardId;
-    renderCompendiumView();
+    const detailSlot = document.getElementById("comp-exp-card-detail-slot");
+    if (!detailSlot || !selectedCompendiumCharId) {
+      renderCompendiumView();
+      return;
+    }
+    const compId = state ? state.compendiumId : "comp_beta1";
+    const ch = getCharacterForCompendium(selectedCompendiumCharId, compId);
+    const allCards = [...ch.cards, ...(ch.ultimate ? [ch.ultimate] : [])];
+    const selectedCard = allCards.find((c) => c.id === cardId) || allCards[0];
+    if (!selectedCard) return;
+
+    document.querySelectorAll(".comp-exp-card-tile[data-card-id]").forEach((el) => {
+      el.classList.toggle("selected", el.dataset.cardId === selectedCard.id);
+    });
+    detailSlot.innerHTML = buildCompendiumCardDetailHtml(selectedCard, ch);
   }
 
   function updateCompendiumScrollControls() {
@@ -6357,6 +6393,7 @@
         const isUlt = c.rarity === "Ultimate";
         return `
           <div class="comp-exp-card-tile ${isSel ? "selected" : ""} ${isUlt ? "is-ult" : ""}"
+               data-card-id="${escapeHtml(c.id)}"
                onclick="window.EFT_APP.selectCompendiumSkillCard('${c.id}')"
                title="${escapeHtml(c.name)}">
             <img src="${getCardImage(c, ch.id)}" alt="${escapeHtml(c.name)}" loading="lazy" decoding="async" />
@@ -6364,26 +6401,7 @@
       })
       .join("");
 
-    const selectedDetailHtml = selectedCard
-      ? `
-        <div class="comp-exp-card-detail">
-          <img class="comp-exp-detail-thumb" src="${getCardImage(selectedCard, ch.id)}" alt="${escapeHtml(selectedCard.name)}" />
-          <div class="comp-exp-detail-body">
-            <div class="comp-exp-detail-top">
-              <span class="comp-exp-detail-name">${escapeHtml(selectedCard.name)}</span>
-              <span class="comp-exp-detail-rarity">${escapeHtml(selectedCard.rarity)}</span>
-            </div>
-            <div class="comp-exp-detail-meta">
-              ${
-                selectedCard.count
-                  ? `Jumlah di Deck: ${selectedCard.count}x`
-                  : `Ultimate Shop: 💰 ${selectedCard.cost || ch.ultCost || 70} TC · [Retain]`
-              }
-            </div>
-            <div class="comp-exp-detail-desc">${escapeHtml(selectedCard.description)}</div>
-          </div>
-        </div>`
-      : "";
+    const selectedDetailHtml = `<div id="comp-exp-card-detail-slot">${buildCompendiumCardDetailHtml(selectedCard, ch)}</div>`;
 
     root.innerHTML = `
       <div class="comp-expanded-panel" style="--char-accent:${escapeHtml(ch.color || "#34d399")};--char-rgb:${escapeHtml(rgb)};">
@@ -7410,7 +7428,7 @@
 
     if (effectMeta) {
       sections.push(`
-        <div style="background:rgba(0,0,0,0.34);border:1px solid ${effectMeta.accent}66;border-left:4px solid ${effectMeta.accent};padding:12px 14px;border-radius:10px;">
+        <div style="background:rgba(0,0,0,0.34);border:1px solid rgba(255,255,255,0.14);padding:12px 14px;border-radius:10px;">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
             <strong style="color:#ffffff;font-size:0.95rem;">${escapeHtml(effectMeta.title)}</strong>
             <span class="tag-badge" style="border-color:${effectMeta.accent};color:#f8fafc;">${escapeHtml(effectMeta.badge)}</span>

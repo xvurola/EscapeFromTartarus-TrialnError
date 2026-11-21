@@ -1006,7 +1006,7 @@ body {
   padding: 8px 12px;
   border-radius: 10px;
   background: rgba(2, 9, 13, 0.72);
-  border-left: 3px solid var(--skill-accent);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: #fef08a;
   font-size: 0.88rem;
   font-weight: 700;
@@ -4219,19 +4219,6 @@ body.admin-mode .digital-tile {
   display: grid;
   grid-template-columns: minmax(290px, 34%) 1fr;
   overflow: hidden;
-  transform-origin: left center;
-  animation: compExpandIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-@keyframes compExpandIn {
-  from {
-    opacity: 0;
-    transform: scaleX(0.45);
-  }
-  to {
-    opacity: 1;
-    transform: scaleX(1);
-  }
 }
 
 .comp-exp-portrait-col {
@@ -4335,8 +4322,7 @@ body.admin-mode .digital-tile {
 
 .comp-exp-specialty-box {
   background: rgba(4, 12, 16, 0.62);
-  border: 1px solid rgba(var(--char-rgb), 0.34);
-  border-left: 3.5px solid var(--char-accent);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   padding: 10px 14px;
   display: flex;
@@ -4381,28 +4367,25 @@ body.admin-mode .digital-tile {
 .comp-exp-card-tile {
   border-radius: 11px;
   overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.16);
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
   background: #071116;
   cursor: pointer;
   position: relative;
   aspect-ratio: 7 / 10;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .comp-exp-card-tile:hover {
-  transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.65);
+  border-color: rgba(255, 255, 255, 0.55);
 }
 
 .comp-exp-card-tile.selected {
-  transform: translateY(-5px) scale(1.03);
-  border-color: var(--char-accent);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.75), 0 0 18px rgba(var(--char-rgb), 0.5);
+  border: 2px solid var(--char-accent);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65);
 }
 
 .comp-exp-card-tile.is-ult.selected {
   border-color: #fbbf24;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.8), 0 0 20px rgba(251, 191, 36, 0.55);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.72);
 }
 
 .comp-exp-card-tile img {
@@ -4414,7 +4397,7 @@ body.admin-mode .digital-tile {
 
 .comp-exp-card-detail {
   background: rgba(5, 14, 19, 0.82);
-  border: 1.5px solid rgba(var(--char-rgb), 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
   padding: 16px 20px;
   display: grid;
@@ -4487,7 +4470,7 @@ body.admin-mode .digital-tile {
   padding: 5px 8px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.35);
-  border-left: 2.5px solid var(--mint-border);
+  border: 1px solid rgba(173, 224, 202, 0.14);
   line-height: 1.35;
 }
 
