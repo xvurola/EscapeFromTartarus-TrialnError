@@ -8732,7 +8732,10 @@
 
   function openInfoModal(title, bodyHtml, modalKind = "") {
     const modalCard = document.getElementById("app-modal-card");
-    if (modalCard) modalCard.classList.remove("card-detail-modal");
+    if (modalCard) {
+      modalCard.classList.remove("card-detail-modal");
+      modalCard.classList.toggle("welcome-lobby-modal", modalKind === "welcome_lobby");
+    }
     const titleEl = document.getElementById("modal-title");
     titleEl.innerHTML = title;
     titleEl.dataset.modalKind = modalKind;
@@ -8742,7 +8745,10 @@
 
   function openCardDetailModal(bodyHtml) {
     const modalCard = document.getElementById("app-modal-card");
-    if (modalCard) modalCard.classList.add("card-detail-modal");
+    if (modalCard) {
+      modalCard.classList.remove("welcome-lobby-modal");
+      modalCard.classList.add("card-detail-modal");
+    }
     const titleEl = document.getElementById("modal-title");
     titleEl.innerHTML = "";
     titleEl.dataset.modalKind = "card_detail";
@@ -8752,7 +8758,9 @@
 
   function closeModal() {
     const modalCard = document.getElementById("app-modal-card");
-    if (modalCard) modalCard.classList.remove("card-detail-modal");
+    if (modalCard) {
+      modalCard.classList.remove("card-detail-modal", "welcome-lobby-modal");
+    }
     const titleEl = document.getElementById("modal-title");
     const curKind = titleEl && titleEl.dataset ? titleEl.dataset.modalKind || "" : "";
     if (curKind === "shared_tile_modal" && state && state.activeTileModal && state.activeTileModal.status === "selecting") {
@@ -8960,8 +8968,8 @@
         .join("");
 
       openInfoModal(
-        `Multiplayer Lobby — Room [${escapeHtml(mp.roomCode)}]`,
-        `<div style="display:flex;flex-direction:column;gap:12px;">
+        `Escape From Tartarus — Room [${escapeHtml(mp.roomCode)}]`,
+        `<div class="setup-modal-stack">
           <div class="panel-box" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <div>
               <div style="font-size:0.72rem;color:var(--text-muted);">Mode: <strong>${mp.mode.toUpperCase()}</strong></div>
@@ -8973,11 +8981,11 @@
             </div>
           </div>
 
-          <div style="font-size:0.78rem;color:#cbd5e1;">
-            Pilih Karakter Kamu (otomatis terkunci jika sudah diambil pemain lain):
-          </div>
-          <div class="char-picker-grid">
-            ${renderSetupCharPickerGrid(compId, me ? me.charId : setupDraft.charId, takenMap)}
+          <div class="setup-char-box">
+            <div class="setup-char-box-label">Pilih Karakter Kamu (otomatis terkunci jika sudah diambil pemain lain):</div>
+            <div class="char-picker-grid">
+              ${renderSetupCharPickerGrid(compId, me ? me.charId : setupDraft.charId, takenMap)}
+            </div>
           </div>
 
           <div class="panel-box" style="display:flex;flex-direction:column;gap:8px;">
@@ -8987,13 +8995,12 @@
 
           ${
             isHost
-              ? `<div class="form-grid">${patchSelectHtml}${compSelectHtml}</div>
-                 <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#cbd5e1;cursor:pointer;">
+              ? `<label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#cbd5e1;cursor:pointer;">
                    <input type="checkbox" ${mp.lobby.fillWithBots ? "checked" : ""} onchange="window.EFT_APP.toggleLobbyFillBots(this.checked)" />
                    Isi slot kosong dengan Bot hingga 4 pemain (urutan tetap diacak)
                  </label>
-                 <button class="btn btn-emerald" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">Acak Urutan &amp; Mulai Game</button>`
-              : `<button class="btn ${me && me.ready ? "btn-gold" : "btn-emerald"}" onclick="window.EFT_APP.toggleLobbyReady()">${
+                 <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">Acak Urutan &amp; Mulai Game</button>`
+              : `<button class="btn ${me && me.ready ? "btn-gold" : "btn-emerald"} setup-action-btn" onclick="window.EFT_APP.toggleLobbyReady()">${
                   me && me.ready ? "Batalkan Ready" : "Siap (Ready)"
                 }</button>
                  <div style="font-size:0.74rem;color:var(--text-muted);text-align:center;">Menunggu Host memulai game &amp; mengacak urutan pemain...</div>`
@@ -9005,7 +9012,6 @@
     }
 
     const allowedChars = playableIds.map((cid) => getCharacterForCompendium(cid, compId));
-    const fbReady = typeof window.EFT_IS_FIREBASE_READY === "function" && window.EFT_IS_FIREBASE_READY();
 
     let tabBodyHtml = "";
     if (setupDraft.tab === "local") {
@@ -9035,71 +9041,57 @@
       }
 
       tabBodyHtml = `
-        <div class="form-grid">
-          ${patchSelectHtml}
-          ${compSelectHtml}
-        </div>
-        <div class="form-field">
-          <label>Jumlah Pemain:</label>
-          <select onchange="window.EFT_APP.updateSetupDraft('playerCount', this.value)">
-            <option value="2" ${setupDraft.playerCount === 2 ? "selected" : ""}>2 Pemain</option>
-            <option value="3" ${setupDraft.playerCount === 3 ? "selected" : ""}>3 Pemain</option>
-            <option value="4" ${setupDraft.playerCount === 4 ? "selected" : ""}>4 Pemain (Standar)</option>
-          </select>
-        </div>
-        ${extraRows}
-        <button class="btn btn-emerald" onclick="window.EFT_APP.startLocalRandomizedMatch()">Acak Urutan &amp; Mulai Match</button>`;
+        <div class="panel-box setup-bottom-panel">
+          <div class="panel-header" style="margin-bottom:4px;">Pengaturan Match Lokal / Solo</div>
+          <div class="form-field">
+            <label>Jumlah Pemain:</label>
+            <select onchange="window.EFT_APP.updateSetupDraft('playerCount', this.value)">
+              <option value="2" ${setupDraft.playerCount === 2 ? "selected" : ""}>2 Pemain</option>
+              <option value="3" ${setupDraft.playerCount === 3 ? "selected" : ""}>3 Pemain</option>
+              <option value="4" ${setupDraft.playerCount === 4 ? "selected" : ""}>4 Pemain (Standar)</option>
+            </select>
+          </div>
+          ${extraRows}
+          <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startLocalRandomizedMatch()">Acak Urutan &amp; Mulai Match</button>
+        </div>`;
     } else {
       tabBodyHtml = `
-        <div class="form-grid">${patchSelectHtml}${compSelectHtml}</div>
-        <div class="grid-2col">
-          <div class="panel-box" style="display:flex;flex-direction:column;gap:8px;">
+        <div class="grid-2col setup-mp-cards">
+          <div class="panel-box setup-bottom-panel">
             <div class="panel-header" style="margin-bottom:2px;">Buat Room (Host)</div>
-            <p style="font-size:0.72rem;color:var(--text-muted);line-height:1.4;">
+            <p style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin:0 0 4px;">
               Buat room online untuk bermain bersama teman di luar LAN, atau gunakan WiFi LAN / Multi-Tab untuk tes lokal.
             </p>
-            <button class="btn btn-emerald" onclick="window.EFT_APP.createLobbyRoom('firebase')">Buat Room</button>
-            <button class="btn btn-sm" onclick="window.EFT_APP.createLobbyRoom('lan')">Buat Room WiFi LAN / Multi-Tab</button>
+            <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.createLobbyRoom('firebase')">Buat Room</button>
+            <button class="btn btn-sm setup-sub-btn" onclick="window.EFT_APP.createLobbyRoom('lan')">Buat Room WiFi LAN / Multi-Tab</button>
           </div>
-          <div class="panel-box" style="display:flex;flex-direction:column;gap:8px;">
+          <div class="panel-box setup-bottom-panel">
             <div class="panel-header" style="margin-bottom:2px;">Gabung Room</div>
             <div class="form-field">
               <label>Kode Room:</label>
               <input type="text" id="setup-join-code" placeholder="EFT456 / LAN123" value="${escapeHtml(mp.roomCode)}" style="text-transform:uppercase;font-weight:800;" />
             </div>
-            <button class="btn btn-gold" onclick="window.EFT_APP.joinLobbyRoom('firebase')">Gabung Room</button>
-            <button class="btn btn-sm" onclick="window.EFT_APP.joinLobbyRoom('lan')">Gabung WiFi LAN / Multi-Tab</button>
+            <button class="btn btn-gold setup-action-btn" onclick="window.EFT_APP.joinLobbyRoom('firebase')">Gabung Room</button>
+            <button class="btn btn-sm setup-sub-btn" onclick="window.EFT_APP.joinLobbyRoom('lan')">Gabung WiFi LAN / Multi-Tab</button>
           </div>
-        </div>
-        <details style="background:rgba(0,0,0,0.28);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
-          <summary style="cursor:pointer;font-size:0.76rem;font-weight:700;color:var(--mint-light);">
-            Quick Test: Paste Konfigurasi Firebase Sementara
-          </summary>
-          <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
-            <textarea id="fb-quick-config-input" rows="3" placeholder='Paste firebaseConfig = { apiKey: "...", databaseURL: "https://...", ... }' style="width:100%;background:#091318;color:#f1f5f9;border:1px solid var(--border-soft);border-radius:8px;padding:8px;font-size:0.74rem;font-family:monospace;"></textarea>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-primary btn-sm" onclick="window.EFT_APP.saveQuickFirebaseConfig()">Simpan &amp; Tes Firebase</button>
-              <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.clearQuickFirebaseConfig()">Hapus Config</button>
-            </div>
-          </div>
-        </details>`;
+        </div>`;
     }
 
     openInfoModal(
-      "Escape From Tartarus — Setup Pemain",
-      `<div style="display:flex;flex-direction:column;gap:12px;">
-        <div class="lobby-tabs">
-          <button class="lobby-tab-btn ${setupDraft.tab === "local" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('local')">Main Lokal / Solo</button>
-          <button class="lobby-tab-btn ${setupDraft.tab === "multiplayer" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('multiplayer')">Multiplayer Room</button>
+      "Escape From Tartarus",
+      `<div class="setup-modal-stack">
+        <div class="setup-mode-pills">
+          <button type="button" class="setup-mode-pill-btn ${setupDraft.tab === "local" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('local')">Main Lokal / Solo</button>
+          <button type="button" class="setup-mode-pill-btn ${setupDraft.tab === "multiplayer" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('multiplayer')">Multiplayer</button>
         </div>
 
-        <div class="form-field">
-          <label>Username Kamu (Ditampilkan di Board &amp; Turn Order):</label>
-          <input type="text" id="setup-username-input" maxlength="18" placeholder="Masukkan username kamu..." value="${escapeHtml(setupDraft.username)}" oninput="window.EFT_APP.updateSetupDraft('username', this.value)" />
+        <div class="setup-username-inline">
+          <label class="setup-username-label" for="setup-username-input">Username:</label>
+          <input type="text" id="setup-username-input" class="setup-username-pill-input" maxlength="18" placeholder="" value="${escapeHtml(setupDraft.username)}" oninput="window.EFT_APP.updateSetupDraft('username', this.value)" />
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          <div style="font-size:0.74rem;color:var(--text-muted);font-weight:700;">Pilih Karakter Kamu:</div>
+        <div class="setup-char-box">
+          <div class="setup-char-box-label">Pilih Karakter Kamu:</div>
           <div class="char-picker-grid">
             ${renderSetupCharPickerGrid(compId, setupDraft.charId, {})}
           </div>
