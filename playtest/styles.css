@@ -4803,19 +4803,48 @@ body.admin-mode .digital-tile {
 }
 
 .char-pick-card.unavailable {
-  opacity: 0.36;
-  filter: grayscale(0.85);
+  opacity: 0.62;
   cursor: not-allowed;
   pointer-events: none;
   border-style: dashed;
-  border-color: rgba(148, 163, 184, 0.25);
+  border-color: rgba(148, 163, 184, 0.34);
 }
 
 .char-pick-thumb {
-  height: 78px;
+  height: 102px;
   position: relative;
   overflow: hidden;
-  background: #061415;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.06) 0%, #061415 80%);
+}
+
+.char-pick-menu-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 16%;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+.char-pick-menu-img.is-tease {
+  filter: grayscale(0.52) brightness(0.72) contrast(1.06);
+}
+
+.char-pick-tease-tag {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(5, 13, 18, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #e2e8f0;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  pointer-events: none;
 }
 
 .char-pick-info {

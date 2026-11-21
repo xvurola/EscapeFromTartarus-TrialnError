@@ -8807,19 +8807,21 @@
     const activeCards = playableIds.map((cid) => {
       const ch = getCharacterForCompendium(cid, compId);
       const charBase = DATA.CHARACTERS[cid] || {};
+      const menuSrc = charBase.menuPortrait || null;
       const pt = charBase.portrait || null;
       const takenBy = takenMap[cid] || "";
       const isTaken = !!takenBy;
       const isSel = !isTaken && selectedCharId === cid;
-      const thumbHtml =
-        pt && pt.src
-          ? `<img class="ph-portrait-img" src="${pt.src}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
-          : `<div class="ph-portrait-fallback" style="background:radial-gradient(circle at 50% 42%, ${ch.color}55 0%, #07191a 82%);"><div class="ph-fallback-icon" style="fill:${ch.color};">${getCharacterSvgIcon(cid)}</div></div>`;
+      const thumbHtml = menuSrc
+        ? `<img class="char-pick-menu-img" src="${menuSrc}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" />`
+        : pt && pt.src
+        ? `<img class="ph-portrait-img" src="${pt.src}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
+        : `<div class="ph-portrait-fallback" style="background:radial-gradient(circle at 50% 42%, ${ch.color}55 0%, #07191a 82%);"><div class="ph-fallback-icon" style="fill:${ch.color};">${getCharacterSvgIcon(cid)}</div></div>`;
       const clickAttr = isTaken ? "" : `onclick="window.EFT_APP.selectSetupChar('${cid}')"`;
 
       return `
       <div class="char-pick-card ${isSel ? "selected" : ""} ${isTaken ? "taken" : ""}" ${clickAttr}>
-        <div class="char-pick-thumb">${thumbHtml}</div>
+        <div class="char-pick-thumb" style="--char-glow:${escapeHtml(ch.color || "#34d399")};">${thumbHtml}</div>
         <div class="char-pick-info">
           <div class="char-pick-name">${escapeHtml(ch.name)}</div>
           <div class="char-pick-role">${isTaken ? "Dipilih: " + escapeHtml(takenBy) : escapeHtml(ch.title)}</div>
@@ -8829,12 +8831,16 @@
 
     const lockedCards = unavailableIds.map((cid) => {
       const ch = DATA.CHARACTERS[cid];
+      const teaseImg = ch.menuPortrait
+        ? `<img class="char-pick-menu-img is-tease" src="${ch.menuPortrait}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" />
+           <span class="char-pick-tease-tag">Coming Soon</span>`
+        : `<div class="ph-portrait-fallback" style="background:radial-gradient(circle at 50% 42%, rgba(148,163,184,0.22) 0%, #071214 82%);">
+             <div class="ph-fallback-icon" style="fill:#64748b;">${getCharacterSvgIcon(cid)}</div>
+           </div>`;
       return `
-      <div class="char-pick-card unavailable" title="${escapeHtml(ch.name)} — Saat ini belum tersedia">
-        <div class="char-pick-thumb">
-          <div class="ph-portrait-fallback" style="background:radial-gradient(circle at 50% 42%, rgba(148,163,184,0.22) 0%, #071214 82%);">
-            <div class="ph-fallback-icon" style="fill:#64748b;">${getCharacterSvgIcon(cid)}</div>
-          </div>
+      <div class="char-pick-card unavailable" title="${escapeHtml(ch.name)} — Coming Soon (Unavailable)">
+        <div class="char-pick-thumb" style="--char-glow:${escapeHtml(ch.color || "#64748b")};">
+          ${teaseImg}
         </div>
         <div class="char-pick-info">
           <div class="char-pick-name">${escapeHtml(ch.name)}</div>
