@@ -10,7 +10,7 @@
 // Catatan: Anda juga bisa menempelkan (paste) konfigurasi Firebase langsung di
 // menu "Multiplayer Room" pada website untuk mengetes cepat sebelum mengedit file ini.
 
-const firebaseConfig = {
+window.EFT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyBigu5CGrztdZLEyQA86a42nhMT5PUR4mQ",
   authDomain: "eft-trialnerror.firebaseapp.com",
   databaseURL: "https://eft-trialnerror-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -25,7 +25,7 @@ window.EFT_FB_RUNTIME_KEY = "EFT_FB_RUNTIME_CONFIG";
 
 window.EFT_GET_FIREBASE_CONFIG = function () {
   // 1. Cek jika file firebaseConfig.js sudah diisi oleh pemilik repo
-  const fileCfg = window.EFT_FIREBASE_CONFIG;
+  const fileCfg = window.EFT_FIREBASE_CONFIG || (typeof firebaseConfig !== "undefined" ? firebaseConfig : null);
   if (
     fileCfg &&
     typeof fileCfg.databaseURL === "string" &&
