@@ -1,0 +1,40 @@
+# ============================================================================
+# ARSIP DESAIN & FILE LOKAL (TIDAK DI-UPLOAD KE GITHUB / GITHUB PAGES)
+# File .psd, .docx, .pdf dan folder mentah tetap aman di komputer Anda,
+# sedangkan GitHub hanya menerima file website ringan (index.html, playtest/, assets/).
+# ============================================================================
+
+# File sumber berat (>100 MB limit GitHub) & dokumen kerja
+*.psd
+*.psb
+*.pdf
+*.docx
+~$*.docx
+
+# Folder arsip desain mentah & print
+Board Card/
+Character/
+Map/
+Turns/
+Changes/
+TempPSDs/
+.card-use/
+.character-cut-out/
+.chibi-character/
+Source
+menu
+A3 TARTARUS*
+Artboard 1.png
+.EFT Palette.png
+
+# Tool lokal & folder build sementara
+hosting-ready/
+tools/
+*.bat
+server.py
+build_hosting.py
+sync_web_assets.py
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

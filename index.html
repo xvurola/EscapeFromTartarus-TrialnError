@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Escape From Tartarus</title>
+  <link rel="stylesheet" href="playtest/styles.css" />
+  <!-- Firebase Realtime Database SDK (Primary Online Multiplayer & Future Minigames) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js" defer></script>
+  <!-- PeerJS Fallback -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
+</head>
+<body>
+  <!-- TOP BAR -->
+  <header class="studio-topbar">
+    <div class="brand-title">Escape From Tartarus</div>
+
+    <nav class="center-nav-pills">
+      <button class="nav-oval-pill active" data-tab="simulator" onclick="window.EFT_APP.switchTab('simulator')">
+        Play Arena
+      </button>
+      <button class="nav-oval-pill" data-tab="compendium" onclick="window.EFT_APP.switchTab('compendium')">
+        Character Compedium
+      </button>
+      <button class="nav-oval-pill" data-tab="rules" onclick="window.EFT_APP.switchTab('rules')">
+        Rules
+      </button>
+    </nav>
+
+    <div class="topbar-right">
+      <div id="sound-control-pill" class="sound-control-pill" title="Kontrol Sound Effect &amp; Voice Line">
+        <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Matikan atau aktifkan suara">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          </svg>
+        </button>
+        <input id="sound-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="45" aria-label="Volume Sound Effect" oninput="window.EFT_APP.setSoundVolume(this.value)" />
+        <span id="sound-volume-label" class="sound-volume-label">45%</span>
+        <button id="btn-voice-popover" class="sound-voice-btn" type="button" onclick="window.EFT_APP.toggleAudioMixerPopover()" title="Pengaturan Voice Line &amp; SFX Karakter" aria-label="Pengaturan Voice Line">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </button>
+        <div id="audio-mixer-popover" class="audio-mixer-popover" onclick="event.stopPropagation()">
+          <div class="am-title">Audio &amp; Character Voice</div>
+          <label class="am-toggle-row">
+            <span>Voice Line Karakter</span>
+            <input id="voice-enabled-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleVoiceLines(this.checked)" />
+          </label>
+          <div class="am-slider-row">
+            <span>Volume Voice</span>
+            <input id="voice-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="65" oninput="window.EFT_APP.setVoiceVolume(this.value)" />
+            <span id="voice-volume-label" class="sound-volume-label">65%</span>
+          </div>
+          <div class="am-test-label">Tes SFX &amp; Voice Karakter:</div>
+          <div class="am-test-grid">
+            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.previewCharacterAudio('bocchi')">Bocchi</button>
+            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.previewCharacterAudio('aventurine')">Aventurine</button>
+            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.previewCharacterAudio('joker')">Joker</button>
+            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.previewCharacterAudio('lilith')">Lilith</button>
+          </div>
+        </div>
+      </div>
+      <button class="top-btn top-btn-green" onclick="window.EFT_APP.openMultiplayerModal()">
+        Multiplayer Room
+      </button>
+      <button class="top-btn top-btn-blue" onclick="window.EFT_APP.openNewMatchSetupModal()">
+        New Match
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       VIEW 1: PLAY ARENA
+       ======================================================================== -->
+  <main id="view-simulator" class="view-container active">
+    <div class="arena-stage">
+      <!-- TOP-RIGHT GAME STATUS CARD (CYCLE, TURN, PHASE, CARD USE, SHARD ZONES) -->
+      <div class="hud-top-right-status">
+        <div class="status-info-card">
+          <div class="status-cycle-row">
+            <span class="status-cycle-main">Cycle <span id="metric-cycle">1</span></span>
+            <span class="status-cycle-sub">(<span id="metric-round">1 / 4</span>)</span>
+          </div>
+          <div class="status-divider"></div>
+          <div class="status-meta-grid">
+            <span>Turn : <strong id="turn-player-label">Bocchi</strong></span>
+            <span>Phase: <strong id="phase-name-label">Main Phase 1</strong></span>
+          </div>
+          <div class="status-card-use-row">
+            Card Use : <span id="metric-card-use">0 / 2</span>
+          </div>
+        </div>
+        <div id="shard-zones-pill" class="shard-zones-pill" title="Active Tartarus Shard Zones">
+          Shard Zones: <span id="metric-shards">- / - / -</span>
+        </div>
+        <div id="world-event-pill-slot" class="world-event-pill-slot"></div>
+        <div id="recent-activity-feed" class="recent-activity-feed" aria-live="polite"></div>
+      </div>
+
+      <!-- TOP-CENTER LIVE STEP / BRANCH NOTICE & EFFECT SPOTLIGHT -->
+      <div class="hud-top-center-float">
+        <div id="step-status-banner" class="step-status-banner"></div>
+        <div id="board-card-toast" class="effect-spotlight-banner"></div>
+      </div>
+
+      <!-- DICE ROLL NUMBER ANIMATION OVERLAY -->
+      <div id="dice-roll-overlay" class="dice-roll-overlay"></div>
+
+      <!-- DRAMATIC SKILL ACTIVATION CUT-IN OVERLAY -->
+      <div id="skill-dramatic-overlay" class="skill-dramatic-overlay" onclick="window.EFT_APP.dismissSkillPopup()"></div>
+
+      <!-- TILE EFFECT CARD SHUFFLE & REVEAL OVERLAY -->
+      <div id="tile-effect-shuffle-overlay" class="tile-effect-shuffle-overlay" onclick="window.EFT_APP.onTileEffectOverlayClick()"></div>
+
+      <!-- DICE OF FATE MINIGAME FULL-STAGE OVERLAY -->
+      <div id="dice-of-fate-overlay" class="dice-of-fate-overlay"></div>
+
+      <!-- PLAYER LIST HUD (ACTIVE HIGHLIGHTED, FACE-CROPPED PORTRAITS) -->
+      <div id="hud-players-list" class="hud-players-list"></div>
+
+      <!-- BOTTOM-LEFT UTILITY & CAMERA CONTROLS -->
+      <div class="hud-bottom-left-utils">
+        <button id="btn-cam-follow" class="util-pill-btn active-cam" onclick="window.EFT_APP.setCameraMode('follow')">
+          Focus Player
+        </button>
+        <button id="btn-cam-wide" class="util-pill-btn" onclick="window.EFT_APP.setCameraMode('wide')">
+          Wide Map
+        </button>
+        <button class="util-pill-btn" onclick="window.EFT_APP.toggleDrawer('drawer-log')">Log</button>
+        <button class="util-pill-btn" onclick="window.EFT_APP.toggleBoardRenderMode()">Print View</button>
+        <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1)">Shop</button>
+        <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
+        <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.undoLastAction()">Undo</button>
+        <button id="btn-admin-mode" class="util-pill-btn" onclick="window.EFT_APP.openAdminModal()">Admin</button>
+      </div>
+
+      <!-- COLLAPSIBLE DRAWER 1: EVENT LOG -->
+      <aside id="drawer-log" class="floating-drawer">
+        <div class="panel-header">
+          <span>Match Log</span>
+          <button class="btn btn-sm" onclick="window.EFT_APP.toggleDrawer('drawer-log')">Close</button>
+        </div>
+        <div id="action-log-feed" class="log-feed"></div>
+      </aside>
+
+      <!-- COLLAPSIBLE DRAWER 2: ADMIN PLAYTEST TOOLS -->
+      <aside id="drawer-sandbox" class="floating-drawer">
+        <div class="panel-header">
+          <span>Admin Playtest Controls</span>
+          <button class="btn btn-sm" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Close</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.3);border:1px solid var(--border-soft);border-radius:8px;padding:7px 10px;font-size:0.74rem;">
+          <span>Free Skill Use (Bypass Limit/Phase)</span>
+          <input type="checkbox" id="admin-free-skill-toggle" onchange="window.EFT_APP.toggleAdminFreeSkill(this.checked)" />
+        </div>
+        <div class="form-field">
+          <label>Force Dice Steps:</label>
+          <select id="sandbox-force-dice" onchange="if(this.value){window.EFT_APP.rollMovementDice(Number(this.value));this.value='';}">
+            <option value="">-- Select Fixed Roll --</option>
+            <option value="1">1 Step</option>
+            <option value="2">2 Steps</option>
+            <option value="3">3 Steps</option>
+            <option value="4">4 Steps</option>
+            <option value="5">5 Steps</option>
+            <option value="6">6 Steps</option>
+            <option value="7">7 Steps</option>
+            <option value="8">8 Steps</option>
+            <option value="9">9 Steps</option>
+            <option value="10">10 Steps</option>
+            <option value="11">11 Steps</option>
+            <option value="12">12 Steps</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.sandboxDrawCard(null)">+1 Card (Active)</button>
+          <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.sandboxRemoveCard(null)">-1 Card (Active)</button>
+          <button class="btn btn-primary btn-sm" onclick="window.EFT_APP.runSmartBotTurn()">Bot Step</button>
+          <button class="btn btn-primary btn-sm" onclick="window.EFT_APP.runAutoBotRound()">Auto 1 Round</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualShardSpawn()">Spawn Shard</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualMinigame()">Run Minigame</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.triggerRandomGlobalEvent()">Draw World Event</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.openMerchantModal(2)">Open Shop 2</button>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.lockAdminMode()">Lock Admin Mode</button>
+      </aside>
+
+      <!-- INTERACTIVE DRAGGABLE & ZOOMABLE BOARD VIEWPORT -->
+      <div id="board-viewport" class="board-viewport">
+        <div id="map-canvas-wrap" class="digital-board-surface">
+          <img id="map-bg-image" class="board-print-img" src="assets/maps/board_v2.png" loading="lazy" decoding="async" alt="Board Map" />
+          <svg id="map-svg-overlay" class="board-connections-svg" viewBox="0 0 2970 1998"></svg>
+          <div id="map-nodes-layer" style="position:absolute;inset:0;width:100%;height:100%;"></div>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE PROMPT BAR (Branch Choice / Buy Shard / River / Target Tile) -->
+      <div id="action-prompt-bar" class="action-prompt-bar"></div>
+
+      <!-- BOTTOM TUCKED CARD HAND + ROLL / END TURN DOCK -->
+      <div class="bottom-hand-stage">
+        <div id="hand-cards-scroll" class="tucked-cards-fan"></div>
+
+        <div class="roll-action-dock">
+          <div id="last-roll-readout" class="last-roll-readout"></div>
+          <button id="btn-roll-dice" class="eft-roll-btn" onclick="window.EFT_APP.handleRollButton()">
+            <span class="eft-roll-title">Roll</span>
+            <span id="roll-counter-label" class="eft-roll-count">0/2</span>
+          </button>
+          <button id="btn-end-turn" class="eft-endturn-btn" onclick="window.EFT_APP.handleEndTurnButton()" disabled>
+            End Turn
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================
+       VIEW 2: CHARACTER COMPENDIUM
+       ======================================================================== -->
+  <section id="view-compendium" class="view-container">
+    <div class="compendium-stage">
+      <div id="compendium-showcase-root" class="compendium-showcase-root"></div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       VIEW 3: RULES
+       ======================================================================== -->
+  <section id="view-rules" class="view-container">
+    <div class="workspace-page">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span>Official Rulebook &amp; Patch Selector</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:0.74rem;color:var(--text-muted);text-transform:none;">Active Rulebook Patch:</span>
+            <select id="rules-patch-select" class="btn" onchange="window.EFT_APP.changeRulesPatch(this.value)">
+              <option value="alpha2">Patch Alpha 2 (3 Shards / 3 Cycles, [Haste])</option>
+              <option value="alpha1_2">Patch Alpha 1.2 (Fractional Rounding Law, 9 Events)</option>
+              <option value="alpha1_1">Patch Alpha 1.1 (2x d6 System, Independent Shops)</option>
+              <option value="v0_1">Version 0.1 (1x d12 per Phase, Shared Global Shop)</option>
+            </select>
+          </div>
+        </div>
+        <div id="rules-patch-details"></div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span>Board Effect &amp; Global Event Registry (19 Cards)</span>
+        </div>
+        <div id="rules-board-cards-grid" class="compendium-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODAL OVERLAY -->
+  <div id="app-modal" class="modal-backdrop" onclick="if(event.target===this)window.EFT_APP.closeModal()">
+    <div id="app-modal-card" class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title" style="color:#f8fafc;font-size:1rem;">Modal Title</h3>
+        <button class="btn btn-sm" onclick="window.EFT_APP.closeModal()">Close</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="playtest/firebaseConfig.js"></script>
+  <script src="playtest/gameData.js"></script>
+  <script src="playtest/app.js"></script>
+</body>
+</html>
