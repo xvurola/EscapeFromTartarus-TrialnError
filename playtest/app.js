@@ -374,8 +374,14 @@
   let lastTimerWarnSec = -1;
   let autoEndTurnTimerId = null;
   let lastRenderedTileModalKey = null;
+  let tileModalMinimizedForId = null;
   let tileModalAutoCloseTimerId = null;
+  let lastShownDiceRollEventId = null;
+  let lastShownDofRollEventId = null;
   let isInitializingMatch = false;
+  let isMatchStarted = false;
+  let isTitleScreenVisible = true;
+  let hasPreloadedAssets = false;
   let seenActivityLogIds = new Set();
   let activeCompendiumFilter = "all";
   let selectedCompendiumCharId = null;
@@ -1433,6 +1439,7 @@
       lastOpponentSkillUsed: null,
       recentOpponentSkills: [],
       lastSkillEvent: null,
+      lastDiceRollEvent: null,
       lastTileEffectReveal: null,
       lastPurchasedShard: null,
       activeMinigame: null,
@@ -1444,9 +1451,12 @@
     };
 
     lastShownSkillEventId = null;
+    lastShownDiceRollEventId = null;
+    lastShownDofRollEventId = null;
     lastShownTileEffectRevealId = null;
     lastTrackedTurnTimerKey = null;
     lastRenderedTileModalKey = null;
+    tileModalMinimizedForId = null;
     clearTimeout(tileModalAutoCloseTimerId);
     tileModalAutoCloseTimerId = null;
     localTurnKeyStartedAt = Date.now();
@@ -1795,8 +1805,126 @@
       vOv.classList.remove("visible");
       vOv.innerHTML = "";
     }
+    showMainTitleScreen();
     initGame("alpha2", "comp_beta1", ["bocchi", "aventurine", "lilith", "joker"]);
+  }
+
+  function showMainTitleScreen() {
+    isTitleScreenVisible = true;
+    isMatchStarted = false;
+    const screen = document.getElementById("main-title-screen");
+    const loadingSec = document.getElementById("mts-loading-section");
+    const menuSec = document.getElementById("mts-menu-section");
+    if (screen) screen.classList.remove("is-hidden");
+    if (hasPreloadedAssets) {
+      if (loadingSec) loadingSec.classList.add("is-hidden");
+      if (menuSec) menuSec.classList.remove("is-hidden");
+    }
+  }
+
+  function hideMainTitleScreen() {
+    isTitleScreenVisible = false;
+    isMatchStarted = true;
+    const screen = document.getElementById("main-title-screen");
+    if (screen) screen.classList.add("is-hidden");
+  }
+
+  function openTitleSingleplayer() {
+    playSfx("click");
     openWelcomeSetupModal("local");
+  }
+
+  function openTitleMultiplayer() {
+    playSfx("click");
+    openWelcomeSetupModal("multiplayer");
+  }
+
+  function collectAllPreloadAssetUrls() {
+    const urls = new Set(["assets/maps/board_v2.png"]);
+    if (DATA && DATA.CHARACTERS) {
+      Object.values(DATA.CHARACTERS).forEach((ch) => {
+        if (!ch) return;
+        if (ch.portrait && ch.portrait.src) urls.add(ch.portrait.src);
+        if (ch.compPortrait && ch.compPortrait.src) urls.add(ch.compPortrait.src);
+        if (ch.chibi) urls.add(ch.chibi);
+        if (Array.isArray(ch.cards)) {
+          ch.cards.forEach((c) => {
+            if (c && c.image) urls.add(c.image);
+          });
+        }
+        if (ch.ultimate && ch.ultimate.image) urls.add(ch.ultimate.image);
+      });
+    }
+    if (DATA && DATA.BOARD_CARDS) {
+      ["positive", "negative", "globalEvents"].forEach((groupKey) => {
+        const list = DATA.BOARD_CARDS[groupKey];
+        if (Array.isArray(list)) {
+          list.forEach((c) => {
+            if (c && c.image) urls.add(c.image);
+          });
+        }
+      });
+    }
+    return Array.from(urls);
+  }
+
+  function runInitialAssetPreload(onComplete) {
+    const fillEl = document.getElementById("mts-progress-fill");
+    const trackEl = fillEl ? fillEl.parentElement : null;
+    const loadingSec = document.getElementById("mts-loading-section");
+    const menuSec = document.getElementById("mts-menu-section");
+
+    const urls = collectAllPreloadAssetUrls();
+    const total = Math.max(1, urls.length);
+    let loadedCount = 0;
+    let displayPct = 4;
+    const startTime = Date.now();
+    const minDurationMs = 1350;
+
+    const setBarPct = (pct) => {
+      const clamped = Math.max(4, Math.min(100, Math.round(pct)));
+      if (fillEl) fillEl.style.width = `${clamped}%`;
+      if (trackEl) trackEl.setAttribute("aria-valuenow", String(clamped));
+    };
+
+    setBarPct(4);
+
+    urls.forEach((url) => {
+      const img = new Image();
+      const markDone = () => {
+        loadedCount++;
+      };
+      img.onload = () => {
+        if (typeof img.decode === "function") {
+          img.decode().then(markDone).catch(markDone);
+        } else {
+          markDone();
+        }
+      };
+      img.onerror = markDone;
+      img.src = url;
+    });
+
+    const tickInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const timeProgress = Math.min(1, elapsed / minDurationMs);
+      const assetProgress = loadedCount / total;
+      const effectiveProgress = Math.min(timeProgress, assetProgress);
+      const targetPct = Math.max(displayPct, Math.round(effectiveProgress * 100));
+      displayPct = targetPct;
+      setBarPct(displayPct);
+
+      if ((loadedCount >= total && elapsed >= minDurationMs) || elapsed >= 6500) {
+        clearInterval(tickInterval);
+        setBarPct(100);
+        setTimeout(() => {
+          hasPreloadedAssets = true;
+          if (loadingSec) loadingSec.classList.add("is-hidden");
+          if (menuSec) menuSec.classList.remove("is-hidden");
+          if (typeof onComplete === "function") onComplete();
+        }, 260);
+      }
+    }, 45);
   }
 
   // ============================================================================
@@ -2064,6 +2192,18 @@
 
     state.lastDiceRoll = rolls;
     state.lastDiceTotal = totalSteps * direction;
+    const rollEventId = "dr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+    state.lastDiceRollEvent = {
+      id: rollEventId,
+      playerName: player.name,
+      rolls,
+      rawTotal,
+      totalSteps,
+      direction,
+      sides,
+      isForced: forcedTotal !== null
+    };
+    lastShownDiceRollEventId = rollEventId;
 
     addLog(
       `${player.name} rolled [${rolls.join(" + ")}] -> Moving ${direction === -1 ? "backward " : ""}${totalSteps} steps.`
@@ -2074,6 +2214,7 @@
     camera.mode = "follow";
     focusCameraOnTile(player.tileId, Math.max(camera.zoom, isMobilePortrait() ? 0.72 : 0.96));
     renderAll();
+    broadcastMultiplayerState();
 
     playDiceRollAnimation(
       { player, rolls, rawTotal, totalSteps, direction, sides, isForced: forcedTotal !== null },
@@ -2988,7 +3129,7 @@
   }
 
   function triggerTurnStartReminder(player) {
-    if (!player || !state || isInitializingMatch) return;
+    if (!player || !state || isInitializingMatch || !isMatchStarted || isTitleScreenVisible) return;
     const banner = document.getElementById("turn-reminder-banner");
     const isMyMultiplayerTurn = mp.mode !== "local" && mp.mySeat !== -1 && mp.mySeat === player.index;
     const isLocalTurn = mp.mode === "local" || mp.mySeat === -1;
@@ -3038,6 +3179,7 @@
   }
 
   function isTurnTimerPausedForAnimation() {
+    if (!isMatchStarted || isTitleScreenVisible) return true;
     if (!state || state.winner || state.activeMinigame) return true;
     if (isWalkingAnim || isTileEffectAnimating || tileShuffleState) return true;
     if (diceAnimIntervalId || diceAnimTimeoutId) return true;
@@ -3051,6 +3193,7 @@
   function scheduleAutoEndTurnIfReady() {
     clearTimeout(autoEndTurnTimerId);
     autoEndTurnTimerId = null;
+    if (!isMatchStarted || isTitleScreenVisible) return;
     if (!state || state.winner || state.activeMinigame) return;
     if (isRemoteClient()) return;
     if (state.phaseIndex !== 5) return;
@@ -3416,15 +3559,24 @@
       e.justLanded = false;
     });
 
-    const d1 = Math.floor(Math.random() * 6) + 1;
-    const d2 = Math.floor(Math.random() * 6) + 1;
-    const total = d1 + d2;
-    const tieBreak = Math.floor(Math.random() * 6) + 1;
+    const d1 = Math.floor(Math.random() * 20) + 1;
+    const d2 = null;
+    const total = d1;
+    const tieBreak = Math.floor(Math.random() * 20) + 1;
+    const dofRollId = "dofr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+    mg.animatingEntryIndex = idx;
+    mg.lastRollEvent = {
+      id: dofRollId,
+      entryIndex: idx,
+      targetVal: total
+    };
+    lastShownDofRollEventId = dofRollId;
 
     renderDiceOfFateOverlay();
+    broadcastMultiplayerState();
 
     let ticks = 0;
-    const maxTicks = 8;
+    const maxTicks = 9;
     const numEl = document.getElementById(`dof-num-${idx}`);
     if (numEl) {
       numEl.classList.remove("is-pending", "is-landed");
@@ -3444,7 +3596,7 @@
         if (ticks % 2 === 1) playSfx("dice_tick");
         const el = document.getElementById(`dof-num-${idx}`);
         if (el) {
-          el.textContent = String(Math.floor(Math.random() * 11) + 2);
+          el.textContent = String(Math.floor(Math.random() * 20) + 1);
         }
         return;
       }
@@ -3460,6 +3612,7 @@
       entry.tieBreak = tieBreak;
       entry.justLanded = true;
       mg.isAnimatingRoll = false;
+      mg.animatingEntryIndex = -1;
       mg.currentOrderPos++;
 
       playSfx("dice_land");
@@ -3472,6 +3625,40 @@
         scheduleDiceOfFateBotIfNeeded();
       }
     }, 65);
+  }
+
+  function playRemoteDiceOfFateRollAnim(rollEv) {
+    if (!rollEv || typeof rollEv.entryIndex !== "number") return;
+    const idx = rollEv.entryIndex;
+    const targetVal = rollEv.targetVal;
+    let ticks = 0;
+    const maxTicks = 8;
+    const numEl = document.getElementById(`dof-num-${idx}`);
+    if (numEl) {
+      numEl.classList.remove("is-pending", "is-landed");
+      numEl.classList.add("is-rolling");
+    }
+    playSfx("dice_tick");
+    clearInterval(dofRollAnimInterval);
+    dofRollAnimInterval = setInterval(() => {
+      ticks++;
+      const el = document.getElementById(`dof-num-${idx}`);
+      if (ticks < maxTicks) {
+        if (ticks % 2 === 1) playSfx("dice_tick");
+        if (el) {
+          el.textContent = String(Math.floor(Math.random() * 20) + 1);
+        }
+        return;
+      }
+      clearInterval(dofRollAnimInterval);
+      dofRollAnimInterval = null;
+      if (el) {
+        el.classList.remove("is-rolling", "is-pending");
+        el.classList.add("is-landed");
+        el.textContent = String(targetVal);
+      }
+      playSfx("dice_land");
+    }, 60);
   }
 
   function evaluateDiceOfFateRound() {
@@ -3689,7 +3876,13 @@
             <div class="dof-roll-display">
               <span class="dof-roll-label">Roll :</span>
               <span id="dof-num-${idx}" class="dof-roll-num ${numCls}">${numText}</span>
-              ${hasRolled ? `<span class="dof-dice-breakdown">[${entry.d1} + ${entry.d2}]</span>` : ""}
+              ${
+                hasRolled
+                  ? `<span class="dof-dice-breakdown">${
+                      entry.d2 !== null && entry.d2 !== undefined ? `[${entry.d1} + ${entry.d2}]` : `[1d20]`
+                    }</span>`
+                  : ""
+              }
             </div>
             <div class="dof-action-col">${rightHtml}</div>
           </div>`;
@@ -3716,6 +3909,11 @@
       </div>`;
 
     overlay.classList.add("visible");
+
+    if (mg.lastRollEvent && mg.lastRollEvent.id && mg.lastRollEvent.id !== lastShownDofRollEventId) {
+      lastShownDofRollEventId = mg.lastRollEvent.id;
+      playRemoteDiceOfFateRollAnim(mg.lastRollEvent);
+    }
   }
 
   function runClashOfFateMinigame(reasonTitle = "Dice of Fate") {
@@ -4911,6 +5109,26 @@
 
   function renderAll() {
     if (!state) return;
+    if (
+      state.lastDiceRollEvent &&
+      state.lastDiceRollEvent.id &&
+      state.lastDiceRollEvent.id !== lastShownDiceRollEventId
+    ) {
+      lastShownDiceRollEventId = state.lastDiceRollEvent.id;
+      const ev = state.lastDiceRollEvent;
+      playDiceRollAnimation(
+        {
+          player: { name: ev.playerName || getActivePlayer().name },
+          rolls: Array.isArray(ev.rolls) && ev.rolls.length > 0 ? ev.rolls : [1],
+          rawTotal: ev.rawTotal || 1,
+          totalSteps: ev.totalSteps || 1,
+          direction: ev.direction || 1,
+          sides: ev.sides || 6,
+          isForced: !!ev.isForced
+        },
+        () => {}
+      );
+    }
     if (state.lastSkillEvent && state.lastSkillEvent.id && state.lastSkillEvent.id !== lastShownSkillEventId) {
       lastShownSkillEventId = state.lastSkillEvent.id;
       showDramaticSkillPopup(state.lastSkillEvent);
@@ -5850,6 +6068,7 @@
     const canRoll =
       (state.phaseIndex === 1 || state.phaseIndex === 3) &&
       !pendingInteraction &&
+      !state.activeTileModal &&
       !state.winner &&
       !isWalkingAnim &&
       !isTileEffectAnimating &&
@@ -5861,6 +6080,7 @@
     const canEndTurn =
       (usedRolls >= 1 || state.phaseIndex === 5) &&
       !pendingInteraction &&
+      !state.activeTileModal &&
       !state.winner &&
       !isWalkingAnim &&
       !isTileEffectAnimating &&
@@ -5995,6 +6215,30 @@
 
   function renderPromptBar() {
     const bar = document.getElementById("action-prompt-bar");
+    if (!bar) return;
+
+    if ((!pendingInteraction || pendingInteraction.type === "choose_branch") && state && state.activeTileModal && state.activeTileModal.status === "selecting") {
+      const tm = state.activeTileModal;
+      const actor = state.players[tm.actorIndex] || getActivePlayer();
+      const isActor = canLocalPlayerAct();
+      bar.classList.add("visible");
+      if (tm.type === "versus") {
+        bar.innerHTML = `
+          <div><strong>Versus Duel Aktif (${escapeHtml(actor.name)})</strong> — ${isActor ? "Pilih lawan &amp; jumlah taruhan TC" : "Sedang memilih lawan duel..."}</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-gold btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Buka Pop-Up Versus</button>
+          </div>`;
+      } else {
+        bar.innerHTML = `
+          <div><strong>Trading Post Aktif (${escapeHtml(actor.name)})</strong> — ${isActor ? "Pilih partner &amp; jenis barter kartu" : "Sedang memilih transaksi barter..."}</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Buka Pop-Up Trade</button>
+            ${isActor ? `<button class="btn btn-sm" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati Trade</button>` : ""}
+          </div>`;
+      }
+      return;
+    }
+
     if (!pendingInteraction || pendingInteraction.type === "choose_branch") {
       bar.classList.remove("visible");
       bar.innerHTML = "";
@@ -6589,6 +6833,7 @@
     }
 
     mp.lobby.status = "playing";
+    hideMainTitleScreen();
     initGame(mp.lobby.patchId, mp.lobby.compendiumId, roster, { randomizeOrder: true });
     if (state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
       mp.mySeat = state.seatMap[mp.clientId];
@@ -6732,6 +6977,7 @@
             mp.onlineSeats = val.seats || {};
 
             if (mp.lobby.status === "playing") {
+              hideMainTitleScreen();
               if (prevStatus !== "playing") {
                 closeModal();
               }
@@ -6752,6 +6998,7 @@
           });
 
           if (mp.lobby.status === "playing") {
+            hideMainTitleScreen();
             closeModal();
             if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
             renderAll();
@@ -7073,6 +7320,7 @@
         mp.mySeat = state.seatMap[mp.clientId];
       }
       if (mp.lobby.status === "playing" && prevStatus !== "playing") {
+        hideMainTitleScreen();
         closeModal();
       }
       if (camera.mode === "follow" && state.players && state.players[state.activePlayerIndex]) {
@@ -7780,9 +8028,65 @@
       state.activeTileModal = null;
     }
     lastRenderedTileModalKey = null;
+    tileModalMinimizedForId = null;
     closeModal();
     renderAll();
     broadcastMultiplayerState();
+  }
+
+  function reopenSharedTileModal() {
+    if (!state || !state.activeTileModal) return;
+    playSfx("click");
+    tileModalMinimizedForId = null;
+    lastRenderedTileModalKey = null;
+    syncSharedTileModal();
+    renderPromptBar();
+  }
+
+  function buildTileModalPlayersStatsHtml(actorIndex) {
+    if (!state || !Array.isArray(state.players)) return "";
+    const rows = state.players
+      .map((p) => {
+        const isAct = p.index === actorIndex;
+        const totShards = (p.shards || 0) + (p.metaShard || 0);
+        const nonUltCnt = (p.hand || []).filter((c) => c && c.rarity !== "Ultimate").length;
+        const ultCnt = (p.hand || []).filter((c) => c && c.rarity === "Ultimate").length;
+        const tagHtml = isAct
+          ? `<span class="tag-badge" style="border-color:var(--mint-light);color:var(--mint-light);">Giliran</span>`
+          : p.inSpawn
+          ? `<span class="tag-badge" style="opacity:0.75;">Spawn</span>`
+          : "";
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:9px;background:${
+            isAct ? "rgba(52,211,153,0.13)" : "rgba(0,0,0,0.32)"
+          };border:1px solid ${isAct ? "rgba(52,211,153,0.45)" : "rgba(255,255,255,0.1)"};">
+            <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+              <span class="ph-icon-badge" style="background:${escapeHtml(p.color || "#34d399")};flex-shrink:0;">${getCharacterSvgIcon(
+          p.charId
+        )}</span>
+              <span style="font-weight:800;font-size:0.82rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(
+                p.name
+              )}</span>
+              ${tagHtml}
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:0.78rem;font-weight:700;flex-shrink:0;">
+              <span style="color:#fde047;">💰 ${p.tc} TC</span>
+              <span style="color:#e9d5ff;">💎 ${totShards}/${state.rules.victoryShards}</span>
+              <span style="color:#cbd5e1;">${nonUltCnt} Kartu${ultCnt > 0 ? ` (+${ultCnt} Ult)` : ""}</span>
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    return `
+      <div style="display:flex;flex-direction:column;gap:6px;background:rgba(6,16,20,0.55);border:1px solid var(--border-soft);border-radius:11px;padding:10px;">
+        <div style="font-size:0.72rem;font-weight:800;color:var(--mint-light);text-transform:uppercase;letter-spacing:0.4px;">
+          Status Seluruh Pemain (TC · Shards · Kartu)
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          ${rows}
+        </div>
+      </div>`;
   }
 
   function syncSharedTileModal() {
@@ -7792,10 +8096,15 @@
     const curKind = titleEl && titleEl.dataset ? titleEl.dataset.modalKind || "" : "";
 
     if (!tm) {
+      tileModalMinimizedForId = null;
       if (curKind === "shared_tile_modal") {
         lastRenderedTileModalKey = null;
         closeModal();
       }
+      return;
+    }
+
+    if (tm.status === "selecting" && tileModalMinimizedForId === tm.id) {
       return;
     }
 
@@ -7807,18 +8116,21 @@
     lastRenderedTileModalKey = renderKey;
 
     const actor = state.players[tm.actorIndex] || getActivePlayer();
+    const statsHtml = buildTileModalPlayersStatsHtml(actor.index);
 
     if (tm.status === "resolved") {
+      tileModalMinimizedForId = null;
       openInfoModal(
         tm.type === "versus" ? `Hasil Versus Duel — ${escapeHtml(actor.name)}` : `Hasil Trading Post — ${escapeHtml(actor.name)}`,
-        `<div style="display:flex;flex-direction:column;gap:14px;text-align:center;padding:8px 4px;">
-          <div style="background:rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);border-radius:12px;padding:14px;font-size:0.9rem;color:#ecfdf5;line-height:1.45;">
+        `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
+          <div style="background:rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);border-radius:12px;padding:14px;font-size:0.9rem;color:#ecfdf5;line-height:1.45;text-align:center;">
             ${escapeHtml(tm.summaryText || "Transaksi selesai.")}
           </div>
+          ${statsHtml}
           ${
             isActor
               ? `<button class="btn btn-emerald" onclick="window.EFT_APP.dismissSharedTileModal()">Lanjut</button>`
-              : `<div style="font-size:0.75rem;color:var(--text-muted);">Menutup otomatis...</div>`
+              : `<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;">Menutup otomatis...</div>`
           }
         </div>`,
         "shared_tile_modal"
@@ -7838,11 +8150,19 @@
         openInfoModal(
           `Versus Duel — 1v1 Wager (${escapeHtml(actor.name)})`,
           `<div style="display:flex;flex-direction:column;gap:12px;">
+            ${statsHtml}
             <div class="form-grid">
               <div class="form-field">
                 <label>Pilih Lawan Duel:</label>
                 <select id="versus-opponent-select">
-                  ${rivals.map((r) => `<option value="${r.index}">${escapeHtml(r.name)} (💰 ${r.tc} TC)</option>`).join("")}
+                  ${rivals
+                    .map(
+                      (r) =>
+                        `<option value="${r.index}">${escapeHtml(r.name)} (💰 ${r.tc} TC · 💎 ${
+                          (r.shards || 0) + (r.metaShard || 0)
+                        }/${state.rules.victoryShards})</option>`
+                    )
+                    .join("")}
                 </select>
               </div>
               <div class="form-field">
@@ -7861,10 +8181,11 @@
       } else {
         openInfoModal(
           `Versus Duel — ${escapeHtml(actor.name)}`,
-          `<div style="display:flex;flex-direction:column;gap:12px;text-align:center;padding:12px 6px;">
-            <div style="background:rgba(249,115,22,0.14);border:1px solid rgba(251,146,60,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ffedd5;line-height:1.45;">
+          `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
+            <div style="background:rgba(249,115,22,0.14);border:1px solid rgba(251,146,60,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ffedd5;line-height:1.45;text-align:center;">
               <strong>${escapeHtml(actor.name)}</strong> mendarat di <strong>Versus Tile</strong> dan sedang memilih lawan serta jumlah taruhan TC...
             </div>
+            ${statsHtml}
           </div>`,
           "shared_tile_modal"
         );
@@ -7875,6 +8196,7 @@
         openInfoModal(
           `Trading Post — Barter Kartu (${escapeHtml(actor.name)})`,
           `<div style="display:flex;flex-direction:column;gap:12px;">
+            ${statsHtml}
             <div class="form-grid">
               <div class="form-field">
                 <label>Pilih Partner Barter:</label>
@@ -7882,7 +8204,10 @@
                   ${others
                     .map((o) => {
                       const nonUltCnt = (o.hand || []).filter((c) => c && c.rarity !== "Ultimate").length;
-                      return `<option value="${o.index}">${escapeHtml(o.name)} (💰 ${o.tc} TC · ${nonUltCnt} Kartu)</option>`;
+                      const totShards = (o.shards || 0) + (o.metaShard || 0);
+                      return `<option value="${o.index}">${escapeHtml(o.name)} (💰 ${o.tc} TC · 💎 ${totShards}/${
+                        state.rules.victoryShards
+                      } · ${nonUltCnt} Kartu)</option>`;
                     })
                     .join("")}
                 </select>
@@ -7906,10 +8231,11 @@
       } else {
         openInfoModal(
           `Trading Post — ${escapeHtml(actor.name)}`,
-          `<div style="display:flex;flex-direction:column;gap:12px;text-align:center;padding:12px 6px;">
-            <div style="background:rgba(132,204,22,0.14);border:1px solid rgba(163,230,53,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ecfccb;line-height:1.45;">
+          `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
+            <div style="background:rgba(132,204,22,0.14);border:1px solid rgba(163,230,53,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ecfccb;line-height:1.45;text-align:center;">
               <strong>${escapeHtml(actor.name)}</strong> mendarat di <strong>Trading Post</strong> dan sedang memilih partner serta jenis barter kartu...
             </div>
+            ${statsHtml}
           </div>`,
           "shared_tile_modal"
         );
@@ -7930,8 +8256,10 @@
       status: "selecting",
       summaryText: ""
     };
+    tileModalMinimizedForId = null;
     lastRenderedTileModalKey = null;
     syncSharedTileModal();
+    renderPromptBar();
     broadcastMultiplayerState();
   }
 
@@ -7992,8 +8320,10 @@
       status: "selecting",
       summaryText: ""
     };
+    tileModalMinimizedForId = null;
     lastRenderedTileModalKey = null;
     syncSharedTileModal();
+    renderPromptBar();
     broadcastMultiplayerState();
   }
 
@@ -8533,8 +8863,13 @@
     const modalCard = document.getElementById("app-modal-card");
     if (modalCard) modalCard.classList.remove("card-detail-modal");
     const titleEl = document.getElementById("modal-title");
+    const curKind = titleEl && titleEl.dataset ? titleEl.dataset.modalKind || "" : "";
+    if (curKind === "shared_tile_modal" && state && state.activeTileModal && state.activeTileModal.status === "selecting") {
+      tileModalMinimizedForId = state.activeTileModal.id;
+    }
     if (titleEl) titleEl.dataset.modalKind = "";
     document.getElementById("app-modal").classList.remove("open");
+    renderPromptBar();
     scheduleAutoEndTurnIfReady();
   }
 
@@ -8924,6 +9259,7 @@
     }
 
     closeModal();
+    hideMainTitleScreen();
     initGame(setupDraft.patchId, setupDraft.compendiumId, roster, { randomizeOrder: true });
     if (state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
       focusCameraOnPlayer(state.seatMap[mp.clientId]);
@@ -8936,6 +9272,10 @@
 
   window.EFT_APP = {
     initGame,
+    showMainTitleScreen,
+    hideMainTitleScreen,
+    openTitleSingleplayer,
+    openTitleMultiplayer,
     switchTab,
     toggleDrawer,
     handleRollButton,
@@ -8966,6 +9306,7 @@
     resolveVersusDuel,
     executeTradeAction,
     dismissSharedTileModal,
+    reopenSharedTileModal,
     openAdminModal,
     submitAdminPassword,
     lockAdminMode,
@@ -9128,23 +9469,15 @@
       else if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
     });
 
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const roomParam = params.get("room");
-      if (roomParam) {
-        const cleanRoom = roomParam.trim().toUpperCase();
-        setTimeout(() => {
+    runInitialAssetPreload(() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const roomParam = params.get("room");
+        if (roomParam) {
+          const cleanRoom = roomParam.trim().toUpperCase();
           openWelcomeSetupModal("multiplayer", cleanRoom);
-        }, 200);
-      } else {
-        setTimeout(() => {
-          openWelcomeSetupModal("local");
-        }, 200);
-      }
-    } catch (e) {
-      setTimeout(() => {
-        openWelcomeSetupModal("local");
-      }, 200);
-    }
+        }
+      } catch (e) {}
+    });
   });
 })();

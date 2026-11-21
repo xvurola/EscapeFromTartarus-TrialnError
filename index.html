@@ -4,12 +4,52 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Escape From Tartarus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="playtest/styles.css" />
   <!-- Firebase Realtime Database SDK (Primary Online Multiplayer & Future Minigames) -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js" defer></script>
 </head>
 <body>
+  <!-- ========================================================================
+       INITIAL ASSET LOADING & MAIN TITLE SCREEN OVERLAY
+       ======================================================================== -->
+  <div id="main-title-screen" class="main-title-screen">
+    <div class="mts-center-content">
+      <h1 class="mts-logo-title">Escape From<br />Tartarus</h1>
+
+      <!-- STAGE 1: LOADING ASSETS PROGRESS BAR -->
+      <div id="mts-loading-section" class="mts-loading-section">
+        <div id="mts-loading-label" class="mts-loading-label">Loading Assets</div>
+        <div class="mts-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="mts-progress-fill" class="mts-progress-fill" style="width: 4%;"></div>
+        </div>
+      </div>
+
+      <!-- STAGE 2: MODE SELECTION (SHOWN AFTER ASSETS LOADED) -->
+      <div id="mts-menu-section" class="mts-menu-section is-hidden">
+        <div class="mts-quick-guide-wrap">
+          <div class="mts-new-here-label">New here?</div>
+          <button type="button" class="mts-quick-guide-btn" disabled aria-disabled="true" tabindex="-1">
+            Quick Guide
+          </button>
+        </div>
+        <div class="mts-mode-buttons">
+          <button type="button" class="mts-mode-btn mts-btn-single" onclick="window.EFT_APP.openTitleSingleplayer()">
+            Singleplayer / Local
+          </button>
+          <button type="button" class="mts-mode-btn mts-btn-multi" onclick="window.EFT_APP.openTitleMultiplayer()">
+            Multiplayer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mts-version-corner">Version.</div>
+  </div>
+
   <!-- TOP BAR -->
   <header class="studio-topbar">
     <div class="brand-title">Escape From Tartarus</div>
