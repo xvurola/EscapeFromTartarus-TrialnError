@@ -379,9 +379,6 @@
   let lastShownDiceRollEventId = null;
   let lastShownDofRollEventId = null;
   let isInitializingMatch = false;
-  let isMatchStarted = false;
-  let isTitleScreenVisible = true;
-  let hasPreloadedAssets = false;
   let seenActivityLogIds = new Set();
   let activeCompendiumFilter = "all";
   let selectedCompendiumCharId = null;
@@ -1805,126 +1802,8 @@
       vOv.classList.remove("visible");
       vOv.innerHTML = "";
     }
-    showMainTitleScreen();
     initGame("alpha2", "comp_beta1", ["bocchi", "aventurine", "lilith", "joker"]);
-  }
-
-  function showMainTitleScreen() {
-    isTitleScreenVisible = true;
-    isMatchStarted = false;
-    const screen = document.getElementById("main-title-screen");
-    const loadingSec = document.getElementById("mts-loading-section");
-    const menuSec = document.getElementById("mts-menu-section");
-    if (screen) screen.classList.remove("is-hidden");
-    if (hasPreloadedAssets) {
-      if (loadingSec) loadingSec.classList.add("is-hidden");
-      if (menuSec) menuSec.classList.remove("is-hidden");
-    }
-  }
-
-  function hideMainTitleScreen() {
-    isTitleScreenVisible = false;
-    isMatchStarted = true;
-    const screen = document.getElementById("main-title-screen");
-    if (screen) screen.classList.add("is-hidden");
-  }
-
-  function openTitleSingleplayer() {
-    playSfx("click");
     openWelcomeSetupModal("local");
-  }
-
-  function openTitleMultiplayer() {
-    playSfx("click");
-    openWelcomeSetupModal("multiplayer");
-  }
-
-  function collectAllPreloadAssetUrls() {
-    const urls = new Set(["assets/maps/board_v2.png"]);
-    if (DATA && DATA.CHARACTERS) {
-      Object.values(DATA.CHARACTERS).forEach((ch) => {
-        if (!ch) return;
-        if (ch.portrait && ch.portrait.src) urls.add(ch.portrait.src);
-        if (ch.compPortrait && ch.compPortrait.src) urls.add(ch.compPortrait.src);
-        if (ch.chibi) urls.add(ch.chibi);
-        if (Array.isArray(ch.cards)) {
-          ch.cards.forEach((c) => {
-            if (c && c.image) urls.add(c.image);
-          });
-        }
-        if (ch.ultimate && ch.ultimate.image) urls.add(ch.ultimate.image);
-      });
-    }
-    if (DATA && DATA.BOARD_CARDS) {
-      ["positive", "negative", "globalEvents"].forEach((groupKey) => {
-        const list = DATA.BOARD_CARDS[groupKey];
-        if (Array.isArray(list)) {
-          list.forEach((c) => {
-            if (c && c.image) urls.add(c.image);
-          });
-        }
-      });
-    }
-    return Array.from(urls);
-  }
-
-  function runInitialAssetPreload(onComplete) {
-    const fillEl = document.getElementById("mts-progress-fill");
-    const trackEl = fillEl ? fillEl.parentElement : null;
-    const loadingSec = document.getElementById("mts-loading-section");
-    const menuSec = document.getElementById("mts-menu-section");
-
-    const urls = collectAllPreloadAssetUrls();
-    const total = Math.max(1, urls.length);
-    let loadedCount = 0;
-    let displayPct = 4;
-    const startTime = Date.now();
-    const minDurationMs = 1350;
-
-    const setBarPct = (pct) => {
-      const clamped = Math.max(4, Math.min(100, Math.round(pct)));
-      if (fillEl) fillEl.style.width = `${clamped}%`;
-      if (trackEl) trackEl.setAttribute("aria-valuenow", String(clamped));
-    };
-
-    setBarPct(4);
-
-    urls.forEach((url) => {
-      const img = new Image();
-      const markDone = () => {
-        loadedCount++;
-      };
-      img.onload = () => {
-        if (typeof img.decode === "function") {
-          img.decode().then(markDone).catch(markDone);
-        } else {
-          markDone();
-        }
-      };
-      img.onerror = markDone;
-      img.src = url;
-    });
-
-    const tickInterval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const timeProgress = Math.min(1, elapsed / minDurationMs);
-      const assetProgress = loadedCount / total;
-      const effectiveProgress = Math.min(timeProgress, assetProgress);
-      const targetPct = Math.max(displayPct, Math.round(effectiveProgress * 100));
-      displayPct = targetPct;
-      setBarPct(displayPct);
-
-      if ((loadedCount >= total && elapsed >= minDurationMs) || elapsed >= 6500) {
-        clearInterval(tickInterval);
-        setBarPct(100);
-        setTimeout(() => {
-          hasPreloadedAssets = true;
-          if (loadingSec) loadingSec.classList.add("is-hidden");
-          if (menuSec) menuSec.classList.remove("is-hidden");
-          if (typeof onComplete === "function") onComplete();
-        }, 260);
-      }
-    }, 45);
   }
 
   // ============================================================================
@@ -3129,7 +3008,7 @@
   }
 
   function triggerTurnStartReminder(player) {
-    if (!player || !state || isInitializingMatch || !isMatchStarted || isTitleScreenVisible) return;
+    if (!player || !state || isInitializingMatch) return;
     const banner = document.getElementById("turn-reminder-banner");
     const isMyMultiplayerTurn = mp.mode !== "local" && mp.mySeat !== -1 && mp.mySeat === player.index;
     const isLocalTurn = mp.mode === "local" || mp.mySeat === -1;
@@ -3179,8 +3058,12 @@
   }
 
   function isTurnTimerPausedForAnimation() {
-    if (!isMatchStarted || isTitleScreenVisible) return true;
     if (!state || state.winner || state.activeMinigame) return true;
+    const modal = document.getElementById("app-modal");
+    const titleEl = document.getElementById("modal-title");
+    if (modal && modal.classList.contains("open") && titleEl && titleEl.dataset && titleEl.dataset.modalKind === "welcome_lobby") {
+      return true;
+    }
     if (isWalkingAnim || isTileEffectAnimating || tileShuffleState) return true;
     if (diceAnimIntervalId || diceAnimTimeoutId) return true;
     const diceOv = document.getElementById("dice-roll-overlay");
@@ -3193,7 +3076,6 @@
   function scheduleAutoEndTurnIfReady() {
     clearTimeout(autoEndTurnTimerId);
     autoEndTurnTimerId = null;
-    if (!isMatchStarted || isTitleScreenVisible) return;
     if (!state || state.winner || state.activeMinigame) return;
     if (isRemoteClient()) return;
     if (state.phaseIndex !== 5) return;
@@ -6833,7 +6715,6 @@
     }
 
     mp.lobby.status = "playing";
-    hideMainTitleScreen();
     initGame(mp.lobby.patchId, mp.lobby.compendiumId, roster, { randomizeOrder: true });
     if (state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
       mp.mySeat = state.seatMap[mp.clientId];
@@ -6977,7 +6858,6 @@
             mp.onlineSeats = val.seats || {};
 
             if (mp.lobby.status === "playing") {
-              hideMainTitleScreen();
               if (prevStatus !== "playing") {
                 closeModal();
               }
@@ -6998,7 +6878,6 @@
           });
 
           if (mp.lobby.status === "playing") {
-            hideMainTitleScreen();
             closeModal();
             if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
             renderAll();
@@ -7320,7 +7199,6 @@
         mp.mySeat = state.seatMap[mp.clientId];
       }
       if (mp.lobby.status === "playing" && prevStatus !== "playing") {
-        hideMainTitleScreen();
         closeModal();
       }
       if (camera.mode === "follow" && state.players && state.players[state.activePlayerIndex]) {
@@ -8166,12 +8044,20 @@
                 </select>
               </div>
               <div class="form-field">
-                <label>Jumlah Taruhan (Wager):</label>
-                <select id="versus-bet-select">
-                  ${(state.rules.versusBets || [15, 30])
-                    .map((b) => `<option value="${b}">💰 ${b} TC (Total Pot ${b * 2} TC)</option>`)
-                    .join("")}
-                </select>
+                <label>Jumlah Taruhan (1–30 TC):</label>
+                <input
+                  type="number"
+                  id="versus-bet-input"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value="15"
+                  placeholder="1 - 30 TC"
+                  oninput="if(this.value!==''){const v=Math.max(1,Math.min(30,Math.floor(Number(this.value)||1)));const lbl=document.getElementById('versus-pot-preview');if(lbl)lbl.textContent='Total Pot: 💰 '+(v*2)+' TC (Maks 30 TC)';}"
+                />
+                <div id="versus-pot-preview" style="font-size:0.72rem;color:var(--mint-light);margin-top:3px;">
+                  Total Pot: 💰 30 TC (Maks 30 TC)
+                </div>
               </div>
             </div>
             <button class="btn btn-gold" onclick="window.EFT_APP.resolveVersusDuel()">Mulai Duel 1v1</button>
@@ -8266,9 +8152,14 @@
   function resolveVersusDuel(forcedOppIdx = null, forcedBet = null) {
     if (!canLocalPlayerAct()) return;
     const oppEl = document.getElementById("versus-opponent-select");
-    const betEl = document.getElementById("versus-bet-select");
+    const betEl = document.getElementById("versus-bet-input") || document.getElementById("versus-bet-select");
     const oppIdx = forcedOppIdx !== null ? Number(forcedOppIdx) : oppEl ? Number(oppEl.value) : -1;
-    const bet = forcedBet !== null ? Number(forcedBet) : betEl ? Number(betEl.value) : 15;
+    const rawBet = forcedBet !== null ? Number(forcedBet) : betEl ? Number(betEl.value) : 15;
+    if (!Number.isFinite(rawBet) || rawBet < 1 || rawBet > 30) {
+      alert("Masukkan jumlah taruhan (bet) antara 1 hingga 30 TC.");
+      return;
+    }
+    const bet = Math.max(1, Math.min(30, Math.floor(rawBet)));
     if (isRemoteClient() && forcedOppIdx === null) {
       sendClientActionToHost("resolve_versus", { oppIdx, bet });
       return;
@@ -9259,7 +9150,6 @@
     }
 
     closeModal();
-    hideMainTitleScreen();
     initGame(setupDraft.patchId, setupDraft.compendiumId, roster, { randomizeOrder: true });
     if (state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
       focusCameraOnPlayer(state.seatMap[mp.clientId]);
@@ -9272,10 +9162,6 @@
 
   window.EFT_APP = {
     initGame,
-    showMainTitleScreen,
-    hideMainTitleScreen,
-    openTitleSingleplayer,
-    openTitleMultiplayer,
     switchTab,
     toggleDrawer,
     handleRollButton,
@@ -9469,15 +9355,23 @@
       else if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
     });
 
-    runInitialAssetPreload(() => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const roomParam = params.get("room");
-        if (roomParam) {
-          const cleanRoom = roomParam.trim().toUpperCase();
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get("room");
+      if (roomParam) {
+        const cleanRoom = roomParam.trim().toUpperCase();
+        setTimeout(() => {
           openWelcomeSetupModal("multiplayer", cleanRoom);
-        }
-      } catch (e) {}
-    });
+        }, 200);
+      } else {
+        setTimeout(() => {
+          openWelcomeSetupModal("local");
+        }, 200);
+      }
+    } catch (e) {
+      setTimeout(() => {
+        openWelcomeSetupModal("local");
+      }, 200);
+    }
   });
 })();
