@@ -119,14 +119,14 @@ window.EFT_DATA = {
     alpha2: {
       id: "alpha2",
       name: "Rulebook Patch Alpha 2",
-      subtitle: "3 Active Shards on Board, Cycle-Based Shard Spawning, [Haste] Keyword",
+      subtitle: "3 Active Shards on Board, Respawn Every 2 Cycles, [Haste] Keyword",
       diceCount: 2,
       diceSides: 6,
       victoryShards: 3,
       shardCost: 100,
       activeShardsOnBoard: 3,
       shardSpawnUnit: "cycle",
-      shardSpawnInterval: 3,
+      shardSpawnInterval: 2,
       turnsPerCycle: 4,
       startTC: 0,
       startHandSize: 6,
@@ -148,7 +148,7 @@ window.EFT_DATA = {
       summary: [
         "Turn Anatomy: Standby Phase -> Main Phase 1 -> Roll Dice -> Main Phase 2 -> Roll Dice -> End Turn.",
         "Keyword [Haste]: Cards with [Haste] can be activated outside the player's normal action window (reactive counterplay).",
-        "Dynamic Shard Spawning: 3 Tartarus Shards are maintained on the board. New shard spawn sequence triggers every 3 Cycles.",
+        "Dynamic Shard Spawning: 3 Tartarus Shards are maintained on the board. New shard spawn sequence triggers every 2 Cycles.",
         "Variable Ultimate Cost: Ultimate Card cost in Merchant Shops now scales per character (e.g. 70 TC standard, 50 TC for Firefly/SAM transformation)."
       ]
     }
@@ -376,14 +376,14 @@ window.EFT_DATA = {
       ultCost: 70,
       lore: "Lilith leaves opponents resource-starved by shredding enemy hands, placing proximity virus traps, reversing movement, and skipping turns.",
       cards: [
-        { id: "lilith_c", name: "Marionette String", rarity: "Common", count: 5, radius: 5, targetType: "opponent_in_radius", effectKey: "discard_1_or_minus3_steps", description: "Target a player in a 5-block radius, they discard 1 random card. If their hand is empty, the target gets -3 steps on their next dice roll.", image: "assets/cards/characters/lilith/c.png" },
+        { id: "lilith_c", name: "Marionette String", rarity: "Common", count: 5, radius: 5, targetType: "any_player_in_radius", effectKey: "discard_1_or_minus3_steps", description: "Target a player in a 5-block radius, they discard 1 random card. If their hand is empty, the target gets -3 steps on their next dice roll.", image: "assets/cards/characters/lilith/c.png" },
         { id: "lilith_uc", name: "Punishing Virus", rarity: "Uncommon", count: 3, radius: 4, targetType: "normal_tile_in_radius", effectKey: "place_trap_virus", description: "Place a trap on a Normal Tile (4-block radius). Opponents who land or pass it lose 1 dice on their next dice roll. (Trap lasted for 1 cycle)", image: "assets/cards/characters/lilith/uc.png" },
-        { id: "lilith_r", name: "Mind Deviation", rarity: "Rare", count: 2, targetType: "other_player", effectKey: "debuff_reverse_move", description: "Target 1 player. The target must move backward according to their dice result in the first dice roll of their next turn.", image: "assets/cards/characters/lilith/r.png" },
-        { id: "lilith_e", name: "Soul Extraction", rarity: "Epic", count: 1, radius: 8, effectKey: "destroy_half_hand_radius", description: "Destroy 50% of the cards in the hands of all opponents within a 8-block radius instantly.", image: "assets/cards/characters/lilith/e.png" },
+        { id: "lilith_r", name: "Mind Deviation", rarity: "Rare", count: 2, targetType: "any_player", effectKey: "debuff_reverse_move", description: "Target 1 player. The target must move backward according to their dice result in the first dice roll of their next turn.", image: "assets/cards/characters/lilith/r.png" },
+        { id: "lilith_e", name: "Soul Extraction", rarity: "Epic", count: 1, radius: 8, targetType: "opponents_in_radius_aoe", effectKey: "destroy_half_hand_radius", description: "Destroy 50% of the cards in the hands of all opponents within a 8-block radius instantly.", image: "assets/cards/characters/lilith/e.png" },
         { id: "lilith_uq", name: "Unpredictable Tricks", rarity: "Unique", count: 1, effectKey: "passive_unpredictable_tricks", durationCycles: 1, description: "Passive: When you pass an opponent or they passed you, they lose 1 random card and must give you 5 TC. Duration: 1 Full Cycle.", image: "assets/cards/characters/lilith/uq.png" }
       ],
       ultimate: {
-        id: "lilith_ult", name: "Dreamfall Showdown", rarity: "Ultimate", cost: 70, retain: true, targetType: "other_player", effectKey: "skip_target_turn_buff_self", description: "[Retain] Target 1 player, skips their next full turn. Lilith gains +1 extra phase and +1 skill use.", image: "assets/cards/characters/lilith/ult.png"
+        id: "lilith_ult", name: "Dreamfall Showdown", rarity: "Ultimate", cost: 70, retain: true, targetType: "any_player", effectKey: "skip_target_turn_buff_self", description: "[Retain] Target 1 player, skips their next full turn. Lilith gains +1 extra phase and +1 skill use.", image: "assets/cards/characters/lilith/ult.png"
       }
     },
 
@@ -403,7 +403,7 @@ window.EFT_DATA = {
       cards: [
         { id: "joker_c", name: "Showtime!", rarity: "Common", count: 5, tcGain: 10, effectKey: "choice_10tc_or_draw1", description: "Choose one: Gain 10 TC or draw 1 card from the deck.", image: "assets/cards/characters/joker/c.png" },
         { id: "joker_uc", name: "Phantom Thief", rarity: "Uncommon", count: 3, choices: [1, 2, 3, 4, 5, 6], effectKey: "dash_1_6_steal_card", description: "Move 1-6 blocks. If you land on an opponent's tile, steal 1 random card from them.", image: "assets/cards/characters/joker/uc.png" },
-        { id: "joker_r", name: "All-Out Attack", rarity: "Rare", count: 2, radius: 6, targetType: "opponent_in_radius", effectKey: "aoa_15tc_silence", description: "Target in a 6-block radius loses 15 TC and is forbidden from using Skill Cards for 1 Phase.", image: "assets/cards/characters/joker/r.png" },
+        { id: "joker_r", name: "All-Out Attack", rarity: "Rare", count: 2, radius: 6, targetType: "any_player_in_radius", effectKey: "aoa_15tc_silence", description: "Target in a 6-block radius loses 15 TC and is forbidden from using Skill Cards for 1 Phase.", image: "assets/cards/characters/joker/r.png" },
         { id: "joker_e", name: "Will of Rebellion", rarity: "Epic", count: 1, effectKey: "copy_last_skill", description: "Choose and copy the effect of an opponent's skill card used within this turn. (When copying an unique card, the effect only last for 1 turn)", image: "assets/cards/characters/joker/e.png" },
         { id: "joker_uq", name: "Awaken, Arsene!", rarity: "Unique", count: 1, effectKey: "passive_awaken_arsene", durationCycles: 1, description: "Passive: Each time you land on an Event or Versus tile, gain +1 extra dice roll for your next Phase. Duration: 1 Full Cycle.", image: "assets/cards/characters/joker/uq.png" }
       ],

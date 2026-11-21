@@ -8,8 +8,6 @@
   <!-- Firebase Realtime Database SDK (Primary Online Multiplayer & Future Minigames) -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js" defer></script>
-  <!-- PeerJS Fallback -->
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
 </head>
 <body>
   <!-- TOP BAR -->
@@ -122,6 +120,9 @@
       <!-- DICE OF FATE MINIGAME FULL-STAGE OVERLAY -->
       <div id="dice-of-fate-overlay" class="dice-of-fate-overlay"></div>
 
+      <!-- FULL-STAGE VICTORY SCREEN OVERLAY -->
+      <div id="victory-screen-overlay" class="victory-screen-overlay"></div>
+
       <!-- PLAYER LIST HUD (ACTIVE HIGHLIGHTED, FACE-CROPPED PORTRAITS) -->
       <div id="hud-players-list" class="hud-players-list"></div>
 
@@ -203,8 +204,23 @@
       <!-- INTERACTIVE PROMPT BAR (Branch Choice / Buy Shard / River / Target Tile) -->
       <div id="action-prompt-bar" class="action-prompt-bar"></div>
 
-      <!-- BOTTOM TUCKED CARD HAND + ROLL / END TURN DOCK -->
+      <!-- BOTTOM TUCKED CARD HAND + DRAW PILE + ROLL / END TURN DOCK -->
       <div class="bottom-hand-stage">
+        <div class="draw-pile-dock">
+          <button id="btn-draw-pile" class="eft-draw-pile-btn" type="button" onclick="window.EFT_APP.openDrawPileModal()" title="Lihat kartu yang belum ter-draw di Draw Pile">
+            <span class="draw-pile-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="7" y="4" width="12" height="16" rx="2"></rect>
+                <path d="M5 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1"></path>
+              </svg>
+            </span>
+            <span class="draw-pile-meta">
+              <span class="draw-pile-title">Draw Pile</span>
+              <span id="draw-pile-count" class="draw-pile-count">6 Kartu</span>
+            </span>
+          </button>
+        </div>
+
         <div id="hand-cards-scroll" class="tucked-cards-fan"></div>
 
         <div class="roll-action-dock">
@@ -241,7 +257,7 @@
           <div style="display:flex;align-items:center;gap:10px;">
             <span style="font-size:0.74rem;color:var(--text-muted);text-transform:none;">Active Rulebook Patch:</span>
             <select id="rules-patch-select" class="btn" onchange="window.EFT_APP.changeRulesPatch(this.value)">
-              <option value="alpha2">Patch Alpha 2 (3 Shards / 3 Cycles, [Haste])</option>
+              <option value="alpha2">Patch Alpha 2 (3 Shards / 2 Cycles, [Haste])</option>
               <option value="alpha1_2">Patch Alpha 1.2 (Fractional Rounding Law, 9 Events)</option>
               <option value="alpha1_1">Patch Alpha 1.1 (2x d6 System, Independent Shops)</option>
               <option value="v0_1">Version 0.1 (1x d12 per Phase, Shared Global Shop)</option>

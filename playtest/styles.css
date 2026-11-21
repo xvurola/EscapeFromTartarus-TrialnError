@@ -1876,34 +1876,32 @@ body.admin-mode .admin-only-el {
 }
 
 /* ============================================================================
-   LET'S GET RICH STYLE 3D BOARD TILES
+   CLEAN CIRCULAR MEDALLION BOARD TILES (LARGE, CALM, LOW-DISTRACTION)
    ============================================================================ */
 .digital-tile {
-  --tile-head: linear-gradient(180deg, #64748b 0%, #475569 100%);
-  --tile-head-text: #ffffff;
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #f1f5f9 68%, #dbe4ee 100%);
-  --tile-border: #ffffff;
+  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #f1f5f9 64%, #dce5f0 100%);
+  --tile-ring: rgba(255, 255, 255, 0.92);
   --tile-base: #475569;
   --tile-accent: #334155;
-  --tile-foot-bg: rgba(15, 23, 42, 0.08);
-  --tile-foot-text: #1e293b;
+  --tile-label: #1e293b;
+  --tile-glow: rgba(148, 163, 184, 0.22);
   position: absolute;
-  width: 82px;
-  height: 58px;
+  width: 80px;
+  height: 80px;
   transform: translate(-50%, -50%);
-  border-radius: 10px;
+  border-radius: 50%;
   display: flex;
-  align-items: stretch;
-  justify-content: stretch;
+  align-items: center;
+  justify-content: center;
   cursor: default;
   z-index: 6;
   transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease, filter 0.16s ease;
   background: var(--tile-surface);
-  border: 2.5px solid var(--tile-border);
+  border: 3px solid var(--tile-ring);
   box-shadow:
-    0 6px 0 var(--tile-base),
-    0 12px 20px rgba(0, 0, 0, 0.56),
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.9);
+    0 5px 0 var(--tile-base),
+    0 11px 22px rgba(0, 0, 0, 0.5),
+    inset 0 2px 3px rgba(255, 255, 255, 0.85);
   user-select: none;
 }
 
@@ -1911,61 +1909,36 @@ body.admin-mode .admin-only-el {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 9px;
+  border-radius: 50%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px;
 }
 
 .lgr-tile-shell::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0) 48%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0) 54%);
   pointer-events: none;
   z-index: 3;
 }
 
-.lgr-head {
-  position: relative;
-  z-index: 2;
-  background: var(--tile-head);
-  color: var(--tile-head-text);
-  font-size: 0.56rem;
-  font-weight: 900;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  text-align: center;
-  padding: 3px 2px 2.5px;
-  line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.48);
-  border-bottom: 1.5px solid rgba(0, 0, 0, 0.14);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lgr-body {
-  position: relative;
-  z-index: 2;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  gap: 1px;
-}
-
 .lgr-icon {
-  width: 21px;
-  height: 21px;
+  position: relative;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--tile-accent);
-  filter: drop-shadow(0 1.5px 1.5px rgba(0, 0, 0, 0.22));
+  filter: drop-shadow(0 1.5px 1.5px rgba(0, 0, 0, 0.18));
 }
 
 .lgr-icon svg {
@@ -1974,27 +1947,15 @@ body.admin-mode .admin-only-el {
   display: block;
 }
 
-.lgr-val {
-  font-size: 0.62rem;
-  font-weight: 900;
-  color: var(--tile-accent);
-  line-height: 1;
-  letter-spacing: -0.2px;
-}
-
-.lgr-foot {
+.lgr-pill-label {
   position: relative;
   z-index: 2;
-  background: var(--tile-foot-bg);
-  color: var(--tile-foot-text);
-  font-size: 0.48rem;
-  font-weight: 800;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.25px;
   text-transform: uppercase;
-  letter-spacing: 0.35px;
-  text-align: center;
-  padding: 2px 2px 2.5px;
+  color: var(--tile-label);
   line-height: 1;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
   white-space: nowrap;
 }
 
@@ -2006,13 +1967,13 @@ body.admin-mode .digital-tile {
 }
 
 .digital-tile:hover {
-  transform: translate(-50%, -62%) scale(1.16);
+  transform: translate(-50%, -58%) scale(1.13);
   z-index: 24;
   border-color: #ffffff;
   box-shadow:
-    0 9px 0 var(--tile-base),
-    0 18px 28px rgba(0, 0, 0, 0.72),
-    0 0 18px rgba(255, 255, 255, 0.32);
+    0 8px 0 var(--tile-base),
+    0 16px 26px rgba(0, 0, 0, 0.68),
+    0 0 18px var(--tile-glow);
 }
 
 /* Print Preview Fallback (keeps map print image legible) */
@@ -2034,54 +1995,45 @@ body.admin-mode .digital-tile {
 }
 
 /* ----------------------------------------------------------------------------
-   LET'S GET RICH TILE THEMES (VIBRANT COLOR BANDS & LANDMARK CORNERS)
+   CIRCULAR TILE THEMES (CALM BASE + DISTINCT SPECIAL MEDALLIONS)
    ---------------------------------------------------------------------------- */
 
-/* Normal Stepping Tile — Glossy Pearl/Slate Horizontal Rectangular Marble Block */
+/* Normal Stepping Tile — Calm Minimalist Frosted Circle (Zero Visual Clutter) */
 .dt-normal {
-  width: 74px;
-  height: 52px;
-  --tile-head: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
-  --tile-surface: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 70%, #cbd5e1 100%);
-  --tile-border: #f1f5f9;
-  --tile-base: #64748b;
+  width: 68px;
+  height: 68px;
+  --tile-surface: radial-gradient(circle at 34% 28%, #eef4f8 0%, #d4e0ea 72%, #bac9d6 100%);
+  --tile-ring: rgba(241, 245, 249, 0.75);
+  --tile-base: #5b6d80;
   --tile-accent: #64748b;
-  --tile-foot-bg: rgba(15, 23, 42, 0.06);
-  --tile-foot-text: #475569;
-}
-
-.dt-normal .lgr-head {
-  height: 9px;
-  padding: 0;
+  --tile-label: #475569;
+  --tile-glow: rgba(148, 163, 184, 0.28);
+  box-shadow:
+    0 4px 0 var(--tile-base),
+    0 8px 16px rgba(0, 0, 0, 0.42),
+    inset 0 2px 3px rgba(255, 255, 255, 0.78);
 }
 
 .dt-normal .lgr-icon {
-  width: 20px;
-  height: 20px;
-  opacity: 0.5;
+  width: 16px;
+  height: 16px;
+  opacity: 0.32;
 }
 
-/* START Landmark Tile (Emerald + Gold Ribbon like Let's Get Rich START) */
+/* START Landmark Circle */
 .dt-spawn {
   width: 90px;
-  height: 66px;
-  border-radius: 13px;
-  --tile-head: linear-gradient(180deg, #10b981 0%, #047857 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #ecfdf5 62%, #a7f3d0 100%);
-  --tile-border: #fde047;
+  height: 90px;
+  --tile-surface: radial-gradient(circle at 32% 28%, #ecfdf5 0%, #a7f3d0 64%, #34d399 100%);
+  --tile-ring: #fde047;
   --tile-base: #065f46;
-  --tile-accent: #047857;
-  --tile-foot-bg: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
-  --tile-foot-text: #1c1917;
+  --tile-accent: #065f46;
+  --tile-label: #064e3b;
+  --tile-glow: rgba(16, 185, 129, 0.5);
   box-shadow:
-    0 7px 0 #065f46,
-    0 14px 24px rgba(0, 0, 0, 0.65),
-    0 0 22px rgba(16, 185, 129, 0.4);
-}
-
-.dt-spawn .lgr-head {
-  font-size: 0.64rem;
-  padding: 4px 2px;
+    0 6px 0 #065f46,
+    0 14px 24px rgba(0, 0, 0, 0.62),
+    0 0 20px rgba(16, 185, 129, 0.38);
 }
 
 .dt-spawn .lgr-icon {
@@ -2089,144 +2041,133 @@ body.admin-mode .digital-tile {
   height: 30px;
 }
 
-/* +10 TC — Emerald Wealth Tile */
+.dt-spawn .lgr-pill-label {
+  font-size: 0.68rem;
+}
+
+/* +10 TC — Soft Emerald Circle */
 .dt-tc_plus10 {
-  --tile-head: linear-gradient(180deg, #34d399 0%, #059669 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #ecfdf5 72%, #d1fae5 100%);
-  --tile-border: #ffffff;
+  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #d1fae5 70%, #a7f3d0 100%);
+  --tile-ring: #6ee7b7;
   --tile-base: #047857;
   --tile-accent: #059669;
-  --tile-foot-bg: rgba(5, 150, 105, 0.14);
-  --tile-foot-text: #065f46;
+  --tile-label: #065f46;
+  --tile-glow: rgba(16, 185, 129, 0.42);
 }
 
-/* -5 TC — Ruby Crimson Tax Tile */
+/* -5 TC — Soft Rose Crimson Circle */
 .dt-tc_minus5 {
-  --tile-head: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #fff1f2 72%, #ffe4e6 100%);
-  --tile-border: #ffffff;
+  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #ffe4e6 70%, #fecdd3 100%);
+  --tile-ring: #fda4af;
   --tile-base: #9f1239;
   --tile-accent: #e11d48;
-  --tile-foot-bg: rgba(225, 29, 72, 0.14);
-  --tile-foot-text: #9f1239;
+  --tile-label: #881337;
+  --tile-glow: rgba(225, 29, 72, 0.42);
 }
 
-/* +1 Card — Sapphire Sky Draw Tile */
+/* +1 Card — Soft Sky Sapphire Circle */
 .dt-card_plus1 {
-  --tile-head: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #f0f9ff 72%, #e0f2fe 100%);
-  --tile-border: #ffffff;
+  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #e0f2fe 70%, #bae6fd 100%);
+  --tile-ring: #7dd3fc;
   --tile-base: #0369a1;
   --tile-accent: #0284c7;
-  --tile-foot-bg: rgba(2, 132, 199, 0.14);
-  --tile-foot-text: #075985;
+  --tile-label: #0c4a6e;
+  --tile-glow: rgba(14, 165, 233, 0.42);
 }
 
-/* -1 Card — Golden Amber Discard Tile */
+/* -1 Card — Soft Amber Circle */
 .dt-card_minus1 {
-  --tile-head: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
-  --tile-head-text: #1c1917;
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #fffbeb 72%, #fef3c7 100%);
-  --tile-border: #ffffff;
+  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #fef3c7 70%, #fde68a 100%);
+  --tile-ring: #fcd34d;
   --tile-base: #92400e;
   --tile-accent: #b45309;
-  --tile-foot-bg: rgba(217, 119, 6, 0.15);
-  --tile-foot-text: #92400e;
+  --tile-label: #78350f;
+  --tile-glow: rgba(245, 158, 11, 0.42);
 }
 
-/* Positive Effect — Jade Fortune Chance Tile */
+/* Positive Effect — Jade Mint Circle */
 .dt-pos_effect {
-  --tile-head: linear-gradient(180deg, #2dd4bf 0%, #0d9488 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #f0fdfa 68%, #ccfbf1 100%);
-  --tile-border: #99f6e4;
+  --tile-surface: radial-gradient(circle at 32% 28%, #f0fdfa 0%, #99f6e4 68%, #5eead4 100%);
+  --tile-ring: #5eead4;
   --tile-base: #115e59;
   --tile-accent: #0f766e;
-  --tile-foot-bg: rgba(13, 148, 136, 0.16);
-  --tile-foot-text: #115e59;
+  --tile-label: #134e4a;
+  --tile-glow: rgba(45, 212, 191, 0.48);
 }
 
-/* Negative Effect — Magenta Hazard Tile */
+/* Negative Effect — Berry Rose Circle */
 .dt-neg_effect {
-  --tile-head: linear-gradient(180deg, #f472b6 0%, #be185d 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #fdf2f8 68%, #fce7f3 100%);
-  --tile-border: #fbcfe8;
+  --tile-surface: radial-gradient(circle at 32% 28%, #fdf2f8 0%, #fbcfe8 68%, #f9a8d4 100%);
+  --tile-ring: #f472b6;
   --tile-base: #831843;
   --tile-accent: #be185d;
-  --tile-foot-bg: rgba(190, 24, 93, 0.14);
-  --tile-foot-text: #831843;
+  --tile-label: #831843;
+  --tile-glow: rgba(236, 72, 153, 0.46);
 }
 
-/* Global Event — Royal Violet Showcase Tile */
+/* Global Event — Royal Violet Medallion */
 .dt-event {
-  width: 86px;
-  height: 62px;
-  border-radius: 11px;
-  --tile-head: linear-gradient(180deg, #c084fc 0%, #7e22ce 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #faf5ff 64%, #f3e8ff 100%);
-  --tile-border: #e9d5ff;
+  width: 88px;
+  height: 88px;
+  --tile-surface: radial-gradient(circle at 32% 28%, #faf5ff 0%, #e9d5ff 64%, #d8b4fe 100%);
+  --tile-ring: #c084fc;
   --tile-base: #581c87;
   --tile-accent: #7e22ce;
-  --tile-foot-bg: rgba(126, 34, 206, 0.16);
-  --tile-foot-text: #581c87;
+  --tile-label: #581c87;
+  --tile-glow: rgba(168, 85, 247, 0.52);
 }
 
 .dt-event .lgr-icon {
-  width: 23px;
-  height: 23px;
+  width: 28px;
+  height: 28px;
 }
 
-/* Versus Duel — Blazing Orange Battle Tile */
+/* Versus Duel — Warm Coral-Orange Medallion */
 .dt-versus {
-  width: 86px;
-  height: 62px;
-  border-radius: 11px;
-  --tile-head: linear-gradient(180deg, #fb923c 0%, #c2410c 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #fff7ed 64%, #ffedd5 100%);
-  --tile-border: #fed7aa;
+  width: 88px;
+  height: 88px;
+  --tile-surface: radial-gradient(circle at 32% 28%, #fff7ed 0%, #fed7aa 64%, #fdba74 100%);
+  --tile-ring: #fb923c;
   --tile-base: #9a3412;
   --tile-accent: #c2410c;
-  --tile-foot-bg: rgba(194, 65, 12, 0.16);
-  --tile-foot-text: #9a3412;
+  --tile-label: #7c2d12;
+  --tile-glow: rgba(249, 115, 22, 0.5);
 }
 
 .dt-versus .lgr-icon {
-  width: 23px;
-  height: 23px;
+  width: 28px;
+  height: 28px;
 }
 
-/* Trading Post — Fresh Lime Barter Tile */
+/* Trading Post — Soft Sage Lime Circle */
 .dt-trading {
-  --tile-head: linear-gradient(180deg, #a3e635 0%, #4d7c0f 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #f7fee7 68%, #ecfccb 100%);
-  --tile-border: #ffffff;
+  --tile-surface: radial-gradient(circle at 32% 28%, #f7fee7 0%, #d9f99d 68%, #bef264 100%);
+  --tile-ring: #a3e635;
   --tile-base: #3f6212;
   --tile-accent: #4d7c0f;
-  --tile-foot-bg: rgba(77, 124, 15, 0.15);
-  --tile-foot-text: #365314;
+  --tile-label: #365314;
+  --tile-glow: rgba(132, 204, 22, 0.45);
 }
 
-/* Merchant Shop — Roadside Gold Landmark with Directional Pointer Arrow */
+/* Merchant Shop — Roadside Golden Circle with Directional Pointer Arrow */
 .dt-merchant {
   width: 88px;
-  height: 64px;
-  border-radius: 12px;
-  --tile-head: linear-gradient(180deg, #fcd34d 0%, #d97706 100%);
-  --tile-head-text: #1c1917;
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #fef9c3 62%, #fde68a 100%);
-  --tile-border: #fef08a;
+  height: 88px;
+  --tile-surface: radial-gradient(circle at 32% 28%, #fefce8 0%, #fde68a 62%, #fbbf24 100%);
+  --tile-ring: #fef08a;
   --tile-base: #92400e;
-  --tile-accent: #b45309;
-  --tile-foot-bg: linear-gradient(90deg, #d97706 0%, #b45309 100%);
-  --tile-foot-text: #ffffff;
+  --tile-accent: #92400e;
+  --tile-label: #78350f;
+  --tile-glow: rgba(245, 158, 11, 0.52);
   box-shadow:
     0 6px 0 #92400e,
-    0 12px 22px rgba(0, 0, 0, 0.65),
+    0 12px 22px rgba(0, 0, 0, 0.6),
     0 0 18px rgba(245, 158, 11, 0.36);
 }
 
 .dt-merchant .lgr-icon {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
 }
 
 .dt-merchant.shop-arrow-up::before,
@@ -2242,72 +2183,69 @@ body.admin-mode .digital-tile {
 }
 
 .dt-merchant.shop-arrow-up::before {
-  top: -19px;
-  border-left: 14px solid transparent;
-  border-right: 14px solid transparent;
-  border-bottom: 16px solid #f59e0b;
+  top: -18px;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-bottom: 15px solid #f59e0b;
 }
 
 .dt-merchant.shop-arrow-down::before {
-  bottom: -24px;
-  border-left: 14px solid transparent;
-  border-right: 14px solid transparent;
-  border-top: 16px solid #f59e0b;
+  bottom: -22px;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-top: 15px solid #f59e0b;
 }
 
-/* Warp Teleporter — Electric Indigo World-Travel Landmark Tile */
+/* Warp Teleporter — Deep Sky Indigo Medallion */
 .dt-warp {
   width: 88px;
-  height: 64px;
-  border-radius: 12px;
-  --tile-head: linear-gradient(180deg, #60a5fa 0%, #1d4ed8 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #eff6ff 62%, #bfdbfe 100%);
-  --tile-border: #93c5fd;
+  height: 88px;
+  --tile-surface: radial-gradient(circle at 32% 28%, #eff6ff 0%, #bfdbfe 62%, #93c5fd 100%);
+  --tile-ring: #60a5fa;
   --tile-base: #1e3a8a;
   --tile-accent: #1d4ed8;
-  --tile-foot-bg: rgba(29, 78, 216, 0.16);
-  --tile-foot-text: #1e3a8a;
+  --tile-label: #1e3a8a;
+  --tile-glow: rgba(59, 130, 246, 0.5);
   box-shadow:
     0 6px 0 #1e3a8a,
-    0 12px 22px rgba(0, 0, 0, 0.65),
-    0 0 18px rgba(59, 130, 246, 0.38);
+    0 12px 22px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(59, 130, 246, 0.36);
 }
 
 .dt-warp .lgr-icon {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
 }
 
-/* River Shortcut — Aqua Turquoise Landmark Tile */
+/* River Shortcut — Aqua Cyan Medallion */
 .dt-river_top,
 .dt-river_bottom {
   width: 86px;
-  height: 62px;
-  border-radius: 12px;
-  --tile-head: linear-gradient(180deg, #22d3ee 0%, #0284c7 100%);
-  --tile-surface: linear-gradient(180deg, #ffffff 0%, #ecfeff 62%, #bae6fd 100%);
-  --tile-border: #7dd3fc;
-  --tile-base: #0369a1;
-  --tile-accent: #0284c7;
-  --tile-foot-bg: rgba(2, 132, 199, 0.16);
-  --tile-foot-text: #075985;
+  height: 86px;
+  --tile-surface: radial-gradient(circle at 32% 28%, #ecfeff 0%, #a5f3fc 64%, #67e8f9 100%);
+  --tile-ring: #22d3ee;
+  --tile-base: #0e7490;
+  --tile-accent: #0e7490;
+  --tile-label: #155e75;
+  --tile-glow: rgba(34, 211, 238, 0.45);
 }
 
 .dt-river_top .lgr-icon,
 .dt-river_bottom .lgr-icon {
-  width: 23px;
-  height: 23px;
+  width: 26px;
+  height: 26px;
 }
 
-/* Split / Belokan Junction Indicator (Circular Non-Tile Node — Does Not Count as a Step) */
+/* Split / Belokan Junction Indicator (Compact Obsidian-Gold Non-Tile Node) */
 .dt-intersect {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   --tile-surface: radial-gradient(circle at 35% 30%, #26394d 0%, #0f1b26 75%, #071018 100%);
-  --tile-border: rgba(250, 204, 21, 0.78);
+  --tile-ring: rgba(250, 204, 21, 0.78);
   --tile-base: #020617;
   --tile-accent: #fde047;
+  --tile-glow: rgba(250, 204, 21, 0.4);
   box-shadow:
     0 4px 0 #020617,
     0 8px 16px rgba(0, 0, 0, 0.62),
@@ -2330,9 +2268,136 @@ body.admin-mode .digital-tile {
 }
 
 .lgr-split-hub svg {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: block;
+}
+
+/* ============================================================================
+   TRAPPED / MODIFIED TILE VISUAL OVERRIDE & FLOATING ICON BADGE
+   ============================================================================ */
+.digital-tile.tile-has-trap {
+  z-index: 14;
+}
+
+.digital-tile.tile-trap-virus {
+  --tile-surface: radial-gradient(circle at 34% 28%, #3b0764 0%, #581c87 52%, #1e072e 100%) !important;
+  --tile-ring: #f43f5e !important;
+  --tile-base: #4c0519 !important;
+  --tile-accent: #fda4af !important;
+  --tile-label: #ffe4e6 !important;
+  box-shadow:
+    0 5px 0 #4c0519,
+    0 0 0 5px rgba(244, 63, 94, 0.34),
+    0 0 24px rgba(192, 38, 211, 0.72) !important;
+  animation: trapTilePulse 1.4s ease-in-out infinite alternate;
+}
+
+.digital-tile.tile-trap-fire {
+  --tile-surface: radial-gradient(circle at 34% 28%, #7c2d12 0%, #c2410c 58%, #431407 100%) !important;
+  --tile-ring: #fb923c !important;
+  --tile-base: #431407 !important;
+  --tile-accent: #fef08a !important;
+  --tile-label: #ffedd5 !important;
+  box-shadow:
+    0 5px 0 #431407,
+    0 0 0 5px rgba(251, 146, 60, 0.36),
+    0 0 24px rgba(234, 88, 12, 0.75) !important;
+  animation: trapTilePulse 1.2s ease-in-out infinite alternate;
+}
+
+.digital-tile.tile-trap-herb {
+  --tile-surface: radial-gradient(circle at 34% 28%, #064e3b 0%, #047857 58%, #022c22 100%) !important;
+  --tile-ring: #34d399 !important;
+  --tile-base: #022c22 !important;
+  --tile-accent: #a7f3d0 !important;
+  --tile-label: #ecfdf5 !important;
+  box-shadow:
+    0 5px 0 #022c22,
+    0 0 0 5px rgba(52, 211, 153, 0.34),
+    0 0 22px rgba(16, 185, 129, 0.65) !important;
+}
+
+.digital-tile.tile-trap-safe {
+  --tile-surface: radial-gradient(circle at 34% 28%, #0c4a6e 0%, #0284c7 58%, #082f49 100%) !important;
+  --tile-ring: #7dd3fc !important;
+  --tile-base: #082f49 !important;
+  --tile-accent: #e0f2fe !important;
+  --tile-label: #f0f9ff !important;
+  box-shadow:
+    0 5px 0 #082f49,
+    0 0 0 5px rgba(56, 189, 248, 0.36),
+    0 0 22px rgba(56, 189, 248, 0.65) !important;
+}
+
+.digital-tile.tile-trap-restricted {
+  --tile-surface: radial-gradient(circle at 34% 28%, #713f12 0%, #b45309 58%, #451a03 100%) !important;
+  --tile-ring: #fbbf24 !important;
+  --tile-base: #451a03 !important;
+  --tile-accent: #fef08a !important;
+  --tile-label: #fef9c3 !important;
+  box-shadow:
+    0 5px 0 #451a03,
+    0 0 0 5px rgba(251, 191, 36, 0.36),
+    0 0 22px rgba(245, 158, 11, 0.65) !important;
+}
+
+.tile-trap-badge {
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #9f1239 0%, #4c0519 100%);
+  border: 1.5px solid #fda4af;
+  color: #ffffff;
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.45px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.85), 0 0 10px rgba(244, 63, 94, 0.65);
+  pointer-events: none;
+  z-index: 26;
+}
+
+.tile-trap-badge svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.tile-trap-badge.badge-herb {
+  background: linear-gradient(180deg, #059669 0%, #064e3b 100%);
+  border-color: #6ee7b7;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8), 0 0 10px rgba(16, 185, 129, 0.6);
+}
+
+.tile-trap-badge.badge-safe {
+  background: linear-gradient(180deg, #0284c7 0%, #0c4a6e 100%);
+  border-color: #7dd3fc;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8), 0 0 10px rgba(56, 189, 248, 0.6);
+}
+
+.tile-trap-badge.badge-restricted {
+  background: linear-gradient(180deg, #d97706 0%, #78350f 100%);
+  border-color: #fde047;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8), 0 0 10px rgba(245, 158, 11, 0.6);
+}
+
+.tile-trap-badge.badge-fire {
+  background: linear-gradient(180deg, #ea580c 0%, #7c2d12 100%);
+  border-color: #fed7aa;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8), 0 0 10px rgba(234, 88, 12, 0.65);
+}
+
+@keyframes trapTilePulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.16); }
 }
 
 /* Highlighted Branch Turn Blocks */
@@ -2571,6 +2636,71 @@ body.admin-mode .digital-tile {
   to { margin-top: -12px; }
 }
 
+/* Chibi Travel Direction Indicator (Floating Above Chibi Pawn) */
+.chibi-dir-indicator {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(6, 20, 25, 0.9);
+  border: 1.5px solid rgba(173, 224, 202, 0.72);
+  color: #e2f7ee;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.78);
+  pointer-events: none;
+  z-index: 5;
+  animation: chibiDirFloat 1.5s ease-in-out infinite;
+}
+
+.board-chibi-pawn.active-pawn .chibi-dir-indicator {
+  background: rgba(16, 48, 44, 0.96);
+  border-color: #fde047;
+  color: #fde047;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.65), 0 3px 10px rgba(0, 0, 0, 0.85);
+}
+
+.chibi-dir-indicator.is-reverse {
+  background: rgba(76, 5, 25, 0.95);
+  border-color: #fb7185;
+  color: #fda4af;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.68), 0 3px 10px rgba(0, 0, 0, 0.85);
+}
+
+.chibi-dir-arrow {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chibi-dir-arrow svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.chibi-dir-rev-tag {
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  margin-left: 1px;
+}
+
+@keyframes chibiDirFloat {
+  0%, 100% { transform: translate(-50%, 0px); }
+  50% { transform: translate(-50%, -4px); }
+}
+
 /* Active Shard Subtle Halo on Host Tile */
 .digital-tile.has-active-shard {
   border-color: #d8b4fe;
@@ -2692,6 +2822,199 @@ body.admin-mode .digital-tile {
   pointer-events: none;
   z-index: 28;
   white-space: nowrap;
+}
+
+/* ============================================================================
+   FULL-STAGE VICTORY SCREEN OVERLAY
+   ============================================================================ */
+.victory-screen-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 98;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+  background: radial-gradient(circle at 50% 30%, rgba(28, 36, 18, 0.92) 0%, rgba(4, 12, 16, 0.96) 72%, rgba(2, 6, 10, 0.98) 100%);
+  backdrop-filter: blur(8px);
+}
+
+.victory-screen-overlay.visible {
+  display: flex;
+  animation: skillOverlayFadeIn 0.32s ease-out forwards;
+}
+
+.victory-stage-card {
+  width: min(640px, 95vw);
+  border-radius: 24px;
+  border: 2px solid rgba(250, 204, 21, 0.78);
+  background: linear-gradient(165deg, rgba(10, 29, 28, 0.97) 0%, rgba(6, 16, 20, 0.99) 100%);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.95), 0 0 64px rgba(250, 204, 21, 0.32);
+  padding: 26px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.victory-eyebrow {
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.16);
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  color: #fde047;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.victory-hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.victory-portrait-frame {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #fde047;
+  background: #07191a;
+  box-shadow: 0 0 28px rgba(250, 204, 21, 0.45);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.victory-portrait-frame img {
+  position: absolute;
+  max-width: none;
+  height: auto;
+  display: block;
+}
+
+.victory-hero-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 5px;
+}
+
+.victory-winner-name {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1.05;
+  text-shadow: 0 3px 18px rgba(250, 204, 21, 0.45);
+}
+
+.victory-subtitle {
+  font-size: 0.88rem;
+  color: #ade0ca;
+}
+
+.victory-stats-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.victory-stat-pill {
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(173, 224, 202, 0.3);
+  color: #f8fafc;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.victory-standings {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.victory-standing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.82rem;
+}
+
+.victory-standing-row.is-first {
+  background: rgba(250, 204, 21, 0.14);
+  border: 1px solid rgba(250, 204, 21, 0.42);
+}
+
+.victory-standing-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.victory-rank-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+  font-size: 0.74rem;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.victory-standing-row.is-first .victory-rank-badge {
+  background: #fbbf24;
+  color: #1c1917;
+}
+
+.victory-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.victory-menu-btn {
+  padding: 12px 28px;
+  border-radius: 14px;
+  border: 1.5px solid #fde047;
+  background: linear-gradient(160deg, #10b981 0%, #047857 100%);
+  color: #ffffff;
+  font-size: 0.96rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.65), 0 0 22px rgba(16, 185, 129, 0.42);
+  transition: transform 0.14s ease, filter 0.14s ease;
+}
+
+.victory-menu-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+  filter: brightness(1.08);
 }
 
 /* ============================================================================
@@ -3045,8 +3368,126 @@ body.admin-mode .digital-tile {
   z-index: 35;
   display: flex;
   align-items: flex-end;
-  gap: 28px;
+  gap: 20px;
   pointer-events: none;
+}
+
+.draw-pile-dock {
+  pointer-events: auto;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.eft-draw-pile-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #0e2c2e 0%, #071b1d 100%);
+  border: 1.5px solid rgba(173, 224, 202, 0.55);
+  color: #f8fafc;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.62);
+  transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.eft-draw-pile-btn:hover {
+  transform: translateY(-2px);
+  border-color: #fde047;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.72), 0 0 16px rgba(173, 224, 202, 0.28);
+}
+
+.draw-pile-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mint-light);
+}
+
+.draw-pile-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.draw-pile-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.draw-pile-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.2px;
+}
+
+.draw-pile-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--mint-light);
+}
+
+.draw-pile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+  max-height: 58vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.draw-pile-card-item {
+  position: relative;
+  background: rgba(6, 20, 24, 0.85);
+  border: 1px solid rgba(173, 224, 202, 0.28);
+  border-radius: 10px;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: center;
+}
+
+.draw-pile-card-item img {
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  object-fit: cover;
+  border-radius: 7px;
+  display: block;
+}
+
+.draw-pile-qty-badge {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.92);
+  border: 1px solid #fde047;
+  color: #fde047;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.draw-pile-card-name {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.draw-pile-card-rarity {
+  font-size: 0.64rem;
+  color: var(--mint-light);
+  font-weight: 700;
 }
 
 .tucked-cards-fan {
@@ -4751,5 +5192,37 @@ body.admin-mode .digital-tile {
   .tef-card-desc,
   .tef-outcome-pill {
     font-size: 0.76rem;
+  }
+
+  /* Draw Pile & Victory Screen on Mobile Portrait */
+  .draw-pile-dock {
+    margin-bottom: 8px;
+  }
+
+  .eft-draw-pile-btn {
+    padding: 7px 10px;
+    gap: 6px;
+  }
+
+  .draw-pile-title {
+    font-size: 0.7rem;
+  }
+
+  .draw-pile-count {
+    font-size: 0.62rem;
+  }
+
+  .victory-stage-card {
+    padding: 18px 14px;
+    gap: 12px;
+  }
+
+  .victory-hero-info {
+    align-items: center;
+    text-align: center;
+  }
+
+  .victory-winner-name {
+    font-size: 1.5rem;
   }
 }

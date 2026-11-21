@@ -254,10 +254,11 @@
     return 999;
   }
 
-  function getTilesWithinRadius(centerTileId, radius, onlyNormal = false) {
+  function getTilesWithinRadius(centerTileId, radius, onlyNormal = false, excludeCenter = false) {
     const result = [];
     DATA.BOARD_TILES.forEach((t) => {
       if (t.id === "T0" || t.type === "intersect" || t.offTrack) return;
+      if (excludeCenter && t.id === centerTileId) return;
       const d = getTileDistance(centerTileId, t.id);
       if (d <= radius) {
         if (!onlyNormal || t.type === "normal") {
@@ -313,6 +314,7 @@
   let queuedTileEffectRuns = [];
   let lastShownTileEffectRevealId = null;
   let isSkillActivationInFlight = false;
+  let isProcessingRemoteAction = false;
   let activeStepsRemaining = 0;
   let stepTimerId = null;
   let diceAnimIntervalId = null;
@@ -351,7 +353,10 @@
   function addOrRefreshPassive(player, passiveObj) {
     if (!player || !passiveObj) return;
     player.passives = (player.passives || []).filter((p) => p.key !== passiveObj.key);
-    player.passives.push(passiveObj);
+    player.passives.push({
+      ...passiveObj,
+      activatedOnTurn: state ? state.totalTurnsCompleted : -1
+    });
   }
 
   function escapeHtml(str) {
@@ -1719,20 +1724,132 @@
   function checkVictory(player) {
     const totalShards = player.shards + player.metaShard;
     if (totalShards >= state.rules.victoryShards && !state.winner) {
-      state.winner = player;
+      state.winner = {
+        index: player.index,
+        id: player.id,
+        name: player.name,
+        charId: player.charId,
+        charName: player.charName || player.name,
+        color: player.color,
+        shards: player.shards,
+        metaShard: player.metaShard,
+        tc: player.tc,
+        cycle: state.cycle
+      };
+      pendingInteraction = null;
+      isWalkingAnim = false;
+      closeModal();
       playSfx("shard");
       addLog(`VICTORY: ${player.name} collected ${totalShards} Tartarus Shards and escaped Tartarus!`);
-      openInfoModal(
-        "Escape From Tartarus — Victory",
-        `<div style="text-align:center;padding:14px;">
-          <h2 style="color:#fbbf24;margin-bottom:8px;">${player.name} Wins the Match</h2>
-          <p style="color:#ade0ca;margin-bottom:12px;">Collected <strong>💎 ${player.shards} Tartarus Shards</strong> + <strong>${player.metaShard} Meta-Shard</strong> on Cycle ${state.cycle}.</p>
-          <p style="font-size:0.85rem;color:#94a3b8;">Final Balance: 💰 ${player.tc} TC</p>
-        </div>`
-      );
+      renderVictoryScreenOverlay();
+      broadcastMultiplayerState();
       return true;
     }
     return false;
+  }
+
+  function renderVictoryScreenOverlay() {
+    const overlay = document.getElementById("victory-screen-overlay");
+    if (!overlay) return;
+    const w = state ? state.winner : null;
+    if (!w) {
+      overlay.classList.remove("visible");
+      overlay.innerHTML = "";
+      return;
+    }
+    const ch = DATA.CHARACTERS[w.charId] || {};
+    const pt = ch.portrait || null;
+    const portraitHtml =
+      pt && pt.src
+        ? `<img src="${pt.src}" alt="${escapeHtml(w.name)}" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
+        : `<div class="ph-portrait-fallback" style="width:100%;height:100%;"><div class="ph-fallback-icon" style="fill:${escapeHtml(w.color || "#fbbf24")};">${getCharacterSvgIcon(w.charId)}</div></div>`;
+
+    const ranked = [...(state.players || [])].sort((a, b) => {
+      const sa = (a.shards || 0) + (a.metaShard || 0);
+      const sb = (b.shards || 0) + (b.metaShard || 0);
+      if (sb !== sa) return sb - sa;
+      return (b.tc || 0) - (a.tc || 0);
+    });
+
+    const standingsHtml = ranked
+      .map((p, idx) => {
+        const shTot = (p.shards || 0) + (p.metaShard || 0);
+        const isWinnerRow = p.id === w.id || idx === 0;
+        return `
+        <div class="victory-standing-row ${isWinnerRow ? "is-first" : ""}">
+          <div class="victory-standing-left">
+            <span class="victory-rank-badge">#${idx + 1}</span>
+            <span>${escapeHtml(p.name)}</span>
+          </div>
+          <div style="display:flex;gap:12px;font-weight:700;color:#cbd5e1;">
+            <span>💎 ${shTot}/${state.rules.victoryShards}</span>
+            <span>💰 ${p.tc} TC</span>
+          </div>
+        </div>`;
+      })
+      .join("");
+
+    const totalShards = (w.shards || 0) + (w.metaShard || 0);
+    overlay.innerHTML = `
+      <div class="victory-stage-card">
+        <div class="victory-eyebrow">ESCAPED FROM TARTARUS · VICTORY</div>
+        <div class="victory-hero-row">
+          <div class="victory-portrait-frame">${portraitHtml}</div>
+          <div class="victory-hero-info">
+            <div class="victory-winner-name">${escapeHtml(w.name)} Menang!</div>
+            <div class="victory-subtitle">Berhasil mengumpulkan ${totalShards} Shard pada Cycle ${w.cycle || state.cycle}.</div>
+            <div class="victory-stats-pills">
+              <span class="victory-stat-pill">💎 ${w.shards} Shard${w.metaShard ? ` + ${w.metaShard} Meta` : ""}</span>
+              <span class="victory-stat-pill">💰 ${w.tc} TC</span>
+              <span class="victory-stat-pill">Cycle ${w.cycle || state.cycle}</span>
+            </div>
+          </div>
+        </div>
+        <div class="victory-standings">
+          ${standingsHtml}
+        </div>
+        <div class="victory-actions">
+          <button class="victory-menu-btn" type="button" onclick="window.EFT_APP.resetGameToMainMenu()">Kembali ke Main Menu</button>
+        </div>
+      </div>`;
+    overlay.classList.add("visible");
+  }
+
+  function resetGameToMainMenu() {
+    playSfx("click");
+    clearTimeout(stepTimerId);
+    clearDiceOverlay();
+    clearDiceOfFateTimers();
+    cancelTileEffectShuffle(true);
+    dismissSkillPopup(true, true);
+    closeModal();
+    if (mp.mode !== "local") {
+      detachFirebaseListeners();
+      if (mp.bc) {
+        try { mp.bc.close(); } catch (e) {}
+        mp.bc = null;
+      }
+      clearInterval(mp.lanPollInterval);
+      mp.lanPollInterval = null;
+      mp.mode = "local";
+      mp.roomCode = "";
+      mp.mySeat = -1;
+      mp.lobby = {
+        status: "idle",
+        hostClientId: null,
+        patchId: "alpha2",
+        compendiumId: "comp_beta1",
+        fillWithBots: true,
+        members: []
+      };
+    }
+    const vOv = document.getElementById("victory-screen-overlay");
+    if (vOv) {
+      vOv.classList.remove("visible");
+      vOv.innerHTML = "";
+    }
+    initGame("alpha2", "comp_beta1", ["bocchi", "aventurine", "lilith", "joker"]);
+    openWelcomeSetupModal("local");
   }
 
   // ============================================================================
@@ -1742,12 +1859,24 @@
     return state.players[state.activePlayerIndex];
   }
 
-  function canLocalPlayerAct() {
-    if (mp.mode === "local" || mp.mySeat === -1) return true;
-    if (pendingInteraction && pendingInteraction.player) {
-      return mp.mySeat === pendingInteraction.player.index;
+  function getExpectedActingSeat() {
+    if (!state) return -1;
+    if (state.activeMinigame && state.activeMinigame.status === "rolling") {
+      const curIdx = getCurrentDiceOfFateEntryIndex(state.activeMinigame);
+      if (curIdx >= 0 && state.activeMinigame.entries[curIdx]) {
+        return state.activeMinigame.entries[curIdx].playerIndex;
+      }
     }
-    return mp.mySeat === state.activePlayerIndex;
+    if (pendingInteraction && pendingInteraction.player && typeof pendingInteraction.player.index === "number") {
+      return pendingInteraction.player.index;
+    }
+    return state.activePlayerIndex;
+  }
+
+  function canLocalPlayerAct() {
+    if (isProcessingRemoteAction) return true;
+    if (mp.mode === "local" || mp.mySeat === -1) return true;
+    return mp.mySeat === getExpectedActingSeat();
   }
 
   function handleRollButton() {
@@ -2164,6 +2293,7 @@
   }
 
   function resolveStageIsMineChoice(tileId = null) {
+    if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("stage_is_mine_choice", { tileId });
       return;
@@ -2198,6 +2328,7 @@
   }
 
   function resolveForcedAllInChoice(choice = "shard") {
+    if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("forced_all_in_choice", { choice });
       return;
@@ -2891,7 +3022,8 @@
   // END OF TURN, MINIGAME & CYCLE RESET
   // ============================================================================
   function endCurrentTurn() {
-    if (isWalkingAnim || isTileEffectAnimating) return;
+    if (isWalkingAnim || isTileEffectAnimating || (state && state.activeMinigame)) return;
+    if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("end_turn", {});
       return;
@@ -2929,11 +3061,17 @@
       }
     }
 
+    const finishingTurnNum = state.totalTurnsCompleted;
     state.players.forEach((p) => {
       p.passives = p.passives.filter((pas) => {
         if (typeof pas.remainingTurns === "number") {
+          if (pas.activatedOnTurn === finishingTurnNum) return true;
           pas.remainingTurns--;
-          return pas.remainingTurns > 0;
+          if (pas.remainingTurns <= 0) {
+            addLog(`Passive [${pas.name}] milik ${p.name} telah berakhir.`);
+            return false;
+          }
+          return true;
         }
         return true;
       });
@@ -2941,6 +3079,7 @@
 
     state.boardTokens = state.boardTokens.filter((t) => {
       if (typeof t.remainingTurns === "number") {
+        if (t.placedOnTurn === finishingTurnNum) return true;
         t.remainingTurns--;
         return t.remainingTurns > 0;
       }
@@ -2998,23 +3137,9 @@
     state.roundInCycle = 1;
     state.shops = createShopState(state.rules);
 
+    // Reshuffle decks only — active Unique Passives & turn-based board traps persist across cycle boundaries
     state.players.forEach((p) => {
-      p.passives = p.passives.filter((pas) => {
-        if (typeof pas.remainingCycles === "number") {
-          pas.remainingCycles--;
-          return pas.remainingCycles > 0;
-        }
-        return true;
-      });
       reshufflePlayerCycleDeck(p);
-    });
-
-    state.boardTokens = state.boardTokens.filter((t) => {
-      if (typeof t.remainingCycles === "number") {
-        t.remainingCycles--;
-        return t.remainingCycles > 0;
-      }
-      return true;
     });
 
     if (
@@ -3754,6 +3879,7 @@
   }
 
   function playSkillCardFromHand(cardUid, options = {}) {
+    if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("play_card", { cardUid, options });
       closeModal();
@@ -3833,10 +3959,47 @@
   }
 
   function executeCardEffect(player, card, options = {}) {
-    const targetPlayer =
-      options.targetPlayerIndex !== undefined
-        ? state.players[options.targetPlayerIndex]
-        : state.players.find((p) => p.index !== player.index && !p.inSpawn) || player;
+    const isRadiusPlayerCard =
+      card.targetType === "opponent_in_radius" || card.targetType === "any_player_in_radius";
+    const cardRadius = card.radius || 5;
+
+    let targetPlayer = null;
+    if (options.targetPlayerIndex !== undefined && state.players[options.targetPlayerIndex]) {
+      targetPlayer = state.players[options.targetPlayerIndex];
+    } else if (card.targetType === "opponent_in_radius") {
+      targetPlayer =
+        state.players.find(
+          (p) => p.index !== player.index && !p.inSpawn && getTileDistance(player.tileId, p.tileId) <= cardRadius
+        ) || null;
+    } else if (card.targetType === "any_player_in_radius") {
+      targetPlayer =
+        state.players.find(
+          (p) => p.index !== player.index && !p.inSpawn && getTileDistance(player.tileId, p.tileId) <= cardRadius
+        ) || player;
+    } else if (card.targetType === "other_player") {
+      targetPlayer = state.players.find((p) => p.index !== player.index && !p.inSpawn) || null;
+    } else {
+      targetPlayer = state.players.find((p) => p.index !== player.index && !p.inSpawn) || player;
+    }
+
+    if (isRadiusPlayerCard) {
+      if (!targetPlayer) {
+        const msg = `Tidak ada target valid dalam radius ${cardRadius} blok.`;
+        addLog(`[${card.name}]: ${msg}`);
+        return msg;
+      }
+      if (card.targetType === "opponent_in_radius" && targetPlayer.index === player.index) {
+        const msg = `Kartu [${card.name}] hanya bisa menarget pemain lain dalam radius ${cardRadius} blok.`;
+        addLog(msg);
+        return msg;
+      }
+      const distToTarget = getTileDistance(player.tileId, targetPlayer.tileId);
+      if (distToTarget > cardRadius) {
+        const msg = `${targetPlayer.name} berada di luar radius ${cardRadius} blok (${distToTarget} blok).`;
+        addLog(`[${card.name}]: ${msg}`);
+        return msg;
+      }
+    }
 
     if (targetPlayer && targetPlayer.index !== player.index) {
       if (targetPlayer.inSpawn) {
@@ -3882,7 +4045,14 @@
       }
       case "teleport_normal_radius": {
         const destTileId = options.targetTileId;
+        const rad = card.radius || 5;
         if (destTileId && TILE_MAP[destTileId]) {
+          const dist = getTileDistance(player.tileId, destTileId);
+          if (dist > rad || TILE_MAP[destTileId].type !== "normal") {
+            const msg = `Tile tujuan di luar radius ${rad} blok atau bukan Normal Tile.`;
+            addLog(`[${card.name}]: ${msg}`);
+            return msg;
+          }
           player.tileId = destTileId;
           if (player.inSpawn && destTileId !== "T0") player.inSpawn = false;
           const destTile = TILE_MAP[destTileId];
@@ -4079,13 +4249,21 @@
       }
       case "place_trap_virus": {
         const tileId = options.targetTileId || player.tileId;
+        const rad = card.radius || 4;
+        if (getTileDistance(player.tileId, tileId) > rad) {
+          const msg = `Tile [${tileId}] berada di luar radius ${rad} blok.`;
+          addLog(`[Punishing Virus]: ${msg}`);
+          return msg;
+        }
         state.boardTokens.push({
           id: "tok_" + Date.now(),
           type: "virus_trap",
           name: "Punishing Virus",
           ownerIndex: player.index,
+          ownerColor: player.color,
           tileId,
-          remainingTurns: getFullCycleTurns()
+          remainingTurns: getFullCycleTurns(),
+          placedOnTurn: state.totalTurnsCompleted
         });
         const msg = `Trap Punishing Virus dipasang di [${tileId}] selama 1 Full Cycle!`;
         addLog(`[Punishing Virus]: ${msg}`);
@@ -4221,7 +4399,7 @@
           addLog(`[Will of Rebellion]: Menyalin efek [${copiedCard.name}].`);
           const copyOpts = { ...options };
           if (copiedCard.rarity === "Unique") {
-            copyOpts.copiedUniqueDurationTurns = 1;
+            copyOpts.copiedUniqueDurationTurns = Math.max(1, state.players.length);
           }
           const innerOutcome = executeCardEffect(player, copiedCard, copyOpts);
           return `Menyalin [${copiedCard.name}]: ${innerOutcome || copiedCard.description}`;
@@ -4542,6 +4720,7 @@
     renderActionLog();
     renderPromptBar();
     renderDiceOfFateOverlay();
+    renderVictoryScreenOverlay();
     applyCameraTransform();
     scheduleMultiplayerBotIfNeeded();
   }
@@ -4830,49 +5009,131 @@
     return `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">${parts.join("")}<circle cx="${cx}" cy="${cy}" r="1.7" fill="currentColor"/></svg>`;
   }
 
-  function buildTileInnerHtml(t) {
+  function getTrapTileMeta(tok) {
+    if (!tok) return null;
+    switch (tok.type) {
+      case "virus_trap":
+        return {
+          tileCls: "tile-trap-virus",
+          badgeCls: "badge-virus",
+          label: "VIRUS",
+          icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5M4.9 4.9l3.5 3.5M15.6 15.6l3.5 3.5M19.1 4.9l-3.5 3.5M8.4 15.6l-3.5 3.5"/></svg>`
+        };
+      case "fire_tile":
+        return {
+          tileCls: "tile-trap-fire",
+          badgeCls: "badge-fire",
+          label: "FIRE",
+          icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c2 3.2 4.8 5.2 4.8 9.2a4.8 4.8 0 0 1-9.6 0c0-1.8.6-3.3 1.4-4.5-.2 1.3.5 2.3 1.5 2.5C9.8 6.4 10.6 4.1 12 2z"/></svg>`
+        };
+      case "herb_tile":
+        return {
+          tileCls: "tile-trap-herb",
+          badgeCls: "badge-herb",
+          label: "HERB",
+          icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`
+        };
+      case "safe_zone":
+        return {
+          tileCls: "tile-trap-safe",
+          badgeCls: "badge-safe",
+          label: "SAFE",
+          icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3l8 3.5v5.5c0 4.6-3.2 8.2-8 9.5-4.8-1.3-8-4.9-8-9.5V6.5L12 3z"/></svg>`
+        };
+      case "restricted_zone":
+        return {
+          tileCls: "tile-trap-restricted",
+          badgeCls: "badge-restricted",
+          label: "TAX 20",
+          icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
+        };
+      default:
+        return {
+          tileCls: "tile-trap-virus",
+          badgeCls: "badge-virus",
+          label: "TRAP",
+          icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3L2 21h20L12 3z"/><path d="M12 9v5M12 17h.01"/></svg>`
+        };
+    }
+  }
+
+  function buildTileInnerHtml(t, activeToken = null) {
     if (printPreviewMode) {
       return `<span class="lgr-print-id">${escapeHtml(t.id.replace("T", ""))}</span>`;
     }
     if (t.type === "intersect") {
       return `<div class="lgr-split-hub" title="Belokan Split (tidak terhitung langkah)">${buildSplitHubSvg(t)}</div>`;
     }
-    const specs = {
-      spawn: { head: "START", val: "", foot: "TARTARUS" },
-      normal: { head: "", val: "", foot: "" },
-      tc_plus10: { head: "+10 TC", val: "", foot: "COIN" },
-      tc_minus5: { head: "-5 TC", val: "", foot: "TAX" },
-      card_plus1: { head: "+1 CARD", val: "", foot: "DRAW" },
-      card_minus1: { head: "-1 CARD", val: "", foot: "DROP" },
-      pos_effect: { head: "BONUS", val: "", foot: "BUFF" },
-      neg_effect: { head: "CURSE", val: "", foot: "TRAP" },
-      event: { head: "EVENT", val: "", foot: "GLOBAL" },
-      versus: { head: "VERSUS", val: "", foot: "1V1 DUEL" },
-      trading: { head: "TRADE", val: "", foot: "BARTER" },
-      merchant: { head: `SHOP ${t.shopId || 1}`, val: "", foot: "MARKET" },
-      warp: { head: "WARP", val: "", foot: "PORTAL" },
-      river_top: { head: "RIVER", val: "", foot: "15 TC" },
-      river_bottom: { head: "RIVER", val: "", foot: "EXIT" }
+    if (activeToken) {
+      const tm = getTrapTileMeta(activeToken);
+      return `
+        <div class="lgr-tile-shell">
+          <div class="lgr-icon">${tm.icon}</div>
+          <div class="lgr-pill-label">${escapeHtml(tm.label)}</div>
+        </div>
+        <div class="tile-trap-badge ${tm.badgeCls}">${tm.icon}<span>${escapeHtml(tm.label)}</span></div>`;
+    }
+    const labels = {
+      spawn: "START",
+      normal: "",
+      tc_plus10: "+10",
+      tc_minus5: "-5",
+      card_plus1: "+1C",
+      card_minus1: "-1C",
+      pos_effect: "BONUS",
+      neg_effect: "CURSE",
+      event: "EVENT",
+      versus: "VS",
+      trading: "TRADE",
+      merchant: `SHOP ${t.shopId || 1}`,
+      warp: "WARP",
+      river_top: "RIVER",
+      river_bottom: "EXIT"
     };
-    const spec = specs[t.type] || { head: getCleanTileLabel(t), val: "", foot: "" };
+    const lbl = labels[t.type] !== undefined ? labels[t.type] : getCleanTileLabel(t);
     return `
       <div class="lgr-tile-shell">
-        <div class="lgr-head">${escapeHtml(spec.head)}</div>
-        <div class="lgr-body">
-          <div class="lgr-icon">${getTileSvgIcon(t.type)}</div>
-          ${spec.val ? `<div class="lgr-val">${escapeHtml(spec.val)}</div>` : ""}
-        </div>
-        ${spec.foot ? `<div class="lgr-foot">${escapeHtml(spec.foot)}</div>` : ""}
+        <div class="lgr-icon">${getTileSvgIcon(t.type)}</div>
+        ${lbl ? `<div class="lgr-pill-label">${escapeHtml(lbl)}</div>` : ""}
       </div>`;
   }
 
   function getTileRadius(tile) {
-    if (!tile) return 42;
-    if (tile.type === "intersect") return 25;
-    if (tile.type === "spawn" || tile.type === "merchant" || tile.type === "warp") return 46;
-    if (tile.type === "river_top" || tile.type === "river_bottom" || tile.type === "event" || tile.type === "versus") return 44;
-    if (tile.type === "normal") return 38;
-    return 42;
+    if (!tile) return 40;
+    if (tile.type === "intersect") return 22;
+    if (tile.type === "spawn") return 45;
+    if (tile.type === "merchant" || tile.type === "warp" || tile.type === "event" || tile.type === "versus") return 44;
+    if (tile.type === "river_top" || tile.type === "river_bottom") return 43;
+    if (tile.type === "normal") return 34;
+    return 40;
+  }
+
+  function buildChibiDirectionIndicatorHtml(p) {
+    const currTile = TILE_MAP[p.tileId];
+    if (!currTile) return "";
+    const isRev = !!p.reverseNextRoll;
+    const opts = getNextPlayableOptions(p.tileId, p.lastTileId || null, isRev ? -1 : 1);
+    if (!opts || opts.length === 0) return "";
+
+    const arrowSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>`;
+    const angles = [];
+    opts.slice(0, 2).forEach((opt) => {
+      const targetTile = TILE_MAP[opt.viaSplitId || opt.tileId];
+      if (!targetTile) return;
+      const dx = ((targetTile.x - currTile.x) / 100) * BOARD_W;
+      const dy = ((targetTile.y - currTile.y) / 100) * BOARD_H;
+      if (Math.hypot(dx, dy) < 1) return;
+      const deg = Math.round((Math.atan2(dy, dx) * 180) / Math.PI);
+      if (!angles.some((a) => Math.abs(a - deg) < 16)) {
+        angles.push(deg);
+      }
+    });
+    if (angles.length === 0) return "";
+
+    const arrowsHtml = angles
+      .map((deg) => `<span class="chibi-dir-arrow" style="transform:rotate(${deg}deg);">${arrowSvg}</span>`)
+      .join("");
+    return `<div class="chibi-dir-indicator ${isRev ? "is-reverse" : ""}" title="${isRev ? "Arah gerak MUNDUR (Mind Deviation)" : "Arah gerak langkah dadu berikutnya"}">${arrowsHtml}${isRev ? `<span class="chibi-dir-rev-tag">REV</span>` : ""}</div>`;
   }
 
   function renderBoardSvgOverlay() {
@@ -5152,10 +5413,12 @@
     surface.classList.toggle("print-mode", printPreviewMode);
     renderBoardSvgOverlay();
 
+    const localCanAct = canLocalPlayerAct();
     const candidateSet = new Set(
-      pendingInteraction && pendingInteraction.type === "choose_branch" ? pendingInteraction.candidates : []
+      localCanAct && pendingInteraction && pendingInteraction.type === "choose_branch" ? pendingInteraction.candidates : []
     );
     const radiusSet = new Set(
+      localCanAct &&
       pendingInteraction &&
       (pendingInteraction.type === "select_tile_target" || pendingInteraction.type === "stage_is_mine")
         ? pendingInteraction.validTileIds
@@ -5174,12 +5437,17 @@
       if (t.shopArrow) classes.push(`shop-arrow-${t.shopArrow}`);
       const effectMeta = TILE_EFFECT_META[t.type] || null;
       const hasShard = shardTileSet.has(t.id);
-      const hasTok = !!tokenTileMap[t.id];
+      const tokOnTile = tokenTileMap[t.id] || null;
+      const hasTok = !!tokOnTile;
       if (effectMeta || hasShard || hasTok) {
         classes.push("has-tile-effect");
       }
       if (hasShard) {
         classes.push("has-active-shard");
+      }
+      if (hasTok) {
+        const tm = getTrapTileMeta(tokOnTile);
+        classes.push("tile-has-trap", tm.tileCls);
       }
 
       let branchTagAttr = "";
@@ -5188,7 +5456,7 @@
         tip = `${effectMeta.title}: ${effectMeta.effect}`;
       }
       if (hasTok) {
-        const tDesc = TOKEN_EFFECT_DESCRIPTIONS[tokenTileMap[t.id].type] || tokenTileMap[t.id].name;
+        const tDesc = TOKEN_EFFECT_DESCRIPTIONS[tokOnTile.type] || tokOnTile.name;
         tip = tip ? `${tip} | ${tDesc}` : tDesc;
       }
       if (hasShard) {
@@ -5215,6 +5483,7 @@
       }
       if (radiusSet.has(t.id)) classes.push("in-radius");
       const stepLbl =
+        localCanAct &&
         pendingInteraction &&
         (pendingInteraction.type === "select_tile_target" || pendingInteraction.type === "stage_is_mine") &&
         pendingInteraction.tileStepLabels &&
@@ -5230,7 +5499,7 @@
            onmouseenter="window.EFT_APP.onTileHover('${t.id}', true)"
            onmouseleave="window.EFT_APP.onTileHover('${t.id}', false)"
            onclick="window.EFT_APP.onTileClicked('${t.id}')">
-        ${buildTileInnerHtml(t)}
+        ${buildTileInnerHtml(t, tokOnTile)}
       </div>`;
     });
 
@@ -5260,12 +5529,6 @@
       </div>`;
     });
 
-    const tokenHtml = state.boardTokens.map((tok) => {
-      const tile = TILE_MAP[tok.tileId];
-      if (!tile) return "";
-      return `<div class="token-marker" style="left:${tile.x}%;top:${tile.y}%;">${escapeHtml(tok.name)}</div>`;
-    });
-
     // Group players by tile and position floating pins around the upper rim so they NEVER cover the tile block!
     const tileOccupants = {};
     state.players.forEach((p) => {
@@ -5287,21 +5550,24 @@
       const pawnVisual = chibiSrc
         ? `<img class="board-chibi-img" src="${chibiSrc}" alt="${escapeHtml(p.name)}" decoding="async" />`
         : `<div class="board-pawn-fallback">${getCharacterSvgIcon(p.charId)}</div>`;
+      const dirIndicator = buildChibiDirectionIndicatorHtml(p);
       return `
       <div class="board-chibi-pawn ${isAct ? "active-pawn" : ""} ${walkCls}"
            style="left:${px}%;top:${py}%;--pawn-color:${p.color};"
            title="${escapeHtml(p.name)} @ ${p.tileId}"
            onclick="event.stopPropagation();window.EFT_APP.${isAdminUnlocked ? "openSandboxPlayerModal" : "focusCameraOnPlayer"}(${idx})">
+        ${dirIndicator}
         ${pawnVisual}
         <span class="chibi-base-ring"></span>
       </div>`;
     });
 
-    nodesLayer.innerHTML = tilesHtml.join("") + shardHtml.join("") + fadingShardHtml.join("") + tokenHtml.join("") + pawnsHtml.join("");
+    nodesLayer.innerHTML = tilesHtml.join("") + shardHtml.join("") + fadingShardHtml.join("") + pawnsHtml.join("");
     applyBranchPreviewTileClasses();
   }
 
   function onTileHover(tileId, entering) {
+    if (!canLocalPlayerAct()) return;
     if (!pendingInteraction || pendingInteraction.type !== "choose_branch") return;
     if (!pendingInteraction.candidates.includes(tileId)) return;
     if (!entering && isTouchOnlyDevice()) return;
@@ -5315,6 +5581,12 @@
     const viewPlayerIdx = mp.mySeat !== -1 ? mp.mySeat : state.activePlayerIndex;
     const player = state.players[viewPlayerIdx] || getActivePlayer();
     const activeP = getActivePlayer();
+
+    const drawCountEl = document.getElementById("draw-pile-count");
+    if (drawCountEl && player) {
+      const rem = (player.deck || []).length;
+      drawCountEl.textContent = `${rem} Kartu`;
+    }
 
     const rollBtn = document.getElementById("btn-roll-dice");
     const rollCountEl = document.getElementById("roll-counter-label");
@@ -5422,6 +5694,57 @@
       .join("");
   }
 
+  function openDrawPileModal() {
+    if (!state) return;
+    playSfx("click");
+    const viewPlayerIdx = mp.mySeat !== -1 ? mp.mySeat : state.activePlayerIndex;
+    const player = state.players[viewPlayerIdx] || getActivePlayer();
+    if (!player) return;
+
+    const deck = player.deck || [];
+    const rarityOrder = { Common: 1, Uncommon: 2, Rare: 3, Epic: 4, Unique: 5, Ultimate: 6 };
+    const grouped = new Map();
+    deck.forEach((c) => {
+      const key = c.id || c.name;
+      if (!grouped.has(key)) {
+        grouped.set(key, { card: c, count: 0 });
+      }
+      grouped.get(key).count++;
+    });
+
+    const sortedEntries = Array.from(grouped.values()).sort((a, b) => {
+      const ra = rarityOrder[a.card.rarity] || 9;
+      const rb = rarityOrder[b.card.rarity] || 9;
+      if (ra !== rb) return ra - rb;
+      return String(a.card.name).localeCompare(String(b.card.name));
+    });
+
+    const bodyHtml =
+      sortedEntries.length === 0
+        ? `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:0.86rem;">
+             Draw Pile kosong — semua kartu sudah berada di tangan atau discard pile hingga reshuffle Cycle berikutnya.
+           </div>`
+        : `<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:10px;">
+             Sisa <strong>${deck.length} kartu</strong> di Draw Pile milik <strong>${escapeHtml(player.name)}</strong> (diurutkan berdasarkan rarity, bukan urutan tarik acak):
+           </div>
+           <div class="draw-pile-grid">
+             ${sortedEntries
+               .map(({ card, count }) => {
+                 const imgUrl = getCardImage(card, player.charId);
+                 return `
+                 <div class="draw-pile-card-item" title="${escapeHtml(card.description || card.name)}">
+                   ${count > 1 ? `<span class="draw-pile-qty-badge">x${count}</span>` : ""}
+                   <img src="${imgUrl}" alt="${escapeHtml(card.name)}" loading="lazy" decoding="async" />
+                   <div class="draw-pile-card-name">${escapeHtml(card.name)}</div>
+                   <div class="draw-pile-card-rarity">${escapeHtml(card.rarity || "Skill")}</div>
+                 </div>`;
+               })
+               .join("")}
+           </div>`;
+
+    openInfoModal(`Draw Pile — ${escapeHtml(player.name)} (${deck.length} Kartu)`, bodyHtml);
+  }
+
   function renderPromptBar() {
     const bar = document.getElementById("action-prompt-bar");
     if (!pendingInteraction || pendingInteraction.type === "choose_branch") {
@@ -5430,6 +5753,15 @@
       return;
     }
     bar.classList.add("visible");
+
+    if (!canLocalPlayerAct()) {
+      const actorName =
+        pendingInteraction.player && pendingInteraction.player.name
+          ? pendingInteraction.player.name
+          : getActivePlayer().name;
+      bar.innerHTML = `<div>Menunggu <strong>${escapeHtml(actorName)}</strong> menentukan pilihan...</div>`;
+      return;
+    }
 
     if (pendingInteraction.type === "prompt_shard_buy") {
       const sh = pendingInteraction.shard;
@@ -6195,21 +6527,47 @@
     mp.processedActionIds.add(aid);
 
     const d = act.data || {};
-    if (act.action === "lobby_join") processLobbyJoinAction(d);
-    else if (act.action === "roll_dice") rollMovementDice();
-    else if (act.action === "end_turn") endCurrentTurn();
-    else if (act.action === "play_card") playSkillCardFromHand(d.cardUid, d.options || {});
-    else if (act.action === "choose_branch") chooseBranchTile(d.tileId);
-    else if (act.action === "buy_shard") confirmShardPurchase(d.buy);
-    else if (act.action === "use_river") confirmRiverShortcut(d.useRiver);
-    else if (act.action === "resume_merchant") resumeFromMerchantPrompt();
-    else if (act.action === "buy_shop") buyShopItem(d.shopId, d.itemType, true);
-    else if (act.action === "resolve_versus") resolveVersusDuel(d.oppIdx, d.bet);
-    else if (act.action === "execute_trade") executeTradeAction(d.partnerIdx, d.tradeType);
-    else if (act.action === "stage_is_mine_choice") resolveStageIsMineChoice(d.tileId);
-    else if (act.action === "forced_all_in_choice") resolveForcedAllInChoice(d.choice);
-    else if (act.action === "minigame_roll") rollDiceOfFateCurrent();
-    else if (act.action === "minigame_finish") finishDiceOfFateMinigame();
+    if (act.action === "lobby_join") {
+      processLobbyJoinAction(d);
+      return;
+    }
+
+    if (!state) return;
+    let senderSeat = -1;
+    if (act.senderId && state.seatMap && typeof state.seatMap[act.senderId] === "number") {
+      senderSeat = state.seatMap[act.senderId];
+    } else if (typeof act.seat === "number") {
+      senderSeat = act.seat;
+    } else if (typeof act.slot === "number") {
+      senderSeat = act.slot;
+    }
+
+    const expectedSeat = getExpectedActingSeat();
+    if (act.action === "minigame_finish") {
+      if (senderSeat < 0) return;
+    } else if (senderSeat !== expectedSeat) {
+      return;
+    }
+
+    isProcessingRemoteAction = true;
+    try {
+      if (act.action === "roll_dice") rollMovementDice();
+      else if (act.action === "end_turn") endCurrentTurn();
+      else if (act.action === "play_card") playSkillCardFromHand(d.cardUid, d.options || {});
+      else if (act.action === "choose_branch") chooseBranchTile(d.tileId);
+      else if (act.action === "buy_shard") confirmShardPurchase(d.buy);
+      else if (act.action === "use_river") confirmRiverShortcut(d.useRiver);
+      else if (act.action === "resume_merchant") resumeFromMerchantPrompt();
+      else if (act.action === "buy_shop") buyShopItem(d.shopId, d.itemType, true);
+      else if (act.action === "resolve_versus") resolveVersusDuel(d.oppIdx, d.bet);
+      else if (act.action === "execute_trade") executeTradeAction(d.partnerIdx, d.tradeType);
+      else if (act.action === "stage_is_mine_choice") resolveStageIsMineChoice(d.tileId);
+      else if (act.action === "forced_all_in_choice") resolveForcedAllInChoice(d.choice);
+      else if (act.action === "minigame_roll") rollDiceOfFateCurrent();
+      else if (act.action === "minigame_finish") finishDiceOfFateMinigame();
+    } finally {
+      isProcessingRemoteAction = false;
+    }
   }
 
   function startOnlineHostRoom() {
@@ -6481,6 +6839,7 @@
   // INTERACTIVE PROMPTS & MODALS
   // ============================================================================
   function confirmShardPurchase(buy) {
+    if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("buy_shard", { buy });
       return;
@@ -6517,6 +6876,7 @@
   }
 
   function confirmRiverShortcut(useRiver) {
+    if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("use_river", { useRiver });
       return;
@@ -6538,6 +6898,7 @@
   }
 
   function resumeFromMerchantPrompt() {
+    if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("resume_merchant", {});
       return;
@@ -6549,6 +6910,11 @@
   }
 
   function buyShopItem(shopId, itemType, closeAfter = false) {
+    if (!canLocalPlayerAct() && !isAdminUnlocked) return;
+    if (pendingInteraction && pendingInteraction.type === "prompt_merchant_pass" && pendingInteraction.shopId !== shopId && !isAdminUnlocked) {
+      alert(`Kamu sedang berada di Shop ${pendingInteraction.shopId} dan tidak bisa mengakses Shop ${shopId}.`);
+      return;
+    }
     if (isRemoteClient()) {
       sendClientActionToHost("buy_shop", { shopId, itemType });
       closeModal();
@@ -6619,7 +6985,7 @@
       return;
     }
 
-    if (pendingInteraction) {
+    if (pendingInteraction && canLocalPlayerAct()) {
       if (pendingInteraction.type === "choose_branch" && pendingInteraction.candidates.includes(tileId)) {
         if (isTouchOnlyDevice() && hoveredBranchTileId !== tileId) {
           hoveredBranchTileId = tileId;
@@ -6712,6 +7078,7 @@
   }
 
   function chooseBranchTile(tileId) {
+    if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("choose_branch", { tileId });
       return;
@@ -6731,35 +7098,51 @@
 
     if (
       targetCard.targetType === "any_player" ||
+      targetCard.targetType === "any_player_in_radius" ||
       targetCard.targetType === "other_player" ||
       targetCard.targetType === "opponent_in_radius"
     ) {
+      const rad = targetCard.radius || 5;
       const validPlayers = state.players.filter((other) => {
         if (targetCard.targetType === "any_player") {
           return other.index === player.index || !other.inSpawn;
+        }
+        if (targetCard.targetType === "any_player_in_radius") {
+          if (other.index === player.index) return true;
+          if (other.inSpawn) return false;
+          return getTileDistance(player.tileId, other.tileId) <= rad;
         }
         if (targetCard.targetType === "other_player") {
           return other.index !== player.index && !other.inSpawn;
         }
         if (targetCard.targetType === "opponent_in_radius") {
           if (other.index === player.index || other.inSpawn) return false;
-          return getTileDistance(player.tileId, other.tileId) <= (targetCard.radius || 5);
+          return getTileDistance(player.tileId, other.tileId) <= rad;
         }
         return true;
       });
 
+      // Put opponents first for debuff cards so default selection is an opponent, while still allowing self
+      validPlayers.sort((a, b) => {
+        const aSelf = a.index === player.index ? 1 : 0;
+        const bSelf = b.index === player.index ? 1 : 0;
+        return targetCard.effectKey === "move_steps" ? bSelf - aSelf : aSelf - bSelf;
+      });
+
       if (validPlayers.length === 0) {
         missingValidTarget = true;
-        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">Tidak ada target valid (pemain di Spawn atau di luar radius ${targetCard.radius || 5} blok).</div>`;
+        const isRadType = targetCard.targetType === "opponent_in_radius" || targetCard.targetType === "any_player_in_radius";
+        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">Tidak ada target valid (${isRadType ? `pemain di Spawn atau di luar radius ${rad} blok` : "semua lawan masih berada di Spawn"}).</div>`;
       } else {
         controlsHtml += `
           <div class="form-field">
-            <label>Target Player:</label>
+            <label>Target Player${targetCard.radius ? ` (Radius ${targetCard.radius} Blok)` : ""}:</label>
             <select id="card-modal-target-player">
               ${validPlayers
                 .map((vp) => {
                   const charNote = vp.charName && vp.charName !== vp.name ? `${vp.charName} · ` : "";
-                  return `<option value="${vp.index}">${escapeHtml(vp.name)} (${charNote}${vp.tileId} · ${getTileDistance(
+                  const selfTag = vp.index === player.index ? " · Diri Sendiri" : "";
+                  return `<option value="${vp.index}">${escapeHtml(vp.name)}${selfTag} (${charNote}${vp.tileId} · ${getTileDistance(
                     player.tileId,
                     vp.tileId
                   )} blok)</option>`;
@@ -6767,6 +7150,19 @@
                 .join("")}
             </select>
           </div>`;
+      }
+    } else if (targetCard.targetType === "opponents_in_radius_aoe") {
+      const rad = targetCard.radius || 8;
+      const inRange = state.players.filter(
+        (other) => other.index !== player.index && !other.inSpawn && getTileDistance(player.tileId, other.tileId) <= rad
+      );
+      if (inRange.length === 0) {
+        missingValidTarget = true;
+        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">Tidak ada lawan dalam radius ${rad} blok dari posisimu (${player.tileId}).</div>`;
+      } else {
+        controlsHtml += `<div style="color:#a7f3d0;font-size:0.78rem;">Target dalam radius ${rad} blok: <strong>${inRange
+          .map((o) => `${escapeHtml(o.name)} (${getTileDistance(player.tileId, o.tileId)} blok)`)
+          .join(", ")}</strong></div>`;
       }
     }
 
@@ -6892,6 +7288,7 @@
   }
 
   function confirmPlayCardFromModal(cardUid) {
+    if (!canLocalPlayerAct()) return;
     const player = getActivePlayer();
     const card = player.hand.find((c) => c.uid === cardUid);
     if (!card) return;
@@ -6952,7 +7349,8 @@
         distance: getTileDistance(player.tileId, t.id)
       }));
     } else {
-      matches = getTilesWithinRadius(player.tileId, radius, onlyNormal);
+      const excludeSelfTile = effectiveCard.effectKey === "teleport_normal_radius";
+      matches = getTilesWithinRadius(player.tileId, radius, onlyNormal, excludeSelfTile);
     }
 
     if (matches.length === 0) {
@@ -7048,6 +7446,7 @@
   }
 
   function openMerchantModal(shopId = 1) {
+    if (!canLocalPlayerAct() && !isAdminUnlocked) return;
     const player = getActivePlayer();
     const effectiveShopId = state.rules.independentShops ? shopId : 1;
     const shop = state.shops[effectiveShopId];
@@ -7062,14 +7461,13 @@
     openInfoModal(
       `Merchant Shop ${shopId} — (${player.name}: 💰 ${player.tc} TC)`,
       `<div style="display:flex;flex-direction:column;gap:14px;">
-        ${
-          state.rules.independentShops
-            ? `<div style="display:flex;gap:6px;">
-                <button class="btn btn-sm ${shopId === 1 ? "btn-primary" : ""}" onclick="window.EFT_APP.openMerchantModal(1)">Shop 1 (Top)</button>
-                <button class="btn btn-sm ${shopId === 2 ? "btn-primary" : ""}" onclick="window.EFT_APP.openMerchantModal(2)">Shop 2 (Bottom)</button>
-              </div>`
-            : `<div style="font-size:0.76rem;color:var(--text-muted);">Rulebook v0.1: Shared Global Merchant Shop Stock</div>`
-        }
+        <div style="font-size:0.76rem;color:var(--mint-light);background:rgba(245,158,11,0.12);border:1px solid rgba(251,191,36,0.36);border-radius:8px;padding:7px 11px;">
+          ${
+            state.rules.independentShops
+              ? `Akses khusus <strong>Merchant Shop ${shopId}</strong> (${shopId === 1 ? "Jalur Atas" : "Jalur Bawah"}) — Stok terpisah dari Shop ${shopId === 1 ? 2 : 1}.`
+              : `Rulebook v0.1: Shared Global Merchant Shop Stock`
+          }
+        </div>
         <div style="display:grid;grid-template-columns:150px 1fr;gap:14px;background:rgba(0,0,0,0.3);padding:12px;border-radius:12px;border:1px solid var(--accent-gold);">
           <img src="${ultImg}" alt="${ultDef.name}" loading="lazy" decoding="async" style="width:100%;border-radius:8px;" />
           <div style="display:flex;flex-direction:column;justify-content:space-between;">
@@ -7127,6 +7525,7 @@
   }
 
   function resolveVersusDuel(forcedOppIdx = null, forcedBet = null) {
+    if (!canLocalPlayerAct()) return;
     const oppIdx = forcedOppIdx !== null ? Number(forcedOppIdx) : Number(document.getElementById("versus-opponent-select").value);
     const bet = forcedBet !== null ? Number(forcedBet) : Number(document.getElementById("versus-bet-select").value);
     if (isRemoteClient() && forcedOppIdx === null) {
@@ -7183,6 +7582,7 @@
   }
 
   function executeTradeAction(forcedPartnerIdx = null, forcedTradeType = null) {
+    if (!canLocalPlayerAct()) return;
     const partnerIdx = forcedPartnerIdx !== null ? Number(forcedPartnerIdx) : Number(document.getElementById("trade-partner-select").value);
     const tradeType = forcedTradeType !== null ? forcedTradeType : document.getElementById("trade-type-select").value;
     if (isRemoteClient() && forcedPartnerIdx === null) {
@@ -7508,67 +7908,98 @@
 
   function _executeBotStepInternal() {
     if (!state || state.winner || isWalkingAnim || isTileEffectAnimating || tileShuffleState) return;
-    if (state.activeMinigame) {
-      if (state.activeMinigame.status === "rolling") rollDiceOfFateCurrent();
-      else finishDiceOfFateMinigame();
-      return;
-    }
-    if (pendingInteraction) {
-      const p = pendingInteraction;
-      if (p.type === "choose_branch") {
-        let bestTile = p.candidates[0];
-        let bestDist = 999;
-        p.candidates.forEach((cid) => {
-          state.activeShards.forEach((sh) => {
-            const d = getTileDistance(cid, sh.tileId);
-            if (d < bestDist) {
-              bestDist = d;
-              bestTile = cid;
-            }
+    isProcessingRemoteAction = true;
+    try {
+      if (state.activeMinigame) {
+        if (state.activeMinigame.status === "rolling") rollDiceOfFateCurrent();
+        else finishDiceOfFateMinigame();
+        return;
+      }
+      if (pendingInteraction) {
+        const p = pendingInteraction;
+        if (p.type === "choose_branch") {
+          let bestTile = p.candidates[0];
+          let bestDist = 999;
+          p.candidates.forEach((cid) => {
+            state.activeShards.forEach((sh) => {
+              const d = getTileDistance(cid, sh.tileId);
+              if (d < bestDist) {
+                bestDist = d;
+                bestTile = cid;
+              }
+            });
           });
-        });
-        const viaId = p.candidateViaMap && p.candidateViaMap[bestTile] ? p.candidateViaMap[bestTile] : null;
-        pendingInteraction = null;
-        hoveredBranchTileId = null;
-        executeSingleStep(p.player, bestTile, p.stepsRemaining - 1, p.direction, p.activateFinalTile, viaId);
-      } else if (p.type === "prompt_shard_buy") {
-        confirmShardPurchase(true);
-      } else if (p.type === "prompt_river") {
-        confirmRiverShortcut(Math.random() < 0.5);
-      } else if (p.type === "prompt_merchant_pass") {
-        resumeFromMerchantPrompt();
-      } else if (p.type === "stage_is_mine") {
-        const goodTypes = new Set(["tc_plus10", "pos_effect", "card_plus1", "merchant", "event"]);
-        const goodTid = (p.validTileIds || []).find((tid) => TILE_MAP[tid] && goodTypes.has(TILE_MAP[tid].type));
-        resolveStageIsMineChoice(goodTid || null);
-      } else if (p.type === "forced_all_in_reward") {
-        resolveForcedAllInChoice("shard");
-      } else {
-        pendingInteraction = null;
-        renderAll();
-      }
-      return;
-    }
-
-    const player = getActivePlayer();
-    if (state.phaseIndex === 1 || state.phaseIndex === 3) {
-      if (player.skillsUsedThisTurn < player.maxSkillsThisTurn && player.hand.length > 0 && !player.silencedThisPhase) {
-        const playable = player.hand.find(
-          (c) =>
-            canPlaySkillCard(player, c).ok &&
-            c.targetType !== "normal_tile_in_radius" &&
-            c.targetType !== "any_tile" &&
-            c.targetType !== "non_event_tile"
-        );
-        if (playable && Math.random() < 0.5) {
-          playSkillCardFromHand(playable.uid, {});
-          return;
+          const viaId = p.candidateViaMap && p.candidateViaMap[bestTile] ? p.candidateViaMap[bestTile] : null;
+          pendingInteraction = null;
+          hoveredBranchTileId = null;
+          executeSingleStep(p.player, bestTile, p.stepsRemaining - 1, p.direction, p.activateFinalTile, viaId);
+        } else if (p.type === "prompt_shard_buy") {
+          confirmShardPurchase(true);
+        } else if (p.type === "prompt_river") {
+          confirmRiverShortcut(Math.random() < 0.5);
+        } else if (p.type === "prompt_merchant_pass") {
+          resumeFromMerchantPrompt();
+        } else if (p.type === "stage_is_mine") {
+          const goodTypes = new Set(["tc_plus10", "pos_effect", "card_plus1", "merchant", "event"]);
+          const goodTid = (p.validTileIds || []).find((tid) => TILE_MAP[tid] && goodTypes.has(TILE_MAP[tid].type));
+          resolveStageIsMineChoice(goodTid || null);
+        } else if (p.type === "forced_all_in_reward") {
+          resolveForcedAllInChoice("shard");
+        } else {
+          pendingInteraction = null;
+          renderAll();
         }
+        return;
       }
-      rollMovementDice();
-      return;
+
+      const player = getActivePlayer();
+      if (state.phaseIndex === 1 || state.phaseIndex === 3) {
+        if (player.skillsUsedThisTurn < player.maxSkillsThisTurn && player.hand.length > 0 && !player.silencedThisPhase) {
+          const playable = player.hand.find((c) => {
+            if (!canPlaySkillCard(player, c).ok) return false;
+            if (c.targetType === "normal_tile_in_radius" || c.targetType === "any_tile" || c.targetType === "non_event_tile") {
+              return false;
+            }
+            if (c.targetType === "opponent_in_radius" || c.targetType === "any_player_in_radius" || c.targetType === "opponents_in_radius_aoe") {
+              const rad = c.radius || 5;
+              return state.players.some(
+                (o) => o.index !== player.index && !o.inSpawn && getTileDistance(player.tileId, o.tileId) <= rad
+              );
+            }
+            if (c.targetType === "other_player") {
+              return state.players.some((o) => o.index !== player.index && !o.inSpawn);
+            }
+            return true;
+          });
+          if (playable && Math.random() < 0.5) {
+            const opts = {};
+            if (
+              playable.targetType === "opponent_in_radius" ||
+              playable.targetType === "any_player_in_radius" ||
+              playable.targetType === "other_player" ||
+              (playable.targetType === "any_player" && playable.effectKey !== "move_steps")
+            ) {
+              const rad = playable.radius || 99;
+              const opp = state.players.find(
+                (o) => o.index !== player.index && !o.inSpawn && getTileDistance(player.tileId, o.tileId) <= rad
+              );
+              if (opp) opts.targetPlayerIndex = opp.index;
+              else if (playable.effectKey !== "move_steps") {
+                rollMovementDice();
+                return;
+              }
+            }
+            playSkillCardFromHand(playable.uid, opts);
+            return;
+          }
+        }
+        rollMovementDice();
+        return;
+      }
+      if (state.phaseIndex === 5) endCurrentTurn();
+    } finally {
+      isProcessingRemoteAction = false;
     }
-    if (state.phaseIndex === 5) endCurrentTurn();
   }
 
   function runSmartBotTurn() {
@@ -7917,21 +8348,19 @@
           <div class="panel-box" style="display:flex;flex-direction:column;gap:8px;">
             <div class="panel-header" style="margin-bottom:2px;">Buat Room (Host)</div>
             <p style="font-size:0.72rem;color:var(--text-muted);line-height:1.4;">
-              Cocok untuk tes multi-tab localhost atau satu WiFi sebelum memakai Firebase online.
+              Buat room online untuk bermain bersama teman di luar LAN, atau gunakan WiFi LAN / Multi-Tab untuk tes lokal.
             </p>
-            <button class="btn btn-emerald" onclick="window.EFT_APP.createLobbyRoom('lan')">Buat Room WiFi LAN / Multi-Tab</button>
-            <button class="btn btn-sm" onclick="window.EFT_APP.createLobbyRoom('firebase')">Buat Room Firebase ${fbReady ? "(Siap)" : "(Belum Config)"}</button>
-            <button class="btn btn-sm" onclick="window.EFT_APP.createLobbyRoom('p2p')">Buat Room PeerJS (P2P)</button>
+            <button class="btn btn-emerald" onclick="window.EFT_APP.createLobbyRoom('firebase')">Buat Room</button>
+            <button class="btn btn-sm" onclick="window.EFT_APP.createLobbyRoom('lan')">Buat Room WiFi LAN / Multi-Tab</button>
           </div>
           <div class="panel-box" style="display:flex;flex-direction:column;gap:8px;">
             <div class="panel-header" style="margin-bottom:2px;">Gabung Room</div>
             <div class="form-field">
               <label>Kode Room:</label>
-              <input type="text" id="setup-join-code" placeholder="LAN123 / EFT456" value="${escapeHtml(mp.roomCode)}" style="text-transform:uppercase;font-weight:800;" />
+              <input type="text" id="setup-join-code" placeholder="EFT456 / LAN123" value="${escapeHtml(mp.roomCode)}" style="text-transform:uppercase;font-weight:800;" />
             </div>
-            <button class="btn btn-gold" onclick="window.EFT_APP.joinLobbyRoom('lan')">Gabung WiFi LAN / Multi-Tab</button>
-            <button class="btn btn-sm" onclick="window.EFT_APP.joinLobbyRoom('firebase')">Gabung Room Firebase</button>
-            <button class="btn btn-sm" onclick="window.EFT_APP.joinLobbyRoom('p2p')">Gabung Room PeerJS</button>
+            <button class="btn btn-gold" onclick="window.EFT_APP.joinLobbyRoom('firebase')">Gabung Room</button>
+            <button class="btn btn-sm" onclick="window.EFT_APP.joinLobbyRoom('lan')">Gabung WiFi LAN / Multi-Tab</button>
           </div>
         </div>
         <details style="background:rgba(0,0,0,0.28);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
@@ -8050,6 +8479,8 @@
     reopenPendingCardModal,
     openMerchantModal,
     buyShopItem,
+    openDrawPileModal,
+    resetGameToMainMenu,
     resolveVersusDuel,
     executeTradeAction,
     openAdminModal,
@@ -8130,6 +8561,7 @@
       focusCameraOnTile(p.tileId, isMobilePortrait() ? 0.72 : 0.96);
     },
     cancelPendingInteraction: () => {
+      if (!canLocalPlayerAct()) return;
       pendingInteraction = null;
       hoveredBranchTileId = null;
       renderAll();
