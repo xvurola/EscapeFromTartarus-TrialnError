@@ -2797,13 +2797,41 @@ body.admin-mode .digital-tile {
   50% { transform: translate(-50%, -4px); }
 }
 
-/* Active Shard Subtle Halo on Host Tile */
+/* Active Shard High-Visibility Glowing Halo on Host Tile */
 .digital-tile.has-active-shard {
-  border-color: #d8b4fe;
+  z-index: 16;
+  border-width: 3.5px;
+  border-color: #f5d0fe;
   box-shadow:
     0 6px 0 var(--tile-base),
-    0 0 0 4px rgba(168, 85, 247, 0.35),
-    0 0 22px rgba(168, 85, 247, 0.55);
+    0 0 0 7px rgba(192, 132, 252, 0.55),
+    0 0 34px rgba(217, 70, 239, 0.88),
+    0 0 62px rgba(168, 85, 247, 0.72),
+    inset 0 0 18px rgba(245, 208, 254, 0.52);
+  animation: shardHostTileGlow 1.75s ease-in-out infinite alternate;
+}
+
+@keyframes shardHostTileGlow {
+  0% {
+    border-color: #e879f9;
+    box-shadow:
+      0 6px 0 var(--tile-base),
+      0 0 0 6px rgba(192, 132, 252, 0.48),
+      0 0 28px rgba(192, 38, 211, 0.78),
+      0 0 50px rgba(168, 85, 247, 0.58),
+      inset 0 0 14px rgba(240, 171, 252, 0.42);
+    filter: brightness(1.04);
+  }
+  100% {
+    border-color: #ffffff;
+    box-shadow:
+      0 6px 0 var(--tile-base),
+      0 0 0 11px rgba(217, 70, 239, 0.65),
+      0 0 46px rgba(232, 121, 249, 0.98),
+      0 0 82px rgba(168, 85, 247, 0.85),
+      inset 0 0 24px rgba(250, 232, 255, 0.72);
+    filter: brightness(1.18);
+  }
 }
 
 /* Floating Purple Tartarus Shard Crystal Monument (Beside Horizontal Tile) */
