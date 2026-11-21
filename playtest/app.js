@@ -328,6 +328,14 @@
   let dofBotTimer = null;
   let dofTieTimer = null;
   let dofAutoFinishTimer = null;
+  const TURN_TIME_LIMIT_SEC = 180;
+  let turnTimerIntervalId = null;
+  let turnReminderTimeoutId = null;
+  let turnReminderFadeTimeoutId = null;
+  let lastTrackedTurnTimerKey = null;
+  let localTurnKeyStartedAt = 0;
+  let lastTimerWarnSec = -1;
+  let autoEndTurnTimerId = null;
   let isInitializingMatch = false;
   let seenActivityLogIds = new Set();
   let activeCompendiumFilter = "all";
@@ -411,126 +419,14 @@
         const p = JSON.parse(raw);
         if (p && typeof p === "object") {
           const vol = Number.isFinite(Number(p.volume)) ? Math.max(0, Math.min(1, Number(p.volume))) : 0.45;
-          const vVol = Number.isFinite(Number(p.voiceVolume)) ? Math.max(0, Math.min(1, Number(p.voiceVolume))) : 0.65;
           return {
             muted: !!p.muted,
-            volume: vol,
-            voiceEnabled: p.voiceEnabled !== undefined ? !!p.voiceEnabled : true,
-            voiceVolume: vVol
+            volume: vol
           };
         }
       }
     } catch (e) {}
-    return { muted: false, volume: 0.45, voiceEnabled: true, voiceVolume: 0.65 };
-  }
-
-  // Optional custom audio voice clips (drop files into assets/voices/<charId>/<cardId>.mp3 and register here)
-  const CHARACTER_VOICE_FILES = {};
-
-  const CHARACTER_VOICE_PROFILES = {
-    bocchi: {
-      pitch: 1.34,
-      rate: 1.08,
-      lang: "id-ID",
-      lines: {
-        bocchi_c1: "C-sharp chord... mulai!",
-        bocchi_c2: "Mundur sebentar, ya...",
-        bocchi_uc: "Waaah! Crowd Surfing!",
-        bocchi_r: "E-A-D-B-G-E... gas!",
-        bocchi_e: "Tukar posisi di panggung!",
-        bocchi_uq: "Panggung ini... milikku!",
-        bocchi_ult: "Semuanya kumpul! Bocchi The Rock!",
-        default: "A-ano... dengar nada gitar ini!"
-      }
-    },
-    aventurine: {
-      pitch: 0.96,
-      rate: 1.02,
-      lang: "id-ID",
-      lines: {
-        avt_c: "Itu milikku sekarang.",
-        avt_uc: "Merah atau hitam? Mari bertaruh.",
-        avt_r: "Sentuhan emas, Hand of Midas!",
-        avt_e: "Bandar selalu menang.",
-        avt_uq: "Investasi IPC Gems aktif.",
-        avt_ult: "All or nothing! Forced All-In!",
-        default: "Keberuntungan selalu di pihakku."
-      }
-    },
-    joker: {
-      pitch: 0.90,
-      rate: 1.04,
-      lang: "id-ID",
-      lines: {
-        joker_c: "It's Showtime!",
-        joker_uc: "Kucuri kartumu, Phantom Thief!",
-        joker_r: "Waktunya All-Out Attack!",
-        joker_e: "Will of Rebellion, pinjam kekuatanmu!",
-        joker_uq: "Bangkitlah, Arsene!",
-        joker_ult: "Meta-Shard... tak tergoyahkan!",
-        default: "It's Showtime!"
-      }
-    },
-    lilith: {
-      pitch: 1.12,
-      rate: 0.92,
-      lang: "id-ID",
-      lines: {
-        lilith_c: "Terikat benang bonekaku...",
-        lilith_uc: "Hadiah kecil, Punishing Virus.",
-        lilith_r: "Berbalik arah, Mind Deviation.",
-        lilith_e: "Hancurkan kartu mereka, Soul Extraction.",
-        lilith_uq: "Hati-hati saat melewatiku...",
-        lilith_ult: "Selamat tidur... Dreamfall Showdown.",
-        default: "Trik kecil khusus untukmu..."
-      }
-    }
-  };
-
-  function getCharacterVoiceLine(charId, cardId = "") {
-    const prof = CHARACTER_VOICE_PROFILES[charId];
-    if (!prof || !prof.lines) return "";
-    return (cardId && prof.lines[cardId]) || prof.lines.default || "";
-  }
-
-  function playCharacterVoiceLine(charId, cardId = "") {
-    const lineText = getCharacterVoiceLine(charId, cardId);
-    if (soundPrefs.muted || !soundPrefs.voiceEnabled || soundPrefs.voiceVolume <= 0.01) {
-      return lineText;
-    }
-
-    const customSrc =
-      CHARACTER_VOICE_FILES[charId] &&
-      (CHARACTER_VOICE_FILES[charId][cardId] || CHARACTER_VOICE_FILES[charId].default);
-    if (customSrc) {
-      try {
-        const audio = new Audio(customSrc);
-        audio.volume = Math.max(0, Math.min(1, soundPrefs.voiceVolume));
-        audio.play().catch(() => {});
-        return lineText;
-      } catch (e) {}
-    }
-
-    if (lineText && typeof window.speechSynthesis !== "undefined" && typeof SpeechSynthesisUtterance !== "undefined") {
-      try {
-        const prof = CHARACTER_VOICE_PROFILES[charId] || { pitch: 1.0, rate: 1.0, lang: "id-ID" };
-        window.speechSynthesis.cancel();
-        const utt = new SpeechSynthesisUtterance(lineText);
-        utt.lang = prof.lang || "id-ID";
-        utt.pitch = prof.pitch || 1.0;
-        utt.rate = prof.rate || 1.0;
-        utt.volume = Math.max(0.05, Math.min(1, soundPrefs.voiceVolume * 0.72));
-        const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
-        if (voices && voices.length > 0) {
-          const prefVoice =
-            voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("id")) ||
-            voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("en"));
-          if (prefVoice) utt.voice = prefVoice;
-        }
-        window.speechSynthesis.speak(utt);
-      } catch (e) {}
-    }
-    return lineText;
+    return { muted: false, volume: 0.45 };
   }
 
   let soundPrefs = loadSoundPrefs();
@@ -719,6 +615,23 @@
         playSoftTone(ctx, warmFilter, { startTime: t, freq: 329.63, duration: 0.14, attack: 0.016, gain: 0.20, type: "sine" });
         playSoftTone(ctx, warmFilter, { startTime: t + 0.075, freq: 440, duration: 0.20, attack: 0.016, gain: 0.22, type: "sine" });
         break;
+      case "turn_reminder": {
+        const notes = variant === "my_turn" ? [440.0, 554.37, 659.25, 880.0] : [392.0, 493.88, 587.33];
+        notes.forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, {
+            startTime: t + idx * 0.075,
+            freq: hz,
+            duration: idx === notes.length - 1 ? 0.34 : 0.20,
+            attack: 0.014,
+            gain: variant === "my_turn" ? 0.22 : 0.18,
+            type: "sine"
+          });
+        });
+        break;
+      }
+      case "timer_warn":
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 520, endFreq: 440, duration: 0.045, attack: 0.005, gain: 0.16, type: "triangle" });
+        break;
       case "shard":
         [523.25, 659.25, 783.99].forEach((hz, idx) => {
           playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.07, freq: hz, duration: 0.34, attack: 0.018, gain: 0.26, type: "sine" });
@@ -848,49 +761,6 @@
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
           </svg>`;
     }
-    const vBtn = document.getElementById("btn-voice-popover");
-    const vToggle = document.getElementById("voice-enabled-toggle");
-    const vSlider = document.getElementById("voice-volume-slider");
-    const vLabel = document.getElementById("voice-volume-label");
-    const vPct = Math.round((soundPrefs.voiceVolume !== undefined ? soundPrefs.voiceVolume : 0.65) * 100);
-    const voiceActive = !soundPrefs.muted && soundPrefs.voiceEnabled && vPct > 0;
-    if (vBtn) vBtn.classList.toggle("is-off", !voiceActive);
-    if (vToggle) vToggle.checked = !!soundPrefs.voiceEnabled;
-    if (vSlider) vSlider.value = String(vPct);
-    if (vLabel) vLabel.textContent = soundPrefs.voiceEnabled ? `${vPct}%` : "Off";
-  }
-
-  function toggleAudioMixerPopover() {
-    const pop = document.getElementById("audio-mixer-popover");
-    if (!pop) return;
-    pop.classList.toggle("open");
-    playSfx("click");
-  }
-
-  function toggleVoiceLines(enabled) {
-    soundPrefs.voiceEnabled = !!enabled;
-    saveSoundPrefs();
-    syncSoundControlUi();
-    if (!enabled && typeof window.speechSynthesis !== "undefined") {
-      try {
-        window.speechSynthesis.cancel();
-      } catch (e) {}
-    } else if (enabled) {
-      playSfx("preview");
-    }
-  }
-
-  function setVoiceVolume(valPct) {
-    const clamped = Math.max(0, Math.min(100, Number(valPct) || 0));
-    soundPrefs.voiceVolume = clamped / 100;
-    if (clamped > 0 && !soundPrefs.voiceEnabled) soundPrefs.voiceEnabled = true;
-    saveSoundPrefs();
-    syncSoundControlUi();
-  }
-
-  function previewCharacterAudio(charId) {
-    playSfx("skill", `${charId}:sonic`);
-    playCharacterVoiceLine(charId, "");
   }
 
   function toggleSoundMute() {
@@ -1509,6 +1379,7 @@
       lastTileEffectReveal: null,
       lastPurchasedShard: null,
       activeMinigame: null,
+      turnTimerKey: "tk_init_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
       shops: createShopState(rules),
       winner: null,
       logs: []
@@ -1516,6 +1387,12 @@
 
     lastShownSkillEventId = null;
     lastShownTileEffectRevealId = null;
+    lastTrackedTurnTimerKey = null;
+    localTurnKeyStartedAt = Date.now();
+    lastTimerWarnSec = -1;
+    clearTimeout(autoEndTurnTimerId);
+    autoEndTurnTimerId = null;
+    ensureTurnCountdownLoop();
 
     undoStack = [];
     pendingInteraction = null;
@@ -1561,12 +1438,15 @@
     }
     if (undoStack.length === 0) return;
     clearTimeout(stepTimerId);
+    clearTimeout(autoEndTurnTimerId);
+    autoEndTurnTimerId = null;
     clearDiceOverlay();
     clearDiceOfFateTimers();
     cancelTileEffectShuffle(true);
     isWalkingAnim = false;
     activeStepsRemaining = 0;
     state = JSON.parse(undoStack.pop());
+    state.turnTimerKey = "tk_undo_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
     pendingInteraction = null;
     selectedCardUid = null;
     addLog("Undo: Reverted to previous state.");
@@ -3019,17 +2899,154 @@
   }
 
   // ============================================================================
+  // TURN START REMINDER, 180s ACTION TIMER & AUTO END TURN ENGINE
+  // ============================================================================
+  function generateTurnTimerKey() {
+    if (!state) return "tk_" + Date.now();
+    return `tk_c${state.cycle}_r${state.roundInCycle}_p${state.activePlayerIndex}_t${state.totalTurnsCompleted}_${Date.now().toString(36)}`;
+  }
+
+  function triggerTurnStartReminder(player) {
+    if (!player || !state || isInitializingMatch) return;
+    const banner = document.getElementById("turn-reminder-banner");
+    const isMyMultiplayerTurn = mp.mode !== "local" && mp.mySeat !== -1 && mp.mySeat === player.index;
+    const isLocalTurn = mp.mode === "local" || mp.mySeat === -1;
+
+    playSfx("turn_reminder", isMyMultiplayerTurn || isLocalTurn ? "my_turn" : "normal");
+
+    if (!banner) return;
+    clearTimeout(turnReminderTimeoutId);
+    clearTimeout(turnReminderFadeTimeoutId);
+
+    const badgeText = isMyMultiplayerTurn ? "GILIRAN KAMU" : `CYCLE ${state.cycle} · ROUND ${state.roundInCycle}`;
+    const mainText = isMyMultiplayerTurn
+      ? `Giliranmu dimulai, ${player.name}! (Batas waktu: 180 detik)`
+      : `Giliran ${player.name} dimulai (Waktu: 03:00)`;
+
+    banner.style.setProperty("--turn-accent", player.color || "#34d399");
+    banner.classList.remove("fading-out");
+    banner.classList.toggle("is-my-turn", isMyMultiplayerTurn);
+    banner.innerHTML = `
+      <span class="turn-reminder-badge">${escapeHtml(badgeText)}</span>
+      <span>${escapeHtml(mainText)}</span>`;
+    banner.classList.add("visible");
+
+    turnReminderFadeTimeoutId = setTimeout(() => {
+      banner.classList.add("fading-out");
+    }, 2400);
+    turnReminderTimeoutId = setTimeout(() => {
+      banner.classList.remove("visible", "fading-out", "is-my-turn");
+      banner.innerHTML = "";
+    }, 2900);
+  }
+
+  function formatTurnCountdown(sec) {
+    const s = Math.max(0, Math.floor(sec));
+    const mm = String(Math.floor(s / 60)).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return `${mm}:${ss}`;
+  }
+
+  function isInteractiveGameplayModalOpen() {
+    const modal = document.getElementById("app-modal");
+    if (!modal || !modal.classList.contains("open")) return false;
+    const titleEl = document.getElementById("modal-title");
+    const kind = titleEl && titleEl.dataset ? titleEl.dataset.modalKind || "" : "";
+    if (kind === "welcome_lobby") return false;
+    return true;
+  }
+
+  function scheduleAutoEndTurnIfReady() {
+    clearTimeout(autoEndTurnTimerId);
+    autoEndTurnTimerId = null;
+    if (!state || state.winner || state.activeMinigame) return;
+    if (isRemoteClient()) return;
+    if (state.phaseIndex !== 5) return;
+    if (isWalkingAnim || isTileEffectAnimating || tileShuffleState || pendingInteraction) return;
+    if (isInteractiveGameplayModalOpen()) return;
+
+    autoEndTurnTimerId = setTimeout(() => {
+      autoEndTurnTimerId = null;
+      if (!state || state.winner || state.activeMinigame || isRemoteClient()) return;
+      if (state.phaseIndex !== 5) return;
+      if (isWalkingAnim || isTileEffectAnimating || tileShuffleState || pendingInteraction) return;
+      if (isInteractiveGameplayModalOpen()) return;
+      endCurrentTurn({ isAuto: true });
+    }, 520);
+  }
+
+  function updateTurnTimerUi() {
+    const el = document.getElementById("metric-turn-timer");
+    if (!el) return;
+    if (!state || state.winner || state.activeMinigame) {
+      el.textContent = "03:00";
+      el.classList.remove("is-warning", "is-critical");
+      return;
+    }
+    const elapsedSec = Math.floor((Date.now() - (localTurnKeyStartedAt || Date.now())) / 1000);
+    const remainingSec = Math.max(0, TURN_TIME_LIMIT_SEC - elapsedSec);
+    el.textContent = formatTurnCountdown(remainingSec);
+    el.classList.toggle("is-warning", remainingSec <= 30 && remainingSec > 10);
+    el.classList.toggle("is-critical", remainingSec <= 10);
+
+    if (remainingSec <= 10 && remainingSec >= 1 && remainingSec !== lastTimerWarnSec && canLocalPlayerAct()) {
+      lastTimerWarnSec = remainingSec;
+      playSfx("timer_warn");
+    }
+
+    if (remainingSec <= 0 && !isRemoteClient()) {
+      forceExpireCurrentTurn();
+    }
+  }
+
+  function ensureTurnCountdownLoop() {
+    if (turnTimerIntervalId) clearInterval(turnTimerIntervalId);
+    turnTimerIntervalId = setInterval(() => {
+      updateTurnTimerUi();
+    }, 500);
+  }
+
+  function forceExpireCurrentTurn() {
+    if (!state || state.winner || state.activeMinigame || isRemoteClient()) return;
+    const player = getActivePlayer();
+    if (!player) return;
+
+    clearTimeout(stepTimerId);
+    clearTimeout(autoEndTurnTimerId);
+    autoEndTurnTimerId = null;
+    clearDiceOverlay();
+    cancelTileEffectShuffle(true);
+    dismissSkillPopup(true, true);
+    isWalkingAnim = false;
+    activeStepsRemaining = 0;
+    pendingInteraction = null;
+    hoveredBranchTileId = null;
+    if (isInteractiveGameplayModalOpen()) {
+      closeModal();
+    }
+
+    player.rollsUsedThisTurn = Math.max(1, player.rollsUsedThisTurn || 1);
+    state.phaseIndex = 5;
+    addLog(`Waktu giliran habis (180 detik) — Giliran ${player.name} otomatis berakhir!`);
+    showEffectSpotlight("Waktu Habis (180 Detik)", `${player.name} — Auto End Turn`, "Batas waktu 3 menit terlampaui, giliran otomatis diakhiri.", null);
+    endCurrentTurn({ forceTimeout: true });
+  }
+
+  // ============================================================================
   // END OF TURN, MINIGAME & CYCLE RESET
   // ============================================================================
-  function endCurrentTurn() {
-    if (isWalkingAnim || isTileEffectAnimating || (state && state.activeMinigame)) return;
-    if (!canLocalPlayerAct()) return;
+  function endCurrentTurn(opts = {}) {
+    const isAuto = !!(opts && (opts.isAuto || opts.forceTimeout));
+    if (!opts.forceTimeout && (isWalkingAnim || isTileEffectAnimating || (state && state.activeMinigame))) return;
+    if (!isAuto && !canLocalPlayerAct()) return;
     if (isRemoteClient()) {
       sendClientActionToHost("end_turn", {});
       return;
     }
     const player = getActivePlayer();
-    if ((player.rollsUsedThisTurn || 0) < 1 && state.phaseIndex !== 5) return;
+    if (!opts.forceTimeout && (player.rollsUsedThisTurn || 0) < 1 && state.phaseIndex !== 5) return;
+    clearTimeout(autoEndTurnTimerId);
+    autoEndTurnTimerId = null;
     saveSnapshot();
     selectedCardUid = null;
     player.skillsUsedThisTurn = 0;
@@ -3118,6 +3135,7 @@
     player.rollsUsedThisTurn = 0;
     player.maxRollsThisTurn = 2;
     player.extraPhasesThisTurn = 0;
+    state.turnTimerKey = generateTurnTimerKey();
     Object.keys(player.cooldowns).forEach((k) => {
       if (player.cooldowns[k] > 0) player.cooldowns[k]--;
     });
@@ -3129,7 +3147,6 @@
       return;
     }
     state.phaseIndex = 1;
-    if (!isInitializingMatch) playSfx("turn");
   }
 
   function completeFullCycle() {
@@ -3764,7 +3781,6 @@
     const prof = payload.profile || { theme: "sonic", tagline: "SKILL ACTIVATED", accent: "#34d399", accentRgb: "52, 211, 153" };
     const isPassiveOrUlt = prof.theme === "ultimate" || prof.theme === "passive";
     const autoMs = prof.theme === "ultimate" ? 5900 : 5250;
-    const voiceQuote = getCharacterVoiceLine(payload.charId, payload.cardId || "");
 
     overlay.innerHTML = `
       <div class="skill-cutin-banner theme-${escapeHtml(prof.theme)}"
@@ -3780,7 +3796,6 @@
           <div class="skill-cutin-eyebrow">${escapeHtml(prof.tagline)}</div>
           <div class="skill-cutin-caster">${escapeHtml(payload.casterName)}</div>
           <div class="skill-cutin-title">${escapeHtml(payload.cardName)}</div>
-          ${voiceQuote ? `<div class="skill-cutin-voice">"${escapeHtml(voiceQuote)}"</div>` : ""}
           <span class="skill-cutin-rarity-pill">${escapeHtml(payload.rarity || "Skill")}</span>
           ${payload.outcomeText ? `<div class="skill-cutin-outcome">${escapeHtml(payload.outcomeText)}</div>` : ""}
           <div class="skill-cutin-desc">${escapeHtml(payload.description || "")}</div>
@@ -3794,7 +3809,6 @@
     skillPopupShownAt = Date.now();
     overlay.classList.add("visible");
     playSfx("skill", `${payload.charId || ""}:${prof.theme}`);
-    playCharacterVoiceLine(payload.charId, payload.cardId || "");
     skillPopupTimerId = setTimeout(() => {
       dismissSkillPopup(true);
     }, autoMs);
@@ -4711,8 +4725,15 @@
       lastProcessedPurchasedShardId = state.lastPurchasedShard.purchaseId;
       triggerShardFadeOut(state.lastPurchasedShard);
     }
+    if (!state.activeMinigame && !state.winner && state.turnTimerKey && state.turnTimerKey !== lastTrackedTurnTimerKey) {
+      lastTrackedTurnTimerKey = state.turnTimerKey;
+      localTurnKeyStartedAt = Date.now();
+      lastTimerWarnSec = -1;
+      triggerTurnStartReminder(getActivePlayer());
+    }
     syncRemoteActivityFeed();
     renderTopStatusStrip();
+    updateTurnTimerUi();
     renderStepStatusBanner();
     renderFloatingPlayerCards();
     renderDigitalBoard();
@@ -4722,6 +4743,7 @@
     renderDiceOfFateOverlay();
     renderVictoryScreenOverlay();
     applyCameraTransform();
+    scheduleAutoEndTurnIfReady();
     scheduleMultiplayerBotIfNeeded();
   }
 
@@ -7877,6 +7899,7 @@
     state.phaseIndex = 1;
     state.players[pIdx].rollsUsedThisTurn = 0;
     state.players[pIdx].maxRollsThisTurn = 2;
+    state.turnTimerKey = generateTurnTimerKey();
     pendingInteraction = null;
     closeModal();
     if (camera.mode !== "wide") {
@@ -8054,6 +8077,7 @@
     const titleEl = document.getElementById("modal-title");
     if (titleEl) titleEl.dataset.modalKind = "";
     document.getElementById("app-modal").classList.remove("open");
+    scheduleAutoEndTurnIfReady();
   }
 
   function switchTab(tabId) {
@@ -8512,10 +8536,6 @@
     dismissTileEffectOverlay,
     toggleSoundMute,
     setSoundVolume,
-    toggleAudioMixerPopover,
-    toggleVoiceLines,
-    setVoiceVolume,
-    previewCharacterAudio,
     playSfx,
     onCopySkillSelectChange,
     closeModal,
@@ -8618,11 +8638,6 @@
       "pointerdown",
       (ev) => {
         ensureAudioCtx(true);
-        const audioPill = document.getElementById("sound-control-pill");
-        const audioPop = document.getElementById("audio-mixer-popover");
-        if (audioPop && audioPop.classList.contains("open") && audioPill && !audioPill.contains(ev.target)) {
-          audioPop.classList.remove("open");
-        }
         const ov = document.getElementById("skill-dramatic-overlay");
         if (ov && ov.classList.contains("visible")) {
           if (!skillPopupShownAt || Date.now() - skillPopupShownAt >= 180) {

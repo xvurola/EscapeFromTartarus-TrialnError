@@ -27,7 +27,7 @@
     </nav>
 
     <div class="topbar-right">
-      <div id="sound-control-pill" class="sound-control-pill" title="Kontrol Sound Effect &amp; Voice Line">
+      <div id="sound-control-pill" class="sound-control-pill" title="Kontrol Sound Effect">
         <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Matikan atau aktifkan suara">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -37,33 +37,6 @@
         </button>
         <input id="sound-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="45" aria-label="Volume Sound Effect" oninput="window.EFT_APP.setSoundVolume(this.value)" />
         <span id="sound-volume-label" class="sound-volume-label">45%</span>
-        <button id="btn-voice-popover" class="sound-voice-btn" type="button" onclick="window.EFT_APP.toggleAudioMixerPopover()" title="Pengaturan Voice Line &amp; SFX Karakter" aria-label="Pengaturan Voice Line">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-            <line x1="12" y1="19" x2="12" y2="23"></line>
-            <line x1="8" y1="23" x2="16" y2="23"></line>
-          </svg>
-        </button>
-        <div id="audio-mixer-popover" class="audio-mixer-popover" onclick="event.stopPropagation()">
-          <div class="am-title">Audio &amp; Character Voice</div>
-          <label class="am-toggle-row">
-            <span>Voice Line Karakter</span>
-            <input id="voice-enabled-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleVoiceLines(this.checked)" />
-          </label>
-          <div class="am-slider-row">
-            <span>Volume Voice</span>
-            <input id="voice-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="65" oninput="window.EFT_APP.setVoiceVolume(this.value)" />
-            <span id="voice-volume-label" class="sound-volume-label">65%</span>
-          </div>
-          <div class="am-test-label">Tes SFX &amp; Voice Karakter:</div>
-          <div class="am-test-grid">
-            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.previewCharacterAudio('bocchi')">Bocchi</button>
-            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.previewCharacterAudio('aventurine')">Aventurine</button>
-            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.previewCharacterAudio('joker')">Joker</button>
-            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.previewCharacterAudio('lilith')">Lilith</button>
-          </div>
-        </div>
       </div>
       <button class="top-btn top-btn-green" onclick="window.EFT_APP.openMultiplayerModal()">
         Multiplayer Room
@@ -94,6 +67,10 @@
           <div class="status-card-use-row">
             Card Use : <span id="metric-card-use">0 / 2</span>
           </div>
+          <div id="status-turn-timer-row" class="status-turn-timer-row" title="Batas waktu 180 detik (3 menit) per giliran">
+            <span>Turn Timer :</span>
+            <strong id="metric-turn-timer" class="status-timer-val">03:00</strong>
+          </div>
         </div>
         <div id="shard-zones-pill" class="shard-zones-pill" title="Active Tartarus Shard Zones">
           Shard Zones: <span id="metric-shards">- / - / -</span>
@@ -104,6 +81,7 @@
 
       <!-- TOP-CENTER LIVE STEP / BRANCH NOTICE & EFFECT SPOTLIGHT -->
       <div class="hud-top-center-float">
+        <div id="turn-reminder-banner" class="turn-reminder-banner" aria-live="polite"></div>
         <div id="step-status-banner" class="step-status-banner"></div>
         <div id="board-card-toast" class="effect-spotlight-banner"></div>
       </div>
