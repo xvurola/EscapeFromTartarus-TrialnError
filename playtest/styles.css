@@ -231,7 +231,7 @@ body {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 248px;
+  width: 276px;
   padding: 12px 14px;
   border-radius: 12px;
   background: rgba(9, 20, 26, 0.98);
@@ -266,6 +266,12 @@ body {
   cursor: pointer;
 }
 
+.am-inline-ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .am-slider-row {
   display: flex;
   align-items: center;
@@ -276,7 +282,7 @@ body {
 }
 
 .am-slider-row .sound-volume-slider {
-  width: 82px;
+  width: 96px;
 }
 
 .am-test-label {
@@ -285,6 +291,59 @@ body {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  border-top: 1px solid rgba(173, 224, 202, 0.14);
+  padding-top: 8px;
+}
+
+.am-char-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.am-char-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(16, 42, 38, 0.52);
+  border: 1px solid rgba(173, 224, 202, 0.14);
+}
+
+.am-char-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  cursor: pointer;
+}
+
+.am-char-check small {
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: 3px;
+}
+
+.am-mini-test-btn {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(173, 224, 202, 0.34);
+  background: rgba(18, 60, 52, 0.78);
+  color: var(--mint-light);
+  font-size: 0.66rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.am-mini-test-btn:hover {
+  background: rgba(29, 88, 76, 0.96);
+  transform: scale(1.04);
 }
 
 .am-test-grid {
@@ -3641,7 +3700,7 @@ body.admin-mode .digital-tile {
   margin-left: 0;
 }
 
-.tucked-card:hover,
+body:not(.modal-open) .tucked-card:hover,
 .tucked-card.selected {
   transform: translateY(-14px) rotate(0deg) scale(1.05) !important;
   z-index: 50;
@@ -5158,7 +5217,7 @@ body.admin-mode .digital-tile {
     transform: translateY(68px) rotate(-3deg);
   }
 
-  .tucked-card:hover,
+  body:not(.modal-open) .tucked-card:hover,
   .tucked-card.selected {
     transform: translateY(-10px) rotate(0deg) scale(1.12) !important;
   }

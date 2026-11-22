@@ -67,7 +67,7 @@
     </nav>
 
     <div class="topbar-right">
-      <div id="sound-control-pill" class="sound-control-pill" title="Kontrol Sound Effect">
+      <div id="sound-control-pill" class="sound-control-pill" title="Kontrol Sound Effect &amp; Skill SFX">
         <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Matikan atau aktifkan suara">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -77,6 +77,69 @@
         </button>
         <input id="sound-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="45" aria-label="Volume Sound Effect" oninput="window.EFT_APP.setSoundVolume(this.value)" />
         <span id="sound-volume-label" class="sound-volume-label">45%</span>
+        <button id="btn-audio-mixer" class="sound-voice-btn" type="button" onclick="window.EFT_APP.toggleAudioMixerPopover()" title="Pengaturan Skill SFX Karakter &amp; Notifikasi Turn" aria-label="Pengaturan Audio &amp; Skill SFX">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="4" y1="21" x2="4" y2="14"></line>
+            <line x1="4" y1="10" x2="4" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12" y2="3"></line>
+            <line x1="20" y1="21" x2="20" y2="16"></line>
+            <line x1="20" y1="12" x2="20" y2="3"></line>
+            <line x1="1" y1="14" x2="7" y2="14"></line>
+            <line x1="9" y1="8" x2="15" y2="8"></line>
+            <line x1="17" y1="16" x2="23" y2="16"></line>
+          </svg>
+        </button>
+        <div id="audio-mixer-popover" class="audio-mixer-popover" onclick="event.stopPropagation()">
+          <div class="am-title">Audio &amp; Skill Card SFX</div>
+          <label class="am-toggle-row">
+            <span>Notifikasi Ganti Turn</span>
+            <span class="am-inline-ctrl">
+              <button type="button" class="am-mini-test-btn" onclick="event.preventDefault();event.stopPropagation();window.EFT_APP.previewTurnChangeSfx()">Tes</button>
+              <input id="turn-sfx-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleTurnSfx(this.checked)" />
+            </span>
+          </label>
+          <label class="am-toggle-row">
+            <span>Skill Card SFX Karakter</span>
+            <input id="skill-sfx-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleSkillSfx(this.checked)" />
+          </label>
+          <div class="am-slider-row">
+            <span>Volume Skill</span>
+            <input id="skill-sfx-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="75" oninput="window.EFT_APP.setSkillSfxVolume(this.value)" />
+            <span id="skill-sfx-volume-label" class="sound-volume-label">75%</span>
+          </div>
+          <div class="am-test-label">SFX Skill Per Karakter:</div>
+          <div class="am-char-list">
+            <div class="am-char-row">
+              <label class="am-char-check">
+                <input id="char-sfx-bocchi" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('bocchi', this.checked)" />
+                <span>Bocchi <small>Guitar</small></span>
+              </label>
+              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('bocchi')">Tes</button>
+            </div>
+            <div class="am-char-row">
+              <label class="am-char-check">
+                <input id="char-sfx-aventurine" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('aventurine', this.checked)" />
+                <span>Aventurine <small>Casino</small></span>
+              </label>
+              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('aventurine')">Tes</button>
+            </div>
+            <div class="am-char-row">
+              <label class="am-char-check">
+                <input id="char-sfx-joker" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('joker', this.checked)" />
+                <span>Joker <small>Jazz</small></span>
+              </label>
+              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('joker')">Tes</button>
+            </div>
+            <div class="am-char-row">
+              <label class="am-char-check">
+                <input id="char-sfx-lilith" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('lilith', this.checked)" />
+                <span>Lilith <small>Music Box</small></span>
+              </label>
+              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('lilith')">Tes</button>
+            </div>
+          </div>
+        </div>
       </div>
       <button class="top-btn top-btn-green" onclick="window.EFT_APP.openMultiplayerModal()">
         Multiplayer Room
@@ -154,7 +217,7 @@
         </button>
         <button class="util-pill-btn" onclick="window.EFT_APP.toggleDrawer('drawer-log')">Log</button>
         <button class="util-pill-btn" onclick="window.EFT_APP.toggleBoardRenderMode()">Print View</button>
-        <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1)">Shop</button>
+        <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1, true)">Shop</button>
         <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
         <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.undoLastAction()">Undo</button>
         <button id="btn-admin-mode" class="util-pill-btn" onclick="window.EFT_APP.openAdminModal()">Admin</button>
@@ -205,7 +268,7 @@
           <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualShardSpawn()">Spawn Shard</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualMinigame()">Run Minigame</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.triggerRandomGlobalEvent()">Draw World Event</button>
-          <button class="btn btn-sm" onclick="window.EFT_APP.openMerchantModal(2)">Open Shop 2</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.openMerchantModal(2, true)">Open Shop 2</button>
         </div>
         <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.lockAdminMode()">Lock Admin Mode</button>
       </aside>

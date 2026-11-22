@@ -476,20 +476,39 @@
   let audioNoiseBuffer = null;
 
   function loadSoundPrefs() {
+    const defaultChars = { bocchi: true, aventurine: true, joker: true, lilith: true };
     try {
       const raw = localStorage.getItem(SOUND_PREFS_KEY);
       if (raw) {
         const p = JSON.parse(raw);
         if (p && typeof p === "object") {
           const vol = Number.isFinite(Number(p.volume)) ? Math.max(0, Math.min(1, Number(p.volume))) : 0.45;
+          const skillVol = Number.isFinite(Number(p.skillSfxVolume)) ? Math.max(0, Math.min(1, Number(p.skillSfxVolume))) : 0.75;
+          const charMap = { ...defaultChars };
+          if (p.charSkillSfx && typeof p.charSkillSfx === "object") {
+            Object.keys(defaultChars).forEach((cid) => {
+              if (typeof p.charSkillSfx[cid] === "boolean") charMap[cid] = p.charSkillSfx[cid];
+            });
+          }
           return {
             muted: !!p.muted,
-            volume: vol
+            volume: vol,
+            turnSfxEnabled: p.turnSfxEnabled !== false,
+            skillSfxEnabled: p.skillSfxEnabled !== false,
+            skillSfxVolume: skillVol,
+            charSkillSfx: charMap
           };
         }
       }
     } catch (e) {}
-    return { muted: false, volume: 0.45 };
+    return {
+      muted: false,
+      volume: 0.45,
+      turnSfxEnabled: true,
+      skillSfxEnabled: true,
+      skillSfxVolume: 0.75,
+      charSkillSfx: defaultChars
+    };
   }
 
   let soundPrefs = loadSoundPrefs();
@@ -530,7 +549,19 @@
 
   function getEffectiveSfxGain() {
     if (soundPrefs.muted || soundPrefs.volume <= 0.005) return 0;
-    return Math.pow(soundPrefs.volume, 1.35) * 0.28;
+    return Math.pow(soundPrefs.volume, 1.25) * 0.32;
+  }
+
+  function getEffectiveSkillSfxGain(charId = "", isPreview = false) {
+    if (soundPrefs.muted || soundPrefs.volume <= 0.005) return 0;
+    const skillVol = Number.isFinite(Number(soundPrefs.skillSfxVolume)) ? soundPrefs.skillSfxVolume : 0.75;
+    if (!isPreview) {
+      if (soundPrefs.skillSfxEnabled === false) return 0;
+      if (charId && soundPrefs.charSkillSfx && soundPrefs.charSkillSfx[charId] === false) return 0;
+    }
+    const effectiveVol = isPreview ? Math.max(0.25, skillVol) : skillVol;
+    if (effectiveVol <= 0.005) return 0;
+    return Math.pow(soundPrefs.volume, 1.1) * Math.pow(effectiveVol, 1.1) * 0.44;
   }
 
   function playSoftTone(ctx, dest, opts) {
@@ -584,7 +615,25 @@
   }
 
   function playSfx(type, variant = "") {
-    const masterLevel = getEffectiveSfxGain();
+    let isSkillPreview = false;
+    let skillCharId = "";
+    let skillTheme = "";
+    if (type === "skill") {
+      const rawVar = String(variant || "");
+      isSkillPreview = rawVar.startsWith("preview:");
+      const cleanVar = isSkillPreview ? rawVar.slice(8) : rawVar;
+      const parts = cleanVar.split(":");
+      skillCharId = parts.length === 2 ? parts[0] : "";
+      skillTheme = parts.length === 2 ? parts[1] : cleanVar;
+    }
+
+    const isTurnPreview = type === "turn_reminder" && String(variant || "").startsWith("preview:");
+    if (type === "turn_reminder" && !isTurnPreview && soundPrefs.turnSfxEnabled === false) {
+      return;
+    }
+
+    const masterLevel =
+      type === "skill" ? getEffectiveSkillSfxGain(skillCharId, isSkillPreview) : getEffectiveSfxGain();
     if (masterLevel <= 0) return;
 
     const nowMs = Date.now();
@@ -596,9 +645,10 @@
       preview: 110,
       step: 45,
       dice_tick: 50,
-      turn: 120
+      turn: 120,
+      turn_reminder: 150
     };
-    const minGap = debounceWindows[type] || 30;
+    const minGap = isSkillPreview || isTurnPreview ? 20 : debounceWindows[type] || 30;
     if (sfxLastPlayed[type] && nowMs - sfxLastPlayed[type] < minGap) return;
     sfxLastPlayed[type] = nowMs;
 
@@ -608,8 +658,8 @@
     const t = ctx.currentTime;
     const warmFilter = ctx.createBiquadFilter();
     warmFilter.type = "lowpass";
-    warmFilter.frequency.setValueAtTime(2400, t);
-    warmFilter.Q.setValueAtTime(0.5, t);
+    warmFilter.frequency.setValueAtTime(type === "skill" ? 4200 : type === "turn_reminder" ? 3400 : 2400, t);
+    warmFilter.Q.setValueAtTime(0.55, t);
 
     const master = ctx.createGain();
     master.gain.setValueAtTime(masterLevel, t);
@@ -679,15 +729,17 @@
         playSoftTone(ctx, warmFilter, { startTime: t + 0.075, freq: 440, duration: 0.20, attack: 0.016, gain: 0.22, type: "sine" });
         break;
       case "turn_reminder": {
-        const notes = variant === "my_turn" ? [440.0, 554.37, 659.25, 880.0] : [392.0, 493.88, 587.33];
+        const cleanTurnVar = String(variant || "").replace(/^preview:/, "");
+        const isMy = cleanTurnVar === "my_turn";
+        const notes = isMy ? [523.25, 659.25, 783.99, 1046.5] : [440.0, 587.33];
         notes.forEach((hz, idx) => {
           playSoftTone(ctx, warmFilter, {
-            startTime: t + idx * 0.075,
+            startTime: t + idx * (isMy ? 0.068 : 0.09),
             freq: hz,
-            duration: idx === notes.length - 1 ? 0.34 : 0.20,
-            attack: 0.014,
-            gain: variant === "my_turn" ? 0.22 : 0.18,
-            type: "sine"
+            duration: idx === notes.length - 1 ? 0.40 : 0.20,
+            attack: 0.01,
+            gain: isMy ? 0.34 : 0.28,
+            type: idx === notes.length - 1 ? "triangle" : "sine"
           });
         });
         break;
@@ -701,73 +753,93 @@
         });
         break;
       case "skill": {
-        const parts = String(variant || "").split(":");
-        const charId = parts.length === 2 ? parts[0] : "";
-        const theme = parts.length === 2 ? parts[1] : variant;
+        const charId = skillCharId;
+        const theme = skillTheme;
         const isUlt = theme === "ultimate";
 
         if (charId === "bocchi") {
-          // Soft plucked rock/acoustic guitar chord strum (E major / C#m resonance)
+          // Crisp plucked electric/acoustic guitar power-chord strum
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 2600, duration: 0.032, gain: 0.14, q: 1.5 });
           const strings = isUlt
             ? [329.63, 415.30, 493.88, 659.25, 830.61]
-            : [277.18, 329.63, 415.30, 493.88];
+            : [277.18, 329.63, 415.30, 554.37];
           strings.forEach((hz, idx) => {
+            const st = t + idx * 0.034;
             playSoftTone(ctx, warmFilter, {
-              startTime: t + idx * 0.036,
+              startTime: st,
               freq: hz,
               endFreq: hz * 0.996,
-              duration: isUlt ? 0.56 : 0.42,
-              attack: 0.009,
-              gain: isUlt ? 0.21 : 0.17,
+              duration: isUlt ? 0.60 : 0.44,
+              attack: 0.006,
+              gain: isUlt ? 0.24 : 0.20,
+              type: "sawtooth"
+            });
+            playSoftTone(ctx, warmFilter, {
+              startTime: st,
+              freq: hz * 2,
+              duration: isUlt ? 0.34 : 0.24,
+              attack: 0.005,
+              gain: 0.08,
               type: "triangle"
             });
           });
         } else if (charId === "aventurine") {
-          // Soft casino chip clink + sparkling gold coin cascade
-          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 2100, duration: 0.035, gain: 0.12, q: 2.2 });
+          // Crisp poker chip clink + sparkling golden casino coin cascade
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 3100, duration: 0.034, gain: 0.22, q: 2.8 });
+          playSoftNoise(ctx, warmFilter, { startTime: t + 0.048, filterType: "bandpass", filterFreq: 3600, duration: 0.028, gain: 0.18, q: 3.0 });
           const notes = isUlt
-            ? [587.33, 739.99, 880.00, 1174.66]
-            : [587.33, 739.99, 987.77];
+            ? [587.33, 739.99, 880.00, 1174.66, 1479.98]
+            : [587.33, 739.99, 987.77, 1174.66];
           notes.forEach((hz, idx) => {
             playSoftTone(ctx, warmFilter, {
-              startTime: t + 0.025 + idx * 0.055,
+              startTime: t + 0.025 + idx * 0.052,
               freq: hz,
-              duration: isUlt ? 0.46 : 0.32,
-              attack: 0.01,
-              gain: isUlt ? 0.22 : 0.18,
-              type: "sine"
+              duration: isUlt ? 0.50 : 0.34,
+              attack: 0.008,
+              gain: isUlt ? 0.27 : 0.23,
+              type: idx % 2 === 0 ? "sine" : "triangle"
             });
           });
         } else if (charId === "joker") {
-          // Sleek acid-jazz Phantom Thief synth-Rhodes chord + subtle snap
-          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1850, duration: 0.032, gain: 0.14, q: 1.8 });
+          // Stylish Phantom Thief finger-snap + sleek acid-jazz Rhodes minor-9th hit
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "highpass", filterFreq: 2200, duration: 0.034, gain: 0.24, q: 1.6 });
+          playSoftTone(ctx, warmFilter, { startTime: t + 0.01, freq: 146.83, endFreq: 110.0, duration: 0.22, attack: 0.008, gain: 0.24, type: "triangle" });
           const jazz = isUlt
-            ? [293.66, 349.23, 440.00, 523.25, 659.25]
-            : [293.66, 349.23, 440.00, 523.25];
+            ? [293.66, 349.23, 440.00, 523.25, 659.25, 880.0]
+            : [293.66, 349.23, 440.00, 523.25, 659.25];
           jazz.forEach((hz, idx) => {
             playSoftTone(ctx, warmFilter, {
-              startTime: t + 0.03 + idx * 0.038,
+              startTime: t + 0.032 + idx * 0.034,
               freq: hz,
-              duration: isUlt ? 0.54 : 0.38,
-              attack: 0.018,
-              gain: isUlt ? 0.20 : 0.17,
-              type: "sine"
+              duration: isUlt ? 0.58 : 0.42,
+              attack: 0.012,
+              gain: isUlt ? 0.24 : 0.20,
+              type: idx === 0 ? "triangle" : "sine"
             });
           });
         } else if (charId === "lilith") {
-          // Ethereal dark music-box celesta + soft velvet sub-pad
-          playSoftTone(ctx, warmFilter, { startTime: t, freq: 196.0, endFreq: 174.61, duration: isUlt ? 0.62 : 0.44, attack: 0.045, gain: 0.16, type: "sine" });
+          // Haunting dark music-box celesta + velvet abyss sub-pad
+          playSoftTone(ctx, warmFilter, { startTime: t, freq: 196.0, endFreq: 164.81, duration: isUlt ? 0.72 : 0.52, attack: 0.035, gain: 0.24, type: "sine" });
           const box = isUlt
-            ? [698.46, 622.25, 523.25, 392.00]
-            : [622.25, 523.25, 466.16];
+            ? [783.99, 698.46, 622.25, 523.25, 392.00]
+            : [698.46, 622.25, 523.25, 466.16];
           box.forEach((hz, idx) => {
+            const st = t + idx * 0.072;
             playSoftTone(ctx, warmFilter, {
-              startTime: t + idx * 0.075,
+              startTime: st,
               freq: hz,
-              duration: 0.36,
-              attack: 0.012,
-              gain: 0.18,
+              duration: 0.42,
+              attack: 0.008,
+              gain: 0.24,
               type: "sine"
+            });
+            playSoftTone(ctx, warmFilter, {
+              startTime: st,
+              freq: hz * 2,
+              duration: 0.18,
+              attack: 0.006,
+              gain: 0.09,
+              type: "triangle"
             });
           });
         } else {
@@ -785,8 +857,8 @@
               startTime: t + idx * 0.045,
               freq: hz,
               duration: isUlt ? 0.52 : 0.40,
-              attack: 0.032,
-              gain: isUlt ? 0.22 : 0.19,
+              attack: 0.025,
+              gain: isUlt ? 0.26 : 0.22,
               type: "sine"
             });
           });
@@ -824,6 +896,84 @@
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
           </svg>`;
     }
+    const mixerBtn = document.getElementById("btn-audio-mixer");
+    const turnToggle = document.getElementById("turn-sfx-toggle");
+    const skillToggle = document.getElementById("skill-sfx-toggle");
+    const skillSlider = document.getElementById("skill-sfx-volume-slider");
+    const skillLabel = document.getElementById("skill-sfx-volume-label");
+    const skillPct = Math.round((soundPrefs.skillSfxVolume !== undefined ? soundPrefs.skillSfxVolume : 0.75) * 100);
+    const skillActive = !isEffectivelyMuted && soundPrefs.skillSfxEnabled !== false && skillPct > 0;
+
+    if (mixerBtn) mixerBtn.classList.toggle("is-off", !skillActive && soundPrefs.turnSfxEnabled === false);
+    if (turnToggle) turnToggle.checked = soundPrefs.turnSfxEnabled !== false;
+    if (skillToggle) skillToggle.checked = soundPrefs.skillSfxEnabled !== false;
+    if (skillSlider) skillSlider.value = String(skillPct);
+    if (skillLabel) skillLabel.textContent = soundPrefs.skillSfxEnabled === false ? "Off" : `${skillPct}%`;
+
+    ["bocchi", "aventurine", "joker", "lilith"].forEach((cid) => {
+      const cb = document.getElementById(`char-sfx-${cid}`);
+      if (cb) cb.checked = !soundPrefs.charSkillSfx || soundPrefs.charSkillSfx[cid] !== false;
+    });
+  }
+
+  function toggleAudioMixerPopover() {
+    const pop = document.getElementById("audio-mixer-popover");
+    if (!pop) return;
+    pop.classList.toggle("open");
+    playSfx("click");
+  }
+
+  function toggleTurnSfx(enabled) {
+    soundPrefs.turnSfxEnabled = !!enabled;
+    saveSoundPrefs();
+    syncSoundControlUi();
+    if (soundPrefs.turnSfxEnabled) playSfx("turn_reminder", "preview:my_turn");
+  }
+
+  function toggleSkillSfx(enabled) {
+    soundPrefs.skillSfxEnabled = !!enabled;
+    saveSoundPrefs();
+    syncSoundControlUi();
+    if (soundPrefs.skillSfxEnabled) playSfx("skill", "preview:bocchi:sonic");
+  }
+
+  function setSkillSfxVolume(valPct) {
+    const clamped = Math.max(0, Math.min(100, Number(valPct) || 0));
+    soundPrefs.skillSfxVolume = clamped / 100;
+    if (clamped > 0 && soundPrefs.skillSfxEnabled === false) soundPrefs.skillSfxEnabled = true;
+    saveSoundPrefs();
+    syncSoundControlUi();
+    if (clamped > 0) playSfx("skill", "preview:aventurine:fortune");
+  }
+
+  function toggleCharacterSkillSfx(charId, enabled) {
+    if (!soundPrefs.charSkillSfx || typeof soundPrefs.charSkillSfx !== "object") {
+      soundPrefs.charSkillSfx = { bocchi: true, aventurine: true, joker: true, lilith: true };
+    }
+    soundPrefs.charSkillSfx[charId] = !!enabled;
+    saveSoundPrefs();
+    syncSoundControlUi();
+    if (enabled) playSfx("skill", `preview:${charId}:sonic`);
+  }
+
+  function previewCharacterSkillSfx(charId) {
+    if (soundPrefs.muted || soundPrefs.volume <= 0.005) {
+      soundPrefs.muted = false;
+      if (soundPrefs.volume <= 0.005) soundPrefs.volume = 0.45;
+      saveSoundPrefs();
+      syncSoundControlUi();
+    }
+    playSfx("skill", `preview:${charId}:sonic`);
+  }
+
+  function previewTurnChangeSfx() {
+    if (soundPrefs.muted || soundPrefs.volume <= 0.005) {
+      soundPrefs.muted = false;
+      if (soundPrefs.volume <= 0.005) soundPrefs.volume = 0.45;
+      saveSoundPrefs();
+      syncSoundControlUi();
+    }
+    playSfx("turn_reminder", "preview:my_turn");
   }
 
   function toggleSoundMute() {
@@ -1970,6 +2120,15 @@
     if (isProcessingRemoteAction) return true;
     if (mp.mode === "local" || mp.mySeat === -1) return true;
     return mp.mySeat === getExpectedActingSeat();
+  }
+
+  function isLocalHumanTurnForPlayer(player) {
+    if (!state || !player) return false;
+    if (isProcessingRemoteAction) return false;
+    if (mp.mode !== "local" && mp.mySeat !== -1) {
+      return mp.mySeat === player.index;
+    }
+    return true;
   }
 
   function handleRollButton() {
@@ -4328,6 +4487,12 @@
     broadcastMultiplayerState();
   }
 
+  function cardActivatesBlockEffect(card) {
+    if (!card) return false;
+    const desc = String(card.description || "");
+    return /\[Activate Block Effect\]/i.test(desc);
+  }
+
   function executeCardEffect(player, card, options = {}) {
     const isRadiusPlayerCard =
       card.targetType === "opponent_in_radius" || card.targetType === "any_player_in_radius";
@@ -4392,6 +4557,8 @@
       }
     }
 
+    const shouldActivateBlock = cardActivatesBlockEffect(card);
+
     switch (card.effectKey) {
       case "move_steps": {
         const tgt = options.targetPlayerIndex !== undefined ? state.players[options.targetPlayerIndex] : player;
@@ -4412,11 +4579,13 @@
           const destTile = TILE_MAP[options.targetTileId];
           const msg = `${tgt.name} bergerak ke [${options.targetTileId}: ${destTile.name}]!`;
           addLog(`[${card.name}]: ${msg}`);
-          resolveExactLandingTile(tgt, destTile);
+          if (shouldActivateBlock) {
+            resolveExactLandingTile(tgt, destTile);
+          }
           return msg;
         } else {
           const steps = Number(options.choiceValue || (card.choices && card.choices[0]) || 1);
-          movePlayerInstantAlongPath(tgt, Math.abs(steps), steps >= 0 ? 1 : -1, true);
+          movePlayerInstantAlongPath(tgt, Math.abs(steps), steps >= 0 ? 1 : -1, shouldActivateBlock);
           const msg = `${tgt.name} bergerak ${steps > 0 ? "+" : ""}${steps} langkah!`;
           addLog(`[${card.name}]: ${msg}`);
           return msg;
@@ -4439,7 +4608,9 @@
           const msg = `${player.name} melompat ke Normal Tile [${destTileId}]!`;
           addLog(`[${card.name}]: ${msg}`);
           checkTokensOnStep(player, destTileId, true);
-          resolveExactLandingTile(player, destTile);
+          if (shouldActivateBlock) {
+            resolveExactLandingTile(player, destTile);
+          }
           return msg;
         }
         return "Tidak ada tujuan dipilih.";
@@ -4460,11 +4631,13 @@
           const destTile = TILE_MAP[options.targetTileId];
           const msg = `${player.name} berpindah ke [${options.targetTileId}: ${destTile.name}]!`;
           addLog(`[${card.name}]: ${msg}`);
-          resolveExactLandingTile(player, destTile);
+          if (shouldActivateBlock) {
+            resolveExactLandingTile(player, destTile);
+          }
           return msg;
         } else {
           const steps = Number(options.choiceValue || 4);
-          movePlayerInstantAlongPath(player, Math.abs(steps), steps >= 0 ? 1 : -1, true);
+          movePlayerInstantAlongPath(player, Math.abs(steps), steps >= 0 ? 1 : -1, shouldActivateBlock);
           const msg = `${player.name} bergerak ${steps > 0 ? "+" : ""}${steps} blok!`;
           addLog(`[${card.name}]: ${msg}`);
           return msg;
@@ -4482,7 +4655,9 @@
           if (targetPlayer.inSpawn && targetPlayer.tileId !== "T0") targetPlayer.inSpawn = false;
           const msg = `${player.name} (${player.tileId}) bertukar posisi dengan ${targetPlayer.name} (${targetPlayer.tileId})!`;
           addLog(`[${card.name}]: ${msg}`);
-          resolveExactLandingTile(player, TILE_MAP[player.tileId]);
+          if (shouldActivateBlock) {
+            resolveExactLandingTile(player, TILE_MAP[player.tileId]);
+          }
           return msg;
         }
         return "Tidak ada target bertukar posisi.";
@@ -4778,7 +4953,7 @@
             addLog(`[Phantom Thief]: ${player.name} stole [${stolenCard.name}] from ${victim.name}.`);
           }
         }
-        if (TILE_MAP[destId]) {
+        if (shouldActivateBlock && TILE_MAP[destId]) {
           resolveExactLandingTile(player, TILE_MAP[destId]);
         }
         return `${player.name} berlari ke [${destId}]${stealMsg || "!"}`;
@@ -4866,9 +5041,11 @@
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
           addLog(`[${card.name}]: ${player.name} moved to [${options.targetTileId}].`);
-          resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
+          if (shouldActivateBlock) {
+            resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
+          }
         } else if (options.choiceValue === "move2") {
-          movePlayerInstantAlongPath(player, 2, 1, true);
+          movePlayerInstantAlongPath(player, 2, 1, shouldActivateBlock);
         } else {
           modifyPlayerTC(player, 10, "own_skill");
         }
@@ -4940,9 +5117,11 @@
           );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
-          resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
+          if (shouldActivateBlock) {
+            resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
+          }
         } else {
-          movePlayerInstantAlongPath(player, 2, 1, true);
+          movePlayerInstantAlongPath(player, 2, 1, shouldActivateBlock);
         }
         if (TILE_MAP[player.tileId]?.type === "normal") modifyPlayerTC(player, 10, "own_skill");
         return card.description;
@@ -4964,7 +5143,7 @@
         return card.description;
       }
       case "retreat_2_negate": {
-        movePlayerInstantAlongPath(player, 2, -1, true);
+        movePlayerInstantAlongPath(player, 2, -1, shouldActivateBlock);
         return card.description;
       }
       case "relocate_board_traps": {
@@ -5003,10 +5182,12 @@
           );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
-          resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
+          if (shouldActivateBlock) {
+            resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
+          }
         } else {
           const steps = Number(options.choiceValue || 4);
-          movePlayerInstantAlongPath(player, steps, 1, true);
+          movePlayerInstantAlongPath(player, steps, 1, shouldActivateBlock);
         }
         state.players.forEach((other) => {
           if (other.index !== player.index && !other.inSpawn && getTileDistance(player.tileId, other.tileId) <= 1) {
@@ -5185,8 +5366,19 @@
       lastProcessedPurchasedShardId = state.lastPurchasedShard.purchaseId;
       triggerShardFadeOut(state.lastPurchasedShard);
     }
-    if (!state.activeMinigame && !state.winner && state.turnTimerKey && state.turnTimerKey !== lastTrackedTurnTimerKey) {
-      lastTrackedTurnTimerKey = state.turnTimerKey;
+    const turnTrackKey = state.turnTimerKey
+      ? `${state.cycle}:${state.roundInCycle}:${state.activePlayerIndex}:${state.turnTimerKey}`
+      : "";
+    if (
+      !state.activeMinigame &&
+      !state.winner &&
+      !isInitializingMatch &&
+      isMatchStarted &&
+      !isTitleScreenVisible &&
+      turnTrackKey &&
+      turnTrackKey !== lastTrackedTurnTimerKey
+    ) {
+      lastTrackedTurnTimerKey = turnTrackKey;
       localTurnKeyStartedAt = Date.now();
       turnThinkingRemainingMs = TURN_TIME_LIMIT_SEC * 1000;
       lastTurnTimerTickAt = Date.now();
@@ -6263,6 +6455,11 @@
     }
 
     if (!pendingInteraction || pendingInteraction.type === "choose_branch") {
+      bar.classList.remove("visible");
+      bar.innerHTML = "";
+      return;
+    }
+    if (pendingInteraction.type === "prompt_merchant_pass" && !isLocalHumanTurnForPlayer(pendingInteraction.player)) {
       bar.classList.remove("visible");
       bar.innerHTML = "";
       return;
@@ -7521,7 +7718,7 @@
     }
     renderAll();
     broadcastMultiplayerState();
-    if (!closeAfter) openMerchantModal(shopId);
+    if (!closeAfter && isLocalHumanTurnForPlayer(player)) openMerchantModal(shopId);
   }
 
   function onTileClicked(tileId) {
@@ -7764,6 +7961,10 @@
     const player = state.players[ownerIdx] || getActivePlayer();
     const card = player.hand.find((c) => c.uid === cardUid);
     if (!card) return;
+    if (selectedCardUid !== null) {
+      selectedCardUid = null;
+      renderTuckedHandAndDice();
+    }
     const imgUrl = getCardImage(card, player.charId);
     const isMyTurn = ownerIdx === state.activePlayerIndex && canLocalPlayerAct();
     const check = isMyTurn ? canPlaySkillCard(player, card) : { ok: false, reason: "Tunggu giliranmu untuk memakai kartu ini." };
@@ -7997,9 +8198,14 @@
     openPlayCardModal(cardUid, player ? player.index : state.activePlayerIndex);
   }
 
-  function openMerchantModal(shopId = 1) {
-    if (!canLocalPlayerAct() && !isAdminUnlocked) return;
+  function openMerchantModal(shopId = 1, fromAdmin = false) {
+    if (!state) return;
     const player = getActivePlayer();
+    if (fromAdmin) {
+      if (!isAdminUnlocked) return;
+    } else if (!isLocalHumanTurnForPlayer(player)) {
+      return;
+    }
     const effectiveShopId = state.rules.independentShops ? shopId : 1;
     const shop = state.shops[effectiveShopId];
     if (shop.ultStock === undefined) shop.ultStock = 1;
@@ -8904,6 +9110,7 @@
     titleEl.dataset.modalKind = modalKind;
     document.getElementById("modal-body").innerHTML = bodyHtml;
     document.getElementById("app-modal").classList.add("open");
+    document.body.classList.add("modal-open");
   }
 
   function openCardDetailModal(bodyHtml) {
@@ -8917,6 +9124,11 @@
     titleEl.dataset.modalKind = "card_detail";
     document.getElementById("modal-body").innerHTML = bodyHtml;
     document.getElementById("app-modal").classList.add("open");
+    document.body.classList.add("modal-open");
+    if (selectedCardUid !== null) {
+      selectedCardUid = null;
+      renderTuckedHandAndDice();
+    }
   }
 
   function closeModal() {
@@ -8931,6 +9143,11 @@
     }
     if (titleEl) titleEl.dataset.modalKind = "";
     document.getElementById("app-modal").classList.remove("open");
+    document.body.classList.remove("modal-open");
+    if (curKind === "card_detail" && selectedCardUid !== null) {
+      selectedCardUid = null;
+      renderTuckedHandAndDice();
+    }
     renderPromptBar();
     scheduleAutoEndTurnIfReady();
   }
@@ -9396,6 +9613,13 @@
     dismissTileEffectOverlay,
     toggleSoundMute,
     setSoundVolume,
+    toggleAudioMixerPopover,
+    toggleTurnSfx,
+    toggleSkillSfx,
+    setSkillSfxVolume,
+    toggleCharacterSkillSfx,
+    previewCharacterSkillSfx,
+    previewTurnChangeSfx,
     playSfx,
     onCopySkillSelectChange,
     closeModal,
@@ -9493,6 +9717,15 @@
       "pointerdown",
       (ev) => {
         ensureAudioCtx(true);
+        const audioPill = document.getElementById("sound-control-pill");
+        const audioPop = document.getElementById("audio-mixer-popover");
+        if (audioPop && audioPop.classList.contains("open") && audioPill && !audioPill.contains(ev.target)) {
+          audioPop.classList.remove("open");
+        }
+        if (selectedCardUid !== null && ev.target && typeof ev.target.closest === "function" && !ev.target.closest(".tucked-card")) {
+          selectedCardUid = null;
+          renderTuckedHandAndDice();
+        }
         const ov = document.getElementById("skill-dramatic-overlay");
         if (ov && ov.classList.contains("visible")) {
           if (!skillPopupShownAt || Date.now() - skillPopupShownAt >= 180) {
