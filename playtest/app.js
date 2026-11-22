@@ -379,6 +379,9 @@
   let lastShownDiceRollEventId = null;
   let lastShownDofRollEventId = null;
   let isInitializingMatch = false;
+  let isMatchStarted = false;
+  let isTitleScreenVisible = true;
+  let hasPreloadedAssets = false;
   let seenActivityLogIds = new Set();
   let activeCompendiumFilter = "all";
   let selectedCompendiumCharId = null;
@@ -1802,8 +1805,144 @@
       vOv.classList.remove("visible");
       vOv.innerHTML = "";
     }
+    showMainTitleScreen();
     initGame("alpha2", "comp_beta1", ["bocchi", "aventurine", "lilith", "joker"]);
+  }
+
+  function showMainTitleScreen() {
+    isTitleScreenVisible = true;
+    isMatchStarted = false;
+    const screen = document.getElementById("main-title-screen");
+    const loadingSec = document.getElementById("mts-loading-section");
+    const menuSec = document.getElementById("mts-menu-section");
+    if (screen) screen.classList.remove("is-hidden");
+    if (hasPreloadedAssets) {
+      if (loadingSec) loadingSec.classList.add("is-hidden");
+      if (menuSec) menuSec.classList.remove("is-hidden");
+    }
+  }
+
+  function hideMainTitleScreen() {
+    isTitleScreenVisible = false;
+    isMatchStarted = true;
+    const screen = document.getElementById("main-title-screen");
+    if (screen) screen.classList.add("is-hidden");
+  }
+
+  function openTitleSingleplayer() {
+    playSfx("click");
     openWelcomeSetupModal("local");
+  }
+
+  function openTitleMultiplayer() {
+    playSfx("click");
+    openWelcomeSetupModal("multiplayer");
+  }
+
+  function collectAllPreloadAssetUrls() {
+    const urls = new Set(["assets/maps/board_v2.png"]);
+    if (DATA && DATA.CHARACTERS) {
+      Object.values(DATA.CHARACTERS).forEach((ch) => {
+        if (!ch) return;
+        if (ch.portrait && ch.portrait.src) urls.add(ch.portrait.src);
+        if (ch.compPortrait && ch.compPortrait.src) urls.add(ch.compPortrait.src);
+        if (ch.menuPortrait) urls.add(ch.menuPortrait);
+        if (ch.chibi) urls.add(ch.chibi);
+        if (Array.isArray(ch.cards)) {
+          ch.cards.forEach((c) => {
+            if (c && c.image) urls.add(c.image);
+          });
+        }
+        if (ch.ultimate && ch.ultimate.image) urls.add(ch.ultimate.image);
+      });
+    }
+    if (DATA && DATA.BOARD_CARDS) {
+      ["positive", "negative", "globalEvents"].forEach((groupKey) => {
+        const list = DATA.BOARD_CARDS[groupKey];
+        if (Array.isArray(list)) {
+          list.forEach((c) => {
+            if (c && c.image) urls.add(c.image);
+          });
+        }
+      });
+    }
+    return Array.from(urls);
+  }
+
+  function runInitialAssetPreload(onComplete) {
+    const fillEl = document.getElementById("mts-progress-fill");
+    const trackEl = fillEl ? fillEl.parentElement : null;
+    const loadingSec = document.getElementById("mts-loading-section");
+    const menuSec = document.getElementById("mts-menu-section");
+
+    const finishLoading = () => {
+      hasPreloadedAssets = true;
+      if (fillEl) fillEl.style.width = "100%";
+      if (trackEl) trackEl.setAttribute("aria-valuenow", "100");
+      if (loadingSec) loadingSec.classList.add("is-hidden");
+      if (menuSec) menuSec.classList.remove("is-hidden");
+      if (typeof onComplete === "function") onComplete();
+    };
+
+    try {
+      const urls = collectAllPreloadAssetUrls();
+      const total = Math.max(1, urls.length);
+      let loadedCount = 0;
+      let displayPct = 4;
+      let finished = false;
+      const startTime = Date.now();
+      const minDurationMs = 1250;
+
+      const setBarPct = (pct) => {
+        const clamped = Math.max(4, Math.min(100, Math.round(pct)));
+        if (fillEl) fillEl.style.width = `${clamped}%`;
+        if (trackEl) trackEl.setAttribute("aria-valuenow", String(clamped));
+      };
+
+      setBarPct(4);
+
+      urls.forEach((url) => {
+        const img = new Image();
+        let settled = false;
+        const markDone = () => {
+          if (settled) return;
+          settled = true;
+          loadedCount++;
+        };
+        img.onload = () => {
+          if (typeof img.decode === "function") {
+            img.decode().then(markDone).catch(markDone);
+          } else {
+            markDone();
+          }
+        };
+        img.onerror = markDone;
+        img.src = url;
+      });
+
+      const tickInterval = setInterval(() => {
+        if (finished) {
+          clearInterval(tickInterval);
+          return;
+        }
+        const elapsed = Date.now() - startTime;
+        const timeProgress = Math.min(1, elapsed / minDurationMs);
+        const assetProgress = loadedCount / total;
+        const effectiveProgress = Math.min(timeProgress, assetProgress);
+        const targetPct = Math.max(displayPct, Math.round(effectiveProgress * 100));
+        displayPct = targetPct;
+        setBarPct(displayPct);
+
+        if ((loadedCount >= total && elapsed >= minDurationMs) || elapsed >= 5000) {
+          finished = true;
+          clearInterval(tickInterval);
+          setBarPct(100);
+          setTimeout(finishLoading, 220);
+        }
+      }, 45);
+    } catch (e) {
+      finishLoading();
+    }
   }
 
   // ============================================================================
@@ -3008,7 +3147,7 @@
   }
 
   function triggerTurnStartReminder(player) {
-    if (!player || !state || isInitializingMatch) return;
+    if (!player || !state || isInitializingMatch || !isMatchStarted || isTitleScreenVisible) return;
     const banner = document.getElementById("turn-reminder-banner");
     const isMyMultiplayerTurn = mp.mode !== "local" && mp.mySeat !== -1 && mp.mySeat === player.index;
     const isLocalTurn = mp.mode === "local" || mp.mySeat === -1;
@@ -3058,6 +3197,7 @@
   }
 
   function isTurnTimerPausedForAnimation() {
+    if (!isMatchStarted || isTitleScreenVisible) return true;
     if (!state || state.winner || state.activeMinigame) return true;
     const modal = document.getElementById("app-modal");
     const titleEl = document.getElementById("modal-title");
@@ -3076,6 +3216,7 @@
   function scheduleAutoEndTurnIfReady() {
     clearTimeout(autoEndTurnTimerId);
     autoEndTurnTimerId = null;
+    if (!isMatchStarted || isTitleScreenVisible) return;
     if (!state || state.winner || state.activeMinigame) return;
     if (isRemoteClient()) return;
     if (state.phaseIndex !== 5) return;
@@ -6733,6 +6874,7 @@
     }
 
     mp.lobby.status = "playing";
+    hideMainTitleScreen();
     initGame(mp.lobby.patchId, mp.lobby.compendiumId, roster, { randomizeOrder: true });
     if (state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
       mp.mySeat = state.seatMap[mp.clientId];
@@ -6876,6 +7018,7 @@
             mp.onlineSeats = val.seats || {};
 
             if (mp.lobby.status === "playing") {
+              hideMainTitleScreen();
               if (prevStatus !== "playing") {
                 closeModal();
               }
@@ -6896,6 +7039,7 @@
           });
 
           if (mp.lobby.status === "playing") {
+            hideMainTitleScreen();
             closeModal();
             if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
             renderAll();
@@ -7217,6 +7361,7 @@
         mp.mySeat = state.seatMap[mp.clientId];
       }
       if (mp.lobby.status === "playing" && prevStatus !== "playing") {
+        hideMainTitleScreen();
         closeModal();
       }
       if (camera.mode === "follow" && state.players && state.players[state.activePlayerIndex]) {
@@ -9166,10 +9311,19 @@
     }
 
     closeModal();
+    hideMainTitleScreen();
     initGame(setupDraft.patchId, setupDraft.compendiumId, roster, { randomizeOrder: true });
     if (state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
       focusCameraOnPlayer(state.seatMap[mp.clientId]);
     }
+  }
+
+  function focusCameraOnPlayer(pIdx) {
+    if (!state || !Array.isArray(state.players)) return;
+    const p = state.players[pIdx];
+    if (!p) return;
+    camera.mode = "follow";
+    focusCameraOnTile(p.tileId, isMobilePortrait() ? 0.72 : 0.96);
   }
 
   function openNewMatchSetupModal() {
@@ -9178,6 +9332,10 @@
 
   window.EFT_APP = {
     initGame,
+    showMainTitleScreen,
+    hideMainTitleScreen,
+    openTitleSingleplayer,
+    openTitleMultiplayer,
     switchTab,
     toggleDrawer,
     handleRollButton,
@@ -9276,12 +9434,7 @@
     },
     openNewMatchSetupModal,
     setCameraMode,
-    focusCameraOnPlayer: (pIdx) => {
-      const p = state.players[pIdx];
-      if (!p) return;
-      camera.mode = "follow";
-      focusCameraOnTile(p.tileId, isMobilePortrait() ? 0.72 : 0.96);
-    },
+    focusCameraOnPlayer,
     cancelPendingInteraction: () => {
       if (!canLocalPlayerAct()) return;
       pendingInteraction = null;
@@ -9371,23 +9524,15 @@
       else if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
     });
 
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const roomParam = params.get("room");
-      if (roomParam) {
-        const cleanRoom = roomParam.trim().toUpperCase();
-        setTimeout(() => {
+    runInitialAssetPreload(() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const roomParam = params.get("room");
+        if (roomParam) {
+          const cleanRoom = roomParam.trim().toUpperCase();
           openWelcomeSetupModal("multiplayer", cleanRoom);
-        }, 200);
-      } else {
-        setTimeout(() => {
-          openWelcomeSetupModal("local");
-        }, 200);
-      }
-    } catch (e) {
-      setTimeout(() => {
-        openWelcomeSetupModal("local");
-      }, 200);
-    }
+        }
+      } catch (e) {}
+    });
   });
 })();
