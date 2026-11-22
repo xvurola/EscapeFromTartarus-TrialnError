@@ -346,21 +346,6 @@ body {
   transform: scale(1.04);
 }
 
-.am-test-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.skill-cutin-voice {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-style: italic;
-  font-size: 0.88rem;
-  color: #fde68a;
-  letter-spacing: 0.2px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75);
-}
-
 /* ============================================================================
    GENERAL BUTTONS
    ============================================================================ */
@@ -1999,28 +1984,6 @@ body.admin-mode .admin-only-el {
   transition: none !important;
 }
 
-.digital-board-surface.print-mode {
-  background: #061411;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
-  border: 1px solid var(--border-soft);
-}
-
-.board-print-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
-  border-radius: 26px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-.digital-board-surface.print-mode .board-print-img {
-  opacity: 1;
-}
-
 .board-connections-svg {
   position: absolute;
   inset: 0;
@@ -2129,24 +2092,6 @@ body.admin-mode .digital-tile {
     0 8px 0 var(--tile-base),
     0 16px 26px rgba(0, 0, 0, 0.68),
     0 0 18px var(--tile-glow);
-}
-
-/* Print Preview Fallback (keeps map print image legible) */
-.digital-board-surface.print-mode .digital-tile {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.28) !important;
-  border: 1.5px solid rgba(255, 255, 255, 0.35);
-  box-shadow: none !important;
-  align-items: center;
-  justify-content: center;
-}
-
-.digital-board-surface.print-mode .lgr-print-id {
-  font-size: 0.62rem;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.78);
 }
 
 /* ----------------------------------------------------------------------------
@@ -2988,23 +2933,6 @@ body.admin-mode .digital-tile {
     transform: translate(46px, -166px) scale(0.68);
     filter: brightness(2.1);
   }
-}
-
-/* Board Traps & Special Tokens Marker */
-.token-marker {
-  position: absolute;
-  transform: translate(-50%, 92%);
-  padding: 3px 10px;
-  border-radius: 99px;
-  background: linear-gradient(180deg, #ea580c 0%, #c2410c 100%);
-  border: 1.5px solid #fed7aa;
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 900;
-  box-shadow: 0 4px 12px rgba(194, 65, 12, 0.78);
-  pointer-events: none;
-  z-index: 28;
-  white-space: nowrap;
 }
 
 /* ============================================================================
@@ -5377,15 +5305,6 @@ body:not(.modal-open) .tucked-card:hover,
     max-height: 90dvh;
   }
 
-  .card-modal-grid {
-    grid-template-columns: 1fr !important;
-    justify-items: center;
-  }
-
-  .card-modal-grid img {
-    max-width: 170px !important;
-  }
-
   .card-detail-layout {
     grid-template-columns: 1fr;
     justify-items: center;
@@ -5739,34 +5658,6 @@ body:not(.modal-open) .tucked-card:hover,
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.mts-quick-guide-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.mts-new-here-label {
-  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  font-weight: 700;
-  font-size: clamp(0.98rem, 1.35vw, 1.24rem);
-  color: #ffffff;
-}
-
-.mts-quick-guide-btn {
-  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  font-weight: 700;
-  font-size: clamp(1.02rem, 1.42vw, 1.32rem);
-  color: #ffffff;
-  background: #551c19;
-  border: none;
-  border-radius: 999px;
-  padding: 9px 28px;
-  pointer-events: none;
-  cursor: not-allowed;
-  user-select: none;
 }
 
 .mts-mode-buttons {

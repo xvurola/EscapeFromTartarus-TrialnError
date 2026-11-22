@@ -31,12 +31,6 @@
 
       <!-- STAGE 2: MODE SELECTION (SHOWN AFTER ASSETS LOADED) -->
       <div id="mts-menu-section" class="mts-menu-section is-hidden">
-        <div class="mts-quick-guide-wrap">
-          <div class="mts-new-here-label">New here?</div>
-          <button type="button" class="mts-quick-guide-btn" disabled aria-disabled="true" tabindex="-1">
-            Quick Guide
-          </button>
-        </div>
         <div class="mts-mode-buttons">
           <button type="button" class="mts-mode-btn mts-btn-single" onclick="window.EFT_APP.openTitleSingleplayer()">
             Singleplayer / Local
@@ -48,7 +42,7 @@
       </div>
     </div>
 
-    <div class="mts-version-corner">Version.</div>
+    <div class="mts-version-corner">Online Beta</div>
   </div>
 
   <!-- TOP BAR -->
@@ -60,7 +54,7 @@
         Play Arena
       </button>
       <button class="nav-oval-pill" data-tab="compendium" onclick="window.EFT_APP.switchTab('compendium')">
-        Character Compedium
+        Character Compendium
       </button>
       <button class="nav-oval-pill" data-tab="rules" onclick="window.EFT_APP.switchTab('rules')">
         Rules
@@ -231,7 +225,6 @@
           Wide Map
         </button>
         <button class="util-pill-btn" onclick="window.EFT_APP.toggleDrawer('drawer-log')">Log</button>
-        <button class="util-pill-btn" onclick="window.EFT_APP.toggleBoardRenderMode()">Print View</button>
         <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1, true)">Shop</button>
         <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
         <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.undoLastAction()">Undo</button>
@@ -292,7 +285,6 @@
       <!-- INTERACTIVE DRAGGABLE & ZOOMABLE BOARD VIEWPORT -->
       <div id="board-viewport" class="board-viewport">
         <div id="map-canvas-wrap" class="digital-board-surface">
-          <img id="map-bg-image" class="board-print-img" src="assets/maps/board_v2.png" loading="lazy" decoding="async" alt="Board Map" />
           <svg id="map-svg-overlay" class="board-connections-svg" viewBox="0 0 2970 1998"></svg>
           <div id="map-nodes-layer" style="position:absolute;inset:0;width:100%;height:100%;"></div>
         </div>

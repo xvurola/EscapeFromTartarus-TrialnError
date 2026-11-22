@@ -337,7 +337,6 @@
 
   let state = null;
   let undoStack = [];
-  let printPreviewMode = false;
   let pendingInteraction = null;
   let selectedCardUid = null;
   let hoveredBranchTileId = null;
@@ -1407,9 +1406,9 @@
     );
   }
 
-  // Multiplayer state (Firebase Realtime Database + PeerJS + LAN / Multi-Tab)
+  // Multiplayer state (Online Firebase Realtime Database)
   const mp = {
-    mode: "local", // "local" | "firebase_host" | "firebase_client" | "p2p_host" | "p2p_client" | "lan_host" | "lan_client"
+    mode: "local", // "local" | "firebase_host" | "firebase_client"
     roomCode: "",
     mySeat: -1,
     clientId: "cli_" + Math.random().toString(36).slice(2, 10),
@@ -1421,12 +1420,6 @@
     fbActionListener: null,
     fbSeatsListener: null,
     onlineSeats: {},
-    peer: null,
-    connections: [],
-    hostConn: null,
-    bc: typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("eft_mp_channel") : null,
-    lanTimer: null,
-    lastLanTimestamp: 0,
     processedActionIds: new Set(),
     lobby: {
       status: "idle", // "idle" | "waiting" | "playing"
@@ -1439,11 +1432,11 @@
   };
 
   function isRemoteClient() {
-    return mp.mode === "firebase_client" || mp.mode === "p2p_client" || mp.mode === "lan_client";
+    return mp.mode === "firebase_client";
   }
 
   function isMultiplayerHost() {
-    return mp.mode === "firebase_host" || mp.mode === "p2p_host" || mp.mode === "lan_host";
+    return mp.mode === "firebase_host";
   }
 
   function serializePendingInteraction() {
@@ -1479,14 +1472,6 @@
     }
     mp.fbDb = firebase.database();
     return mp.fbDb;
-  }
-
-  if (mp.bc) {
-    mp.bc.onmessage = (ev) => {
-      const msg = ev.data;
-      if (!msg || !mp.roomCode || msg.roomCode !== mp.roomCode) return;
-      handleIncomingMpMessage(msg);
-    };
   }
 
   const PLAYER_COLORS = ["#ec4899", "#eab308", "#ef4444", "#38bdf8", "#10b981", "#a855f7"];
@@ -1974,12 +1959,6 @@
     closeModal();
     if (mp.mode !== "local") {
       detachFirebaseListeners();
-      if (mp.bc) {
-        try { mp.bc.close(); } catch (e) {}
-        mp.bc = null;
-      }
-      clearInterval(mp.lanPollInterval);
-      mp.lanPollInterval = null;
       mp.mode = "local";
       mp.roomCode = "";
       mp.mySeat = -1;
@@ -2031,15 +2010,24 @@
     openWelcomeSetupModal("multiplayer");
   }
 
-  function collectAllPreloadAssetUrls() {
-    const urls = new Set(["assets/maps/board_v2.png"]);
+  function collectCriticalPreloadUrls() {
+    const urls = new Set();
     if (DATA && DATA.CHARACTERS) {
       Object.values(DATA.CHARACTERS).forEach((ch) => {
         if (!ch) return;
-        if (ch.portrait && ch.portrait.src) urls.add(ch.portrait.src);
-        if (ch.compPortrait && ch.compPortrait.src) urls.add(ch.compPortrait.src);
         if (ch.menuPortrait) urls.add(ch.menuPortrait);
+        if (ch.portrait && ch.portrait.src) urls.add(ch.portrait.src);
         if (ch.chibi) urls.add(ch.chibi);
+      });
+    }
+    return Array.from(urls);
+  }
+
+  function collectSecondaryPreloadUrls() {
+    const urls = new Set();
+    if (DATA && DATA.CHARACTERS) {
+      Object.values(DATA.CHARACTERS).forEach((ch) => {
+        if (!ch) return;
         if (ch.samChibi) urls.add(ch.samChibi);
         if (Array.isArray(ch.cards)) {
           ch.cards.forEach((c) => {
@@ -2068,6 +2056,57 @@
     return Array.from(urls);
   }
 
+  function preloadSingleImage(url, onSettled) {
+    const img = new Image();
+    let settled = false;
+    let triedFallback = false;
+    const markDone = () => {
+      if (settled) return;
+      settled = true;
+      if (typeof onSettled === "function") onSettled();
+    };
+    img.onload = () => {
+      if (typeof img.decode === "function") {
+        img.decode().then(markDone).catch(markDone);
+      } else {
+        markDone();
+      }
+    };
+    img.onerror = () => {
+      if (!triedFallback && /\.webp$/i.test(url)) {
+        triedFallback = true;
+        img.src = url.replace(/\.webp$/i, ".png");
+        return;
+      }
+      markDone();
+    };
+    img.src = url;
+  }
+
+  function preloadSecondaryAssetsInBackground() {
+    const queue = collectSecondaryPreloadUrls();
+    let idx = 0;
+    const BATCH_SIZE = 4;
+    const pump = () => {
+      if (idx >= queue.length) return;
+      const batch = queue.slice(idx, idx + BATCH_SIZE);
+      idx += BATCH_SIZE;
+      let left = batch.length;
+      const onOne = () => {
+        left--;
+        if (left <= 0 && idx < queue.length) {
+          if (typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(pump, { timeout: 600 });
+          } else {
+            setTimeout(pump, 140);
+          }
+        }
+      };
+      batch.forEach((u) => preloadSingleImage(u, onOne));
+    };
+    setTimeout(pump, 350);
+  }
+
   function runInitialAssetPreload(onComplete) {
     const fillEl = document.getElementById("mts-progress-fill");
     const trackEl = fillEl ? fillEl.parentElement : null;
@@ -2080,43 +2119,31 @@
       if (trackEl) trackEl.setAttribute("aria-valuenow", "100");
       if (loadingSec) loadingSec.classList.add("is-hidden");
       if (menuSec) menuSec.classList.remove("is-hidden");
+      preloadSecondaryAssetsInBackground();
       if (typeof onComplete === "function") onComplete();
     };
 
     try {
-      const urls = collectAllPreloadAssetUrls();
+      const urls = collectCriticalPreloadUrls();
       const total = Math.max(1, urls.length);
       let loadedCount = 0;
-      let displayPct = 4;
+      let displayPct = 8;
       let finished = false;
       const startTime = Date.now();
-      const minDurationMs = 1250;
+      const minDurationMs = 380;
 
       const setBarPct = (pct) => {
-        const clamped = Math.max(4, Math.min(100, Math.round(pct)));
+        const clamped = Math.max(8, Math.min(100, Math.round(pct)));
         if (fillEl) fillEl.style.width = `${clamped}%`;
         if (trackEl) trackEl.setAttribute("aria-valuenow", String(clamped));
       };
 
-      setBarPct(4);
+      setBarPct(8);
 
       urls.forEach((url) => {
-        const img = new Image();
-        let settled = false;
-        const markDone = () => {
-          if (settled) return;
-          settled = true;
+        preloadSingleImage(url, () => {
           loadedCount++;
-        };
-        img.onload = () => {
-          if (typeof img.decode === "function") {
-            img.decode().then(markDone).catch(markDone);
-          } else {
-            markDone();
-          }
-        };
-        img.onerror = markDone;
-        img.src = url;
+        });
       });
 
       const tickInterval = setInterval(() => {
@@ -2132,13 +2159,13 @@
         displayPct = targetPct;
         setBarPct(displayPct);
 
-        if ((loadedCount >= total && elapsed >= minDurationMs) || elapsed >= 5000) {
+        if ((loadedCount >= total && elapsed >= minDurationMs) || elapsed >= 2200) {
           finished = true;
           clearInterval(tickInterval);
           setBarPct(100);
-          setTimeout(finishLoading, 220);
+          setTimeout(finishLoading, 120);
         }
-      }, 45);
+      }, 40);
     } catch (e) {
       finishLoading();
     }
@@ -2530,7 +2557,7 @@
           casterName: mover.name,
           cardName: "Unpredictable Tricks",
           rarity: "Passive",
-          cardImg: "assets/cards/characters/lilith/uq.png",
+          cardImg: "assets/cards/characters/lilith/uq.webp",
           description: "Pass opponent: opponent loses 1 random card and gives 5 TC.",
           outcomeText: `${mover.name} melewati ${other.name}: -${disc.length} Kartu & -${stolen} TC!`,
           profile: { theme: "passive", tagline: "PASSIVE TRIGGERED · UNPREDICTABLE TRICKS", accent: "#ef4444", accentRgb: "239, 68, 68" }
@@ -2550,7 +2577,7 @@
           casterName: other.name,
           cardName: "Unpredictable Tricks",
           rarity: "Passive",
-          cardImg: "assets/cards/characters/lilith/uq.png",
+          cardImg: "assets/cards/characters/lilith/uq.webp",
           description: "Opponent passed you: they lose 1 random card and give 5 TC.",
           outcomeText: `${mover.name} melewati ${other.name}: ${mover.name} kehilangan ${disc.length} Kartu & ${stolen} TC!`,
           profile: { theme: "passive", tagline: "PASSIVE TRIGGERED · UNPREDICTABLE TRICKS", accent: "#ef4444", accentRgb: "239, 68, 68" }
@@ -2604,7 +2631,7 @@
       casterName: player.name,
       cardName: "The Stage Is Mine",
       rarity: "Passive",
-      cardImg: "assets/cards/characters/bocchi/uq.png",
+      cardImg: "assets/cards/characters/bocchi/uq.webp",
       description: "[Activate Block Effect] When land on Normal Tiles, choose to move (+1/+2/-1).",
       outcomeText: `${player.name} mendarat di Normal Tile — Pilih pindah +1 / +2 / -1 di peta!`,
       profile: { theme: "passive", tagline: "UNIQUE PASSIVE TRIGGERED · BOCCHI", accent: "#ec4899", accentRgb: "236, 72, 153" }
@@ -2769,7 +2796,7 @@
         player.nextTurnDiceMod = Math.max(-1, (player.nextTurnDiceMod || 0) - 1);
         state.boardTokens.splice(i, 1);
         addLog(`${player.name} terkena trap Punishing Virus (-1 dadu pada giliran berikutnya, maks. 1 per pemain).`);
-        showEffectSpotlight("Punishing Virus!", `${player.name} terkena Trap`, "Giliran berikutnya berkurang -1 dadu (maks. 1 per pemain).", "assets/cards/characters/lilith/uc.png");
+        showEffectSpotlight("Punishing Virus!", `${player.name} terkena Trap`, "Giliran berikutnya berkurang -1 dadu (maks. 1 per pemain).", "assets/cards/characters/lilith/uc.webp");
       } else if (tok.type === "herb_tile") {
         const owner = state.players[tok.ownerIndex] || player;
         state.boardTokens.splice(i, 1);
@@ -5924,9 +5951,6 @@
   }
 
   function buildTileInnerHtml(t, activeToken = null) {
-    if (printPreviewMode) {
-      return `<span class="lgr-print-id">${escapeHtml(t.id.replace("T", ""))}</span>`;
-    }
     if (t.type === "intersect") {
       return `<div class="lgr-split-hub" title="Belokan Split (tidak terhitung langkah)">${buildSplitHubSvg(t)}</div>`;
     }
@@ -6009,48 +6033,46 @@
     const H = BOARD_H;
     const pathLines = [];
 
-    if (!printPreviewMode) {
-      const rTop = TILE_MAP.T38;
-      const rBot = TILE_MAP.T69;
-      if (rTop && rBot) {
-        const x1 = (rTop.x / 100) * W;
-        const y1 = (rTop.y / 100) * H;
-        const x2 = (rBot.x / 100) * W;
-        const y2 = (rBot.y / 100) * H;
-        pathLines.push(
-          `<path d="M ${x1} ${y1} C ${x1 + 95} ${y1 + 500}, ${x1 - 405} ${y2 - 580}, ${x2} ${y2}" fill="none" stroke="rgba(56, 189, 248, 0.24)" stroke-width="42" stroke-linecap="round"/>`,
-          `<path d="M ${x1} ${y1} C ${x1 + 95} ${y1 + 500}, ${x1 - 405} ${y2 - 580}, ${x2} ${y2}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-dasharray="18,14"/>`
-        );
-      }
-
-      const w1 = TILE_MAP.T63;
-      const w2 = TILE_MAP.T116;
-      if (w1 && w2) {
-        pathLines.push(
-          `<line x1="${(w1.x / 100) * W}" y1="${(w1.y / 100) * H}" x2="${(w2.x / 100) * W}" y2="${(w2.y / 100) * H}" stroke="rgba(96, 165, 250, 0.42)" stroke-width="4" stroke-dasharray="16,12"/>`
-        );
-      }
-
-      // Clean undirected board track roads (NO fixed directional arrows on tiles!)
-      const drawnEdges = new Set();
-      DATA.BOARD_TILES.forEach((t) => {
-        const x1 = (t.x / 100) * W;
-        const y1 = (t.y / 100) * H;
-        (ADJ_MAP[t.id] || []).forEach((nid) => {
-          const edgeKey = t.id < nid ? `${t.id}|${nid}` : `${nid}|${t.id}`;
-          if (drawnEdges.has(edgeKey)) return;
-          drawnEdges.add(edgeKey);
-          const target = TILE_MAP[nid];
-          if (!target) return;
-          const x2 = (target.x / 100) * W;
-          const y2 = (target.y / 100) * H;
-          pathLines.push(
-            `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(15, 23, 42, 0.76)" stroke-width="18" stroke-linecap="round"/>`,
-            `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(203, 213, 225, 0.42)" stroke-width="4" stroke-linecap="round"/>`
-          );
-        });
-      });
+    const rTop = TILE_MAP.T38;
+    const rBot = TILE_MAP.T69;
+    if (rTop && rBot) {
+      const x1 = (rTop.x / 100) * W;
+      const y1 = (rTop.y / 100) * H;
+      const x2 = (rBot.x / 100) * W;
+      const y2 = (rBot.y / 100) * H;
+      pathLines.push(
+        `<path d="M ${x1} ${y1} C ${x1 + 95} ${y1 + 500}, ${x1 - 405} ${y2 - 580}, ${x2} ${y2}" fill="none" stroke="rgba(56, 189, 248, 0.24)" stroke-width="42" stroke-linecap="round"/>`,
+        `<path d="M ${x1} ${y1} C ${x1 + 95} ${y1 + 500}, ${x1 - 405} ${y2 - 580}, ${x2} ${y2}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-dasharray="18,14"/>`
+      );
     }
+
+    const w1 = TILE_MAP.T63;
+    const w2 = TILE_MAP.T116;
+    if (w1 && w2) {
+      pathLines.push(
+        `<line x1="${(w1.x / 100) * W}" y1="${(w1.y / 100) * H}" x2="${(w2.x / 100) * W}" y2="${(w2.y / 100) * H}" stroke="rgba(96, 165, 250, 0.42)" stroke-width="4" stroke-dasharray="16,12"/>`
+      );
+    }
+
+    // Clean undirected board track roads (NO fixed directional arrows on tiles!)
+    const drawnEdges = new Set();
+    DATA.BOARD_TILES.forEach((t) => {
+      const x1 = (t.x / 100) * W;
+      const y1 = (t.y / 100) * H;
+      (ADJ_MAP[t.id] || []).forEach((nid) => {
+        const edgeKey = t.id < nid ? `${t.id}|${nid}` : `${nid}|${t.id}`;
+        if (drawnEdges.has(edgeKey)) return;
+        drawnEdges.add(edgeKey);
+        const target = TILE_MAP[nid];
+        if (!target) return;
+        const x2 = (target.x / 100) * W;
+        const y2 = (target.y / 100) * H;
+        pathLines.push(
+          `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(15, 23, 42, 0.76)" stroke-width="18" stroke-linecap="round"/>`,
+          `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(203, 213, 225, 0.42)" stroke-width="4" stroke-linecap="round"/>`
+        );
+      });
+    });
 
     // Highlight glowing branch turn paths & live preview polyline ONLY during active branch choice
     if (pendingInteraction && pendingInteraction.type === "choose_branch") {
@@ -6275,8 +6297,6 @@
   };
 
   function renderDigitalBoard() {
-    const surface = document.getElementById("map-canvas-wrap");
-    surface.classList.toggle("print-mode", printPreviewMode);
     renderBoardSvgOverlay();
 
     const localCanAct = canLocalPlayerAct();
@@ -7081,36 +7101,13 @@
   }
 
   function broadcastLobbyState() {
-    if (mp.mode === "local") return;
-    if (mp.mode === "firebase_host" && mp.fbRoomRef) {
-      mp.fbRoomRef
-        .update({
-          lobbyJson: JSON.stringify(mp.lobby),
-          updatedAt: Date.now()
-        })
-        .catch(() => {});
-      return;
-    }
-    const payload = {
-      type: "lobby_sync",
-      roomCode: mp.roomCode,
-      senderId: mp.clientId,
-      lobby: mp.lobby,
-      timestamp: Date.now()
-    };
-    if (mp.mode === "p2p_host") {
-      mp.connections.forEach((c) => {
-        if (c.open) c.send(payload);
-      });
-    }
-    if (mp.bc) mp.bc.postMessage(payload);
-    if (mp.mode === "lan_host") {
-      fetch("/api/room", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: mp.roomCode, type: "sync_state", state: payload })
-      }).catch(() => {});
-    }
+    if (mp.mode !== "firebase_host" || !mp.fbRoomRef) return;
+    mp.fbRoomRef
+      .update({
+        lobbyJson: JSON.stringify(mp.lobby),
+        updatedAt: Date.now()
+      })
+      .catch(() => {});
   }
 
   function processLobbyJoinAction(d) {
@@ -7141,28 +7138,6 @@
     }
     broadcastLobbyState();
     refreshLobbyModalIfOpen();
-  }
-
-  function saveQuickFirebaseConfig() {
-    const raw = (document.getElementById("fb-quick-config-input")?.value || "").trim();
-    if (!raw) {
-      alert("Tempelkan objek firebaseConfig dari Firebase Console terlebih dahulu.");
-      return;
-    }
-    try {
-      window.EFT_SET_RUNTIME_FIREBASE_CONFIG(raw);
-      alert("Konfigurasi Firebase berhasil disimpan di browser!");
-      openWelcomeSetupModal("multiplayer");
-    } catch (e) {
-      alert("Format konfigurasi Firebase tidak valid: " + e.message);
-    }
-  }
-
-  function clearQuickFirebaseConfig() {
-    if (typeof window.EFT_CLEAR_RUNTIME_FIREBASE_CONFIG === "function") {
-      window.EFT_CLEAR_RUNTIME_FIREBASE_CONFIG();
-    }
-    openWelcomeSetupModal("multiplayer");
   }
 
   function detachFirebaseListeners() {
@@ -7208,19 +7183,17 @@
     mp.mySeat = -1;
   }
 
-  function createLobbyRoom(transport = "lan") {
+  function createLobbyRoom() {
     const uname = (setupDraft.username || "").trim();
     if (!uname) {
       alert("Masukkan Username kamu terlebih dahulu sebelum membuat Room.");
       return;
     }
     savePlayerProfile(uname, setupDraft.charId);
-    if (transport === "firebase") startFirebaseHostRoom();
-    else if (transport === "p2p") startOnlineHostRoom();
-    else startLanOrTabRoom("HOST");
+    startFirebaseHostRoom();
   }
 
-  function joinLobbyRoom(transport = "lan") {
+  function joinLobbyRoom() {
     const uname = (setupDraft.username || "").trim();
     if (!uname) {
       alert("Masukkan Username kamu terlebih dahulu sebelum bergabung.");
@@ -7234,9 +7207,7 @@
     }
     mp.roomCode = code;
     savePlayerProfile(uname, setupDraft.charId);
-    if (transport === "firebase") joinFirebaseClientRoom(code);
-    else if (transport === "p2p") joinOnlineClientRoom(code);
-    else startLanOrTabRoom("JOIN", code);
+    joinFirebaseClientRoom(code);
   }
 
   function toggleLobbyReady() {
@@ -7309,9 +7280,7 @@
 
   function startFirebaseHostRoom() {
     if (!window.EFT_IS_FIREBASE_READY()) {
-      alert(
-        "Firebase belum dikonfigurasi.\n\nIsi firebaseConfig di playtest/firebaseConfig.js atau pakai tombol 'WiFi LAN / Multi-Tab' untuk localhost."
-      );
+      alert("Firebase belum dikonfigurasi.\n\nIsi firebaseConfig di playtest/firebaseConfig.js terlebih dahulu.");
       return;
     }
     const code = "EFT" + Math.floor(100 + Math.random() * 900);
@@ -7375,7 +7344,7 @@
 
   function joinFirebaseClientRoom(forcedCode = null) {
     if (!window.EFT_IS_FIREBASE_READY()) {
-      alert("Firebase belum dikonfigurasi. Untuk localhost, gunakan tombol 'WiFi LAN / Multi-Tab'.");
+      alert("Firebase belum dikonfigurasi di playtest/firebaseConfig.js.");
       return;
     }
     const codeEl = document.getElementById("setup-join-code");
@@ -7532,130 +7501,11 @@
     }
   }
 
-  function startOnlineHostRoom() {
-    if (typeof Peer === "undefined") {
-      alert("PeerJS library belum termuat. Gunakan 'WiFi LAN / Multi-Tab' untuk localhost.");
-      return;
-    }
-    const code = "EFT" + Math.floor(100 + Math.random() * 900);
-    const peerId = "eft-tartarus-room-" + code;
-
-    if (mp.peer) mp.peer.destroy();
-    const peer = new Peer(peerId);
-
-    peer.on("open", () => {
-      mp.mode = "p2p_host";
-      initHostLobbyPayload(code);
-      mp.peer = peer;
-      mp.connections = [];
-      addLog(`PeerJS Lobby created. Room Code: [${code}].`);
-      openWelcomeSetupModal("multiplayer");
-    });
-
-    peer.on("connection", (conn) => {
-      mp.connections.push(conn);
-      conn.on("open", () => {
-        conn.send({
-          type: "lobby_sync",
-          roomCode: mp.roomCode,
-          lobby: mp.lobby
-        });
-        if (mp.lobby.status === "playing") {
-          conn.send({
-            type: "full_sync",
-            roomCode: mp.roomCode,
-            lobby: mp.lobby,
-            state,
-            pending: serializePendingInteraction()
-          });
-        }
-      });
-      conn.on("data", (data) => handleIncomingMpMessage(data));
-    });
-
-    peer.on("error", (err) => {
-      alert("Could not create online P2P room: " + err.message);
-    });
-  }
-
-  function joinOnlineClientRoom(forcedCode = null) {
-    if (typeof Peer === "undefined") {
-      alert("PeerJS library belum termuat.");
-      return;
-    }
-    const codeEl = document.getElementById("setup-join-code");
-    const code = (forcedCode || (codeEl && codeEl.value) || "").trim().toUpperCase();
-    if (!code) {
-      alert("Masukkan Kode Room dari Host.");
-      return;
-    }
-
-    if (mp.peer) mp.peer.destroy();
-    const peer = new Peer();
-
-    peer.on("open", () => {
-      const conn = peer.connect("eft-tartarus-room-" + code);
-      conn.on("open", () => {
-        mp.mode = "p2p_client";
-        mp.roomCode = code;
-        mp.mySeat = -1;
-        mp.peer = peer;
-        mp.hostConn = conn;
-        sendClientActionToHost("lobby_join", {
-          clientId: mp.clientId,
-          username: setupDraft.username || "Player",
-          charId: setupDraft.charId,
-          ready: false
-        });
-        openWelcomeSetupModal("multiplayer");
-      });
-      conn.on("data", (data) => handleIncomingMpMessage(data));
-    });
-
-    peer.on("error", (err) => {
-      alert("Could not connect to Room [" + code + "]: " + err.message);
-    });
-  }
-
-  function startLanOrTabRoom(role, forcedCode = null) {
-    const codeEl = document.getElementById("setup-join-code");
-    const code =
-      role === "HOST"
-        ? "LAN" + Math.floor(100 + Math.random() * 900)
-        : (forcedCode || (codeEl && codeEl.value) || "LAN100").trim().toUpperCase();
-
-    if (role === "HOST") {
-      mp.mode = "lan_host";
-      initHostLobbyPayload(code);
-      broadcastLobbyState();
-    } else {
-      mp.mode = "lan_client";
-      mp.roomCode = code;
-      mp.mySeat = -1;
-      mp.lastLanTimestamp = 0;
-      sendClientActionToHost("lobby_join", {
-        clientId: mp.clientId,
-        username: setupDraft.username || "Player",
-        charId: setupDraft.charId,
-        ready: false
-      });
-    }
-
-    clearInterval(mp.lanTimer);
-    mp.lanTimer = setInterval(pollLanServer, 700);
-    addLog(`Connected to WiFi LAN / Multi-Tab Lobby [${code}].`);
-    openWelcomeSetupModal("multiplayer");
-  }
-
   function disconnectMultiplayer() {
     detachFirebaseListeners();
-    if (mp.peer) mp.peer.destroy();
-    clearInterval(mp.lanTimer);
     mp.mode = "local";
     mp.roomCode = "";
     mp.mySeat = -1;
-    mp.connections = [];
-    mp.hostConn = null;
     mp.lobby = {
       status: "idle",
       hostClientId: "",
@@ -7669,46 +7519,19 @@
   }
 
   function broadcastMultiplayerState() {
-    if (!state || mp.mode === "local") return;
-
-    if (mp.mode === "firebase_host" && mp.fbRoomRef) {
-      mp.fbRoomRef
-        .update({
-          lobbyJson: JSON.stringify(mp.lobby),
-          stateJson: JSON.stringify(state),
-          pendingJson: JSON.stringify(serializePendingInteraction()),
-          updatedAt: Date.now()
-        })
-        .catch(() => {});
-      return;
-    }
-
-    const payload = {
-      type: "full_sync",
-      roomCode: mp.roomCode,
-      senderId: mp.clientId,
-      lobby: mp.lobby,
-      state,
-      pending: serializePendingInteraction(),
-      timestamp: Date.now()
-    };
-
-    if (mp.mode === "p2p_host") {
-      mp.connections.forEach((c) => {
-        if (c.open) c.send(payload);
-      });
-    }
-    if (mp.bc) mp.bc.postMessage(payload);
-    if (mp.mode === "lan_host") {
-      fetch("/api/room", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: mp.roomCode, type: "sync_state", state: payload })
-      }).catch(() => {});
-    }
+    if (!state || mp.mode !== "firebase_host" || !mp.fbRoomRef) return;
+    mp.fbRoomRef
+      .update({
+        lobbyJson: JSON.stringify(mp.lobby),
+        stateJson: JSON.stringify(state),
+        pendingJson: JSON.stringify(serializePendingInteraction()),
+        updatedAt: Date.now()
+      })
+      .catch(() => {});
   }
 
   function sendClientActionToHost(actionName, data) {
+    if (mp.mode !== "firebase_client" || !mp.fbActionsRef) return;
     const msg = {
       type: "client_action",
       roomCode: mp.roomCode,
@@ -7719,83 +7542,9 @@
       data,
       ts: Date.now()
     };
-
-    if (mp.mode === "firebase_client" && mp.fbActionsRef) {
-      mp.fbActionsRef.push(msg).catch((err) => {
-        alert("Gagal mengirim aksi ke Firebase: " + err.message);
-      });
-      return;
-    }
-
-    if (mp.mode === "p2p_client" && mp.hostConn && mp.hostConn.open) {
-      mp.hostConn.send(msg);
-      return;
-    }
-
-    if (mp.bc) mp.bc.postMessage(msg);
-    if (mp.mode === "lan_client") {
-      fetch("/api/room", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code: mp.roomCode,
-          type: "client_action",
-          actionId: msg.actionId,
-          slot: mp.mySeat,
-          action: actionName,
-          data
-        })
-      }).catch(() => {});
-    }
-  }
-
-  function pollLanServer() {
-    if ((mp.mode !== "lan_host" && mp.mode !== "lan_client") || !mp.roomCode) return;
-    fetch(`/api/room?code=${encodeURIComponent(mp.roomCode)}`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (!res.exists) return;
-        if (mp.mode === "lan_host" && Array.isArray(res.actions)) {
-          res.actions.forEach((act) => {
-            if (act && act.type === "client_action") {
-              processRemoteClientAction(act);
-            }
-          });
-        }
-        if (mp.mode === "lan_client" && res.state && res.updatedAt > mp.lastLanTimestamp) {
-          mp.lastLanTimestamp = res.updatedAt;
-          handleIncomingMpMessage(res.state);
-        }
-      })
-      .catch(() => {});
-  }
-
-  function handleIncomingMpMessage(msg) {
-    if (!msg) return;
-    if (msg.senderId && msg.senderId === mp.clientId) return;
-
-    if (msg.type === "lobby_sync" && msg.lobby && isRemoteClient()) {
-      mp.lobby = msg.lobby;
-      refreshLobbyModalIfOpen();
-    } else if (msg.type === "full_sync" && msg.state && isRemoteClient()) {
-      const prevStatus = mp.lobby.status;
-      if (msg.lobby) mp.lobby = msg.lobby;
-      state = msg.state;
-      pendingInteraction = msg.pending ? deserializePendingInteraction(msg.pending) : null;
-      if (state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
-        mp.mySeat = state.seatMap[mp.clientId];
-      }
-      if (mp.lobby.status === "playing" && prevStatus !== "playing") {
-        hideMainTitleScreen();
-        closeModal();
-      }
-      if (camera.mode === "follow" && state.players && state.players[state.activePlayerIndex]) {
-        focusCameraOnTile(getActivePlayer().tileId);
-      }
-      renderAll();
-    } else if (msg.type === "client_action" && !isRemoteClient()) {
-      processRemoteClientAction(msg);
-    }
+    mp.fbActionsRef.push(msg).catch((err) => {
+      alert("Gagal mengirim aksi ke Firebase: " + err.message);
+    });
   }
 
   // ============================================================================
@@ -9670,21 +9419,19 @@
       tabBodyHtml = `
         <div class="grid-2col setup-mp-cards">
           <div class="panel-box setup-bottom-panel">
-            <div class="panel-header" style="margin-bottom:2px;">Buat Room (Host)</div>
-            <p style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin:0 0 4px;">
-              Buat room online untuk bermain bersama teman di luar LAN, atau gunakan WiFi LAN / Multi-Tab untuk tes lokal.
+            <div class="panel-header" style="margin-bottom:2px;">Buat Room Online (Host)</div>
+            <p style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin:0 0 6px;">
+              Buat room online dan bagikan kode atau link invite ke temanmu untuk bermain bersama.
             </p>
-            <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.createLobbyRoom('firebase')">Buat Room</button>
-            <button class="btn btn-sm setup-sub-btn" onclick="window.EFT_APP.createLobbyRoom('lan')">Buat Room WiFi LAN / Multi-Tab</button>
+            <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.createLobbyRoom()">Buat Room</button>
           </div>
           <div class="panel-box setup-bottom-panel">
             <div class="panel-header" style="margin-bottom:2px;">Gabung Room</div>
             <div class="form-field">
               <label>Kode Room:</label>
-              <input type="text" id="setup-join-code" placeholder="EFT456 / LAN123" value="${escapeHtml(mp.roomCode)}" style="text-transform:uppercase;font-weight:800;" />
+              <input type="text" id="setup-join-code" placeholder="EFT456" value="${escapeHtml(mp.roomCode)}" style="text-transform:uppercase;font-weight:800;" />
             </div>
-            <button class="btn btn-gold setup-action-btn" onclick="window.EFT_APP.joinLobbyRoom('firebase')">Gabung Room</button>
-            <button class="btn btn-sm setup-sub-btn" onclick="window.EFT_APP.joinLobbyRoom('lan')">Gabung WiFi LAN / Multi-Tab</button>
+            <button class="btn btn-gold setup-action-btn" onclick="window.EFT_APP.joinLobbyRoom()">Gabung Room</button>
           </div>
         </div>`;
     }
@@ -9867,11 +9614,6 @@
     startMultiplayerMatchFromLobby,
     startFirebaseHostRoom,
     joinFirebaseClientRoom,
-    saveQuickFirebaseConfig,
-    clearQuickFirebaseConfig,
-    startOnlineHostRoom,
-    joinOnlineClientRoom,
-    startLanOrTabRoom,
     disconnectMultiplayer,
     copyInviteLink: () => {
       if (!mp.roomCode) return;
@@ -9893,10 +9635,6 @@
       pendingInteraction = null;
       hoveredBranchTileId = null;
       renderAll();
-    },
-    toggleBoardRenderMode: () => {
-      printPreviewMode = !printPreviewMode;
-      renderDigitalBoard();
     },
     triggerRandomGlobalEvent: () => {
       if (!isAdminUnlocked) {
@@ -9954,6 +9692,22 @@
   };
 
   window.addEventListener("DOMContentLoaded", () => {
+    // Graceful fallback: if a .webp asset has not been generated locally yet, fall back to .png
+    document.addEventListener(
+      "error",
+      (ev) => {
+        const el = ev.target;
+        if (el && el.tagName === "IMG" && !el.dataset.webpFallbackTried) {
+          const curSrc = el.getAttribute("src") || "";
+          if (/\.webp(\?.*)?$/i.test(curSrc)) {
+            el.dataset.webpFallbackTried = "1";
+            el.src = curSrc.replace(/\.webp(\?.*)?$/i, ".png$1");
+          }
+        }
+      },
+      true
+    );
+
     if (window.EFT_MINIGAMES && typeof window.EFT_MINIGAMES.init === "function") {
       window.EFT_MINIGAMES.init({
         getState: () => state,
