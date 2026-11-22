@@ -1108,6 +1108,13 @@
     if ((m = raw.match(/^Versus: (.+?) defeated (.+?) \(\+(\d+) TC\)/i))) {
       return { text: `... ${m[1]} menang Duel (+${m[3]} coin)`, kind: "gain" };
     }
+    if ((m = raw.match(/^Versus \(([^)]+)\): (.+?) mengalahkan (.+?) & merebut .*?(\d+) TC/i))) {
+      return { text: `... ${m[2]} menang ${m[1]} (+${m[4]} coin)`, kind: "gain" };
+    }
+    if ((m = raw.match(/^Minigame ([^(:]+)(?:\([^)]+\))?: (.+)$/i))) {
+      const shortRes = m[2].length > 52 ? m[2].slice(0, 49) + "..." : m[2];
+      return { text: `... ${m[1].trim()}: ${shortRes}`, kind: "skill" };
+    }
     if ((m = raw.match(/^Awaken, Arsene!: (.+?) mendapat \+1/i))) {
       return { text: `... ${m[1]} +1 ekstra dadu (Arsene)`, kind: "skill" };
     }
@@ -1627,6 +1634,7 @@
       lastTileEffectReveal: null,
       lastPurchasedShard: null,
       activeMinigame: null,
+      minigameHistory: { versus: null, ffa: null },
       activeTileModal: null,
       turnTimerKey: "tk_init_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
       shops: createShopState(rules),
@@ -2145,10 +2153,18 @@
 
   function getExpectedActingSeat() {
     if (!state) return -1;
-    if (state.activeMinigame && state.activeMinigame.status === "rolling") {
-      const curIdx = getCurrentDiceOfFateEntryIndex(state.activeMinigame);
-      if (curIdx >= 0 && state.activeMinigame.entries[curIdx]) {
-        return state.activeMinigame.entries[curIdx].playerIndex;
+    if (state.activeMinigame) {
+      const mg = state.activeMinigame;
+      if (mg.gameId === "dice_of_fate" && mg.phase === "playing" && mg.data && mg.data.status === "rolling" && window.EFT_MINIGAMES) {
+        const curIdx = window.EFT_MINIGAMES.getCurrentDiceOfFateEntryIndex(mg);
+        if (curIdx >= 0 && mg.entries[curIdx]) {
+          return mg.entries[curIdx].playerIndex;
+        }
+      } else if (mg.status === "rolling") {
+        const curIdx = getCurrentDiceOfFateEntryIndex(mg);
+        if (curIdx >= 0 && mg.entries[curIdx]) {
+          return mg.entries[curIdx].playerIndex;
+        }
       }
     }
     if (pendingInteraction && pendingInteraction.player && typeof pendingInteraction.player.index === "number") {
@@ -3329,7 +3345,7 @@
     } else if (card.effectType === "instant_minigame") {
       if (deferMinigame) {
         needsMinigame = true;
-        outcomeText = "Dice of Fate segera dimulai untuk semua pemain!";
+        outcomeText = "Minigame Acak segera dimulai untuk semua pemain!";
       } else {
         runClashOfFateMinigame("Global Event: Sudden Minigame");
       }
@@ -3615,7 +3631,10 @@
       state.activePlayerIndex++;
       startPlayerTurn(getActivePlayer());
     } else {
-      startDiceOfFateMinigame(`Akhir Ronde ${state.roundInCycle} · Cycle ${state.cycle}`, "advance_round");
+      startRandomMinigame("ffa", {
+        reasonTitle: `Akhir Ronde ${state.roundInCycle} · Cycle ${state.cycle}`,
+        afterAction: "advance_round"
+      });
       return;
     }
 
@@ -3696,6 +3715,39 @@
     dofBotTimer = null;
     dofTieTimer = null;
     dofAutoFinishTimer = null;
+    if (window.EFT_MINIGAMES && typeof window.EFT_MINIGAMES.clearAllTimers === "function") {
+      window.EFT_MINIGAMES.clearAllTimers();
+    }
+  }
+
+  function startRandomMinigame(mode = "ffa", opts = {}) {
+    if (!state) return;
+    if (window.EFT_MINIGAMES && typeof window.EFT_MINIGAMES.startRandomMinigame === "function") {
+      clearDiceOfFateTimers();
+      window.EFT_MINIGAMES.startRandomMinigame(mode, opts);
+      return;
+    }
+    startDiceOfFateMinigame(opts.reasonTitle || "Minigame", opts.afterAction || "none");
+  }
+
+  function onMinigameClosed(afterAction) {
+    if (!state) return;
+    if (afterAction === "advance_round") {
+      state.activePlayerIndex = 0;
+      if (state.roundInCycle < state.rules.turnsPerCycle) {
+        state.roundInCycle++;
+      } else {
+        completeFullCycle();
+      }
+      startPlayerTurn(getActivePlayer());
+      if (camera.mode !== "wide") {
+        camera.mode = "follow";
+        focusCameraOnTile(getActivePlayer().tileId);
+      }
+    }
+    playSfx("click");
+    renderAll();
+    broadcastMultiplayerState();
   }
 
   function startDiceOfFateMinigame(reasonTitle = "Minigame", afterAction = "none") {
@@ -3766,6 +3818,10 @@
     dofBotTimer = null;
     if (!state || !state.activeMinigame) return;
     const mg = state.activeMinigame;
+    if (mg.gameId && window.EFT_MINIGAMES) {
+      window.EFT_MINIGAMES.syncRuntime();
+      return;
+    }
     if (mg.status !== "rolling" || mg.isAnimatingRoll) return;
     if (isRemoteClient()) return;
 
@@ -3783,6 +3839,14 @@
   function rollDiceOfFateCurrent() {
     if (!state || !state.activeMinigame) return;
     const mg = state.activeMinigame;
+    if (mg.gameId && window.EFT_MINIGAMES) {
+      if (mg.gameId === "dice_of_fate" && mg.phase === "playing") {
+        const curIdx = window.EFT_MINIGAMES.getCurrentDiceOfFateEntryIndex(mg);
+        const curEntry = curIdx >= 0 ? mg.entries[curIdx] : null;
+        window.EFT_MINIGAMES.dispatchAction("dof_roll", {}, curEntry ? curEntry.playerIndex : null);
+      }
+      return;
+    }
     if (mg.status !== "rolling" || mg.isAnimatingRoll) return;
 
     const idx = getCurrentDiceOfFateEntryIndex(mg);
@@ -3996,6 +4060,10 @@
 
   function finishDiceOfFateMinigame() {
     if (!state || !state.activeMinigame) return;
+    if (state.activeMinigame.gameId && window.EFT_MINIGAMES) {
+      window.EFT_MINIGAMES.finishActiveMinigame();
+      return;
+    }
     if (state.activeMinigame.status !== "finished") return;
     if (isRemoteClient()) {
       sendClientActionToHost("minigame_finish", {});
@@ -4032,6 +4100,11 @@
     if (!mg) {
       overlay.classList.remove("visible");
       overlay.innerHTML = "";
+      if (window.EFT_MINIGAMES) window.EFT_MINIGAMES.renderOverlay();
+      return;
+    }
+    if (mg.gameId && window.EFT_MINIGAMES) {
+      window.EFT_MINIGAMES.renderOverlay();
       return;
     }
 
@@ -4159,8 +4232,8 @@
     }
   }
 
-  function runClashOfFateMinigame(reasonTitle = "Dice of Fate") {
-    startDiceOfFateMinigame(reasonTitle, "none");
+  function runClashOfFateMinigame(reasonTitle = "Minigame Acak") {
+    startRandomMinigame("ffa", { reasonTitle, afterAction: "none" });
   }
 
   // ============================================================================
@@ -7426,7 +7499,7 @@
     }
 
     const expectedSeat = getExpectedActingSeat();
-    if (act.action === "minigame_finish") {
+    if (act.action === "minigame_finish" || act.action === "minigame_action") {
       if (senderSeat < 0) return;
     } else if (senderSeat !== expectedSeat) {
       return;
@@ -7448,6 +7521,11 @@
       else if (act.action === "stage_is_mine_choice") resolveStageIsMineChoice(d.tileId);
       else if (act.action === "forced_all_in_choice") resolveForcedAllInChoice(d.choice);
       else if (act.action === "minigame_roll") rollDiceOfFateCurrent();
+      else if (act.action === "minigame_action") {
+        if (window.EFT_MINIGAMES) {
+          window.EFT_MINIGAMES.handleAuthoritativeAction(senderSeat, d.type, d.payload || {});
+        }
+      }
       else if (act.action === "minigame_finish") finishDiceOfFateMinigame();
     } finally {
       isProcessingRemoteAction = false;
@@ -8685,41 +8763,23 @@
     }
     const challenger = getActivePlayer();
     const opponent = state.players[oppIdx];
-    if (!opponent) return;
+    if (!opponent || opponent.index === challenger.index) return;
 
-    const c1 = Math.floor(Math.random() * 12) + 1;
-    const c2 = Math.floor(Math.random() * 12) + 1;
-    let summaryText = "";
-    if (c1 >= c2) {
-      const taken = Math.min(bet, opponent.tc);
-      opponent.tc -= taken;
-      const gained = modifyPlayerTC(challenger, taken, "versus");
-      summaryText = `${challenger.name} (Roll ${c1}) mengalahkan ${opponent.name} (Roll ${c2}) & merebut 💰 ${gained} TC!`;
-      addLog(`Versus: ${summaryText}`);
-    } else {
-      const lost = Math.min(bet, challenger.tc);
-      challenger.tc -= lost;
-      const gained = modifyPlayerTC(opponent, lost, "versus");
-      summaryText = `${opponent.name} (Roll ${c2}) mengalahkan ${challenger.name} (Roll ${c1}) & memenangkan 💰 ${gained} TC!`;
-      addLog(`Versus: ${summaryText}`);
-    }
-
-    state.activeTileModal = {
-      id: (state.activeTileModal && state.activeTileModal.id) || ("tm_vs_" + Date.now()),
-      type: "versus",
-      actorIndex: challenger.index,
-      status: "resolved",
-      summaryText
-    };
-    lastRenderedTileModalKey = null;
+    // Close the opponent/bet selection modal and launch the 1v1 Versus Minigame Randomizer
     clearTimeout(tileModalAutoCloseTimerId);
-    tileModalAutoCloseTimerId = setTimeout(() => {
-      if (state && state.activeTileModal && state.activeTileModal.status === "resolved") {
-        dismissSharedTileModal();
-      }
-    }, 2600);
-    renderAll();
-    broadcastMultiplayerState();
+    tileModalAutoCloseTimerId = null;
+    state.activeTileModal = null;
+    lastRenderedTileModalKey = null;
+    tileModalMinimizedForId = null;
+    closeModal();
+
+    startRandomMinigame("versus", {
+      reasonTitle: `Versus Tile · Taruhan 💰 ${bet} TC`,
+      afterAction: "versus_wager",
+      challengerIndex: challenger.index,
+      opponentIndex: opponent.index,
+      wager: bet
+    });
   }
 
   function openTradingModal(trader) {
@@ -9114,8 +9174,13 @@
     isProcessingRemoteAction = true;
     try {
       if (state.activeMinigame) {
-        if (state.activeMinigame.status === "rolling") rollDiceOfFateCurrent();
-        else finishDiceOfFateMinigame();
+        if (state.activeMinigame.gameId && window.EFT_MINIGAMES) {
+          window.EFT_MINIGAMES.nudgeBotStep();
+        } else if (state.activeMinigame.status === "rolling") {
+          rollDiceOfFateCurrent();
+        } else {
+          finishDiceOfFateMinigame();
+        }
         return;
       }
       if (state.activeTileModal) {
@@ -9865,13 +9930,48 @@
         return;
       }
       saveSnapshot();
-      runClashOfFateMinigame("Manual Minigame");
-      renderAll();
-      broadcastMultiplayerState();
-    }
+      runClashOfFateMinigame("Manual Minigame (FFA)");
+    },
+    triggerManualVersusMinigame: () => {
+      if (!isAdminUnlocked) {
+        openAdminModal();
+        return;
+      }
+      if (!state || !state.players || state.players.length < 2) return;
+      saveSnapshot();
+      const challenger = getActivePlayer();
+      const opponent = state.players.find((p) => p.index !== challenger.index);
+      if (!opponent) return;
+      startRandomMinigame("versus", {
+        reasonTitle: "Manual Versus Duel · Taruhan 💰 15 TC",
+        afterAction: "versus_wager",
+        challengerIndex: challenger.index,
+        opponentIndex: opponent.index,
+        wager: 15
+      });
+    },
+    startRandomMinigame
   };
 
   window.addEventListener("DOMContentLoaded", () => {
+    if (window.EFT_MINIGAMES && typeof window.EFT_MINIGAMES.init === "function") {
+      window.EFT_MINIGAMES.init({
+        getState: () => state,
+        getData: () => DATA,
+        isRemoteClient,
+        isMultiplayerHost,
+        getMpInfo: () => ({ mode: mp.mode, mySeat: mp.mySeat }),
+        escapeHtml,
+        getCharacterSvgIcon,
+        playSfx,
+        modifyPlayerTC,
+        addLog,
+        renderAll,
+        broadcastMultiplayerState,
+        sendClientActionToHost,
+        onMinigameClosed
+      });
+    }
     syncAdminUiState();
     syncSoundControlUi();
     setupBoardDragAndZoom();
@@ -9902,6 +10002,9 @@
     );
 
     document.addEventListener("keydown", (e) => {
+      if (state && state.activeMinigame && window.EFT_MINIGAMES && window.EFT_MINIGAMES.handleKeyDown(e)) {
+        return;
+      }
       if (e.key === "Escape") {
         const ov = document.getElementById("skill-dramatic-overlay");
         if (ov && ov.classList.contains("visible")) {

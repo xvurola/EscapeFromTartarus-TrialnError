@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="playtest/styles.css" />
+  <link rel="stylesheet" href="playtest/minigames.css" />
   <!-- Firebase Realtime Database SDK (Primary Online Multiplayer & Future Minigames) -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js" defer></script>
@@ -280,7 +281,8 @@
           <button class="btn btn-primary btn-sm" onclick="window.EFT_APP.runSmartBotTurn()">Bot Step</button>
           <button class="btn btn-primary btn-sm" onclick="window.EFT_APP.runAutoBotRound()">Auto 1 Round</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualShardSpawn()">Spawn Shard</button>
-          <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualMinigame()">Run Minigame</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualMinigame()">Run Minigame (FFA)</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualVersusMinigame()">Test Versus (1v1)</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.triggerRandomGlobalEvent()">Draw World Event</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.openMerchantModal(2, true)">Open Shop 2</button>
         </div>
@@ -384,6 +386,7 @@
 
   <script src="playtest/firebaseConfig.js"></script>
   <script src="playtest/gameData.js"></script>
+  <script src="playtest/minigames.js"></script>
   <script src="playtest/app.js"></script>
 </body>
 </html>
