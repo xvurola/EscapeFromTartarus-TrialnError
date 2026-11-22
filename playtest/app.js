@@ -476,7 +476,7 @@
   let audioNoiseBuffer = null;
 
   function loadSoundPrefs() {
-    const defaultChars = { bocchi: true, aventurine: true, joker: true, lilith: true };
+    const defaultChars = { bocchi: true, aventurine: true, joker: true, lilith: true, maomao: true, firefly: true };
     try {
       const raw = localStorage.getItem(SOUND_PREFS_KEY);
       if (raw) {
@@ -842,6 +842,40 @@
               type: "triangle"
             });
           });
+        } else if (charId === "maomao") {
+          // Serene apothecary herbal chime + pentatonic bamboo flute trill
+          const notes = isUlt
+            ? [523.25, 587.33, 659.25, 783.99, 1046.5]
+            : [523.25, 659.25, 783.99, 880.0];
+          notes.forEach((hz, idx) => {
+            playSoftTone(ctx, warmFilter, {
+              startTime: t + idx * 0.055,
+              freq: hz,
+              duration: isUlt ? 0.50 : 0.36,
+              attack: 0.012,
+              gain: isUlt ? 0.24 : 0.20,
+              type: "sine"
+            });
+          });
+        } else if (charId === "firefly") {
+          // Crystalline Stellaron shimmer + fiery SAM combustion pulse
+          if (isUlt) {
+            playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1600, duration: 0.14, gain: 0.24, q: 1.0 });
+            playSoftTone(ctx, warmFilter, { startTime: t, freq: 130.81, endFreq: 261.63, duration: 0.45, attack: 0.015, gain: 0.26, type: "sawtooth" });
+          }
+          const notes = isUlt
+            ? [523.25, 659.25, 783.99, 1046.5, 1318.5]
+            : [659.25, 830.61, 987.77, 1318.5];
+          notes.forEach((hz, idx) => {
+            playSoftTone(ctx, warmFilter, {
+              startTime: t + 0.02 + idx * 0.044,
+              freq: hz,
+              duration: isUlt ? 0.52 : 0.36,
+              attack: 0.008,
+              gain: isUlt ? 0.24 : 0.20,
+              type: idx % 2 === 0 ? "triangle" : "sine"
+            });
+          });
         } else {
           const themeChords = {
             sonic: [329.63, 415.30, 493.88],
@@ -910,7 +944,7 @@
     if (skillSlider) skillSlider.value = String(skillPct);
     if (skillLabel) skillLabel.textContent = soundPrefs.skillSfxEnabled === false ? "Off" : `${skillPct}%`;
 
-    ["bocchi", "aventurine", "joker", "lilith"].forEach((cid) => {
+    ["bocchi", "aventurine", "joker", "lilith", "maomao", "firefly"].forEach((cid) => {
       const cb = document.getElementById(`char-sfx-${cid}`);
       if (cb) cb.checked = !soundPrefs.charSkillSfx || soundPrefs.charSkillSfx[cid] !== false;
     });
@@ -948,7 +982,7 @@
 
   function toggleCharacterSkillSfx(charId, enabled) {
     if (!soundPrefs.charSkillSfx || typeof soundPrefs.charSkillSfx !== "object") {
-      soundPrefs.charSkillSfx = { bocchi: true, aventurine: true, joker: true, lilith: true };
+      soundPrefs.charSkillSfx = { bocchi: true, aventurine: true, joker: true, lilith: true, maomao: true, firefly: true };
     }
     soundPrefs.charSkillSfx[charId] = !!enabled;
     saveSoundPrefs();
@@ -1998,12 +2032,19 @@
         if (ch.compPortrait && ch.compPortrait.src) urls.add(ch.compPortrait.src);
         if (ch.menuPortrait) urls.add(ch.menuPortrait);
         if (ch.chibi) urls.add(ch.chibi);
+        if (ch.samChibi) urls.add(ch.samChibi);
         if (Array.isArray(ch.cards)) {
           ch.cards.forEach((c) => {
             if (c && c.image) urls.add(c.image);
           });
         }
         if (ch.ultimate && ch.ultimate.image) urls.add(ch.ultimate.image);
+        if (Array.isArray(ch.samCards)) {
+          ch.samCards.forEach((c) => {
+            if (c && c.image) urls.add(c.image);
+          });
+        }
+        if (ch.samUltimate && ch.samUltimate.image) urls.add(ch.samUltimate.image);
       });
     }
     if (DATA && DATA.BOARD_CARDS) {
@@ -2709,24 +2750,48 @@
       if (tok.tileId !== tileId) continue;
 
       if (tok.type === "virus_trap" && tok.ownerIndex !== player.index) {
-        player.nextPhaseDiceMod = Math.max(-2, player.nextPhaseDiceMod - 1);
+        player.nextTurnDiceMod = Math.max(-1, (player.nextTurnDiceMod || 0) - 1);
         state.boardTokens.splice(i, 1);
-        addLog(`${player.name} terkena trap Punishing Virus (-1 dadu pada roll dadu berikutnya).`);
-        showEffectSpotlight("Punishing Virus!", `${player.name} terkena Trap`, "Roll dadu berikutnya berkurang -1 dadu.", "assets/cards/characters/lilith/uc.png");
+        addLog(`${player.name} terkena trap Punishing Virus (-1 dadu pada giliran berikutnya, maks. 1 per pemain).`);
+        showEffectSpotlight("Punishing Virus!", `${player.name} terkena Trap`, "Giliran berikutnya berkurang -1 dadu (maks. 1 per pemain).", "assets/cards/characters/lilith/uc.png");
       } else if (tok.type === "herb_tile") {
-        modifyPlayerTC(player, 10, "tile");
+        const owner = state.players[tok.ownerIndex] || player;
         state.boardTokens.splice(i, 1);
-        addLog(`${player.name} activated Medicinal Herbs (+10 TC).`);
+        if (owner.hand.length < state.rules.maxHandSize && owner.tc >= 60 && owner.deck.length > 0) {
+          const d = drawCards(owner, 1);
+          addLog(`Medicinal Herbs (${player.name} melewati [${tileId}]): ${owner.name} menarik +${d.length} kartu!`);
+        } else {
+          const g = modifyPlayerTC(owner, 10, "tile");
+          addLog(`Medicinal Herbs (${player.name} melewati [${tileId}]): ${owner.name} mendapat +${g} TC!`);
+        }
+      } else if (tok.type === "safe_zone" && isExactLanding) {
+        player.safeZoneImmune = true;
+        state.boardTokens.splice(i, 1);
+        addLog(`${player.name} mengaktifkan Safe Zone (Oak Cake Break) — kebal target kartu hingga Phase berikutnya!`);
       } else if (tok.type === "restricted_zone" && isExactLanding && tok.ownerIndex !== player.index) {
-        const fee = Math.min(20, player.tc);
-        player.tc -= fee;
-        state.players[tok.ownerIndex].tc += fee;
-        addLog(`${player.name} landed on Restricted Zone (Paid ${fee} TC fee to ${state.players[tok.ownerIndex].name}).`);
+        const owner = state.players[tok.ownerIndex];
+        if (player.tc >= 20) {
+          player.tc -= 20;
+          if (owner) owner.tc += 20;
+          addLog(`${player.name} mendarat di Restricted Zone — membayar 20 TC medical fee ke ${owner ? owner.name : "Mao-Mao"}.`);
+        } else {
+          const giveIdx = player.hand.findIndex((c) => c && c.rarity !== "Ultimate");
+          if (giveIdx !== -1) {
+            const surrendered = player.hand.splice(giveIdx, 1)[0];
+            if (owner && owner.hand.length < state.rules.maxHandSize) owner.hand.push(surrendered);
+            addLog(`${player.name} tidak mampu bayar 20 TC di Restricted Zone -> menyerahkan [${surrendered.name}] ke ${owner ? owner.name : "Mao-Mao"}!`);
+          } else {
+            const fee = Math.min(20, player.tc);
+            player.tc -= fee;
+            if (owner) owner.tc += fee;
+            addLog(`${player.name} mendarat di Restricted Zone — membayar sisa ${fee} TC ke ${owner ? owner.name : "Mao-Mao"}.`);
+          }
+        }
       } else if (tok.type === "fire_tile" && isExactLanding) {
         modifyPlayerTC(player, -15, "tile");
         player.nextRollMaxCap = 6;
         state.boardTokens.splice(i, 1);
-        addLog(`${player.name} landed on Deathstar Fire (-15 TC, next roll max 6).`);
+        addLog(`${player.name} landed on Deathstar Fire (-15 TC, next Phase 1 roll max 6).`);
       }
     }
   }
@@ -3133,6 +3198,13 @@
         return false;
       }
       case "pos_effect": {
+        let jokerPassiveNote = "";
+        if (hasPassive(player, "passive_awaken_arsene") && !player.awakenArseneUsedThisTurn) {
+          player.awakenArseneUsedThisTurn = true;
+          player.nextPhaseDiceMod += 1;
+          addLog(`Awaken, Arsene!: ${player.name} mendarat di Positive Effect -> +1 ekstra dadu (maks. 1/turn)!`);
+          jokerPassiveNote = `Awaken, Arsene!: ${player.name} +1 Ekstra Dadu (maks. 1/turn)`;
+        }
         const deck = DATA.BOARD_CARDS.positive;
         const card = deck[Math.floor(Math.random() * deck.length)];
         return startTileEffectCardShuffle({
@@ -3140,11 +3212,19 @@
           player,
           tile,
           card,
+          extraOutcomeNote: jokerPassiveNote,
           applyFn: (drawnCard) => applyBoardEffectCard(player, drawnCard, { showToast: false }),
           onComplete: meta.onComplete
         });
       }
       case "neg_effect": {
+        let jokerPassiveNote = "";
+        if (hasPassive(player, "passive_awaken_arsene") && !player.awakenArseneUsedThisTurn) {
+          player.awakenArseneUsedThisTurn = true;
+          player.nextPhaseDiceMod += 1;
+          addLog(`Awaken, Arsene!: ${player.name} mendarat di Negative Effect -> +1 ekstra dadu (maks. 1/turn)!`);
+          jokerPassiveNote = `Awaken, Arsene!: ${player.name} +1 Ekstra Dadu (maks. 1/turn)`;
+        }
         const deck = DATA.BOARD_CARDS.negative;
         const card = deck[Math.floor(Math.random() * deck.length)];
         return startTileEffectCardShuffle({
@@ -3152,17 +3232,12 @@
           player,
           tile,
           card,
+          extraOutcomeNote: jokerPassiveNote,
           applyFn: (drawnCard) => applyBoardEffectCard(player, drawnCard, { showToast: false }),
           onComplete: meta.onComplete
         });
       }
       case "event": {
-        let jokerPassiveNote = "";
-        if (hasPassive(player, "passive_awaken_arsene")) {
-          player.nextPhaseDiceMod += 1;
-          addLog(`Awaken, Arsene!: ${player.name} mendapat +1 ekstra dadu untuk Phase berikutnya!`);
-          jokerPassiveNote = `Awaken, Arsene!: ${player.name} +1 Ekstra Dadu di Phase berikutnya`;
-        }
         const deck = DATA.BOARD_CARDS.globalEvents;
         const card = deck[Math.floor(Math.random() * deck.length)];
         return startTileEffectCardShuffle({
@@ -3170,27 +3245,11 @@
           player,
           tile,
           card,
-          extraOutcomeNote: jokerPassiveNote,
           applyFn: (drawnCard) => triggerGlobalEventCard(drawnCard, { showToast: false, deferMinigame: true }),
           onComplete: meta.onComplete
         });
       }
       case "versus": {
-        if (hasPassive(player, "passive_awaken_arsene")) {
-          player.nextPhaseDiceMod += 1;
-          addLog(`Awaken, Arsene!: ${player.name} mendapat +1 ekstra dadu untuk Phase berikutnya!`);
-          triggerDramaticSkillEvent({
-            charId: player.charId,
-            cardId: "joker_uq",
-            casterName: player.name,
-            cardName: "Awaken, Arsene!",
-            rarity: "Passive",
-            cardImg: "assets/cards/characters/joker/uq.png",
-            description: "Each time you land on an Event or Versus tile, gain +1 extra dice roll for your next Phase.",
-            outcomeText: `${player.name} mendapat +1 Ekstra Dadu di Phase berikutnya!`,
-            profile: { theme: "passive", tagline: "PASSIVE TRIGGERED · AWAKEN, ARSENE!", accent: "#dc2626", accentRgb: "220, 38, 38" }
-          });
-        }
         openVersusModal(player);
         return false;
       }
@@ -3575,6 +3634,8 @@
     player.rollsUsedThisTurn = 0;
     player.maxRollsThisTurn = 2;
     player.extraPhasesThisTurn = 0;
+    player.awakenArseneUsedThisTurn = false;
+    player.safeZoneImmune = false;
     state.turnTimerKey = generateTurnTimerKey();
     Object.keys(player.cooldowns).forEach((k) => {
       if (player.cooldowns[k] > 0) player.cooldowns[k]--;
@@ -4185,7 +4246,7 @@
         };
       }
       case "move_self_range": {
-        const ch = card.choices && card.choices.length > 0 ? card.choices : [8];
+        const ch = card.choices && card.choices.length > 0 ? card.choices : [6];
         return {
           mode: "both",
           minSteps: 1,
@@ -4490,7 +4551,7 @@
   function cardActivatesBlockEffect(card) {
     if (!card) return false;
     const desc = String(card.description || "");
-    return /\[Activate Block Effect\]/i.test(desc);
+    return /\[Activate (?:Block|Tile|Tiles) Effect\]|activate tiles effect/i.test(desc);
   }
 
   function executeCardEffect(player, card, options = {}) {
@@ -4539,6 +4600,11 @@
     if (targetPlayer && targetPlayer.index !== player.index) {
       if (targetPlayer.inSpawn) {
         const msg = `${targetPlayer.name} terlindungi Spawn Protection.`;
+        addLog(msg);
+        return msg;
+      }
+      if (targetPlayer.safeZoneImmune) {
+        const msg = `${targetPlayer.name} dilindungi Safe Zone (Oak Cake Break) — tidak dapat ditarget kartu!`;
         addLog(msg);
         return msg;
       }
@@ -4898,9 +4964,10 @@
         targetPlayer.skipNextTurn = true;
         player.extraPhasesThisTurn += 1;
         player.maxRollsThisTurn = (player.maxRollsThisTurn || 2) + 1;
-        const bonusSkills = state.compendiumId === "comp_v0_1" ? 0 : 1;
+        const bonusSkills =
+          state.compendiumId === "comp_v0_1" ? 0 : state.compendiumId === "comp_alpha1_1" ? 1 : 2;
         player.maxSkillsThisTurn += bonusSkills;
-        const msg = `${targetPlayer.name} melewatkan giliran depan! ${player.name} mendapat +1 Extra Phase & +${bonusSkills} Skill Use!`;
+        const msg = `${targetPlayer.name} melewatkan giliran depan! ${player.name} mendapat +1 Extra Dice Roll & +${bonusSkills} Skill Use!`;
         addLog(`ULTIMATE [${card.name}]: ${msg}`);
         return msg;
       }
@@ -4933,24 +5000,25 @@
           destId = player.tileId;
         }
         let stealMsg = "";
+        const allowedStealRarities = new Set(["Common", "Uncommon", "Rare"]);
         const victim = state.players.find(
           (other) =>
             other.index !== player.index &&
             !other.inSpawn &&
             other.tileId === destId &&
-            other.hand.some((c) => c && c.rarity !== "Ultimate")
+            other.hand.some((c) => c && allowedStealRarities.has(c.rarity))
         );
         if (victim && !hasPassive(victim, "passive_immune_steal")) {
           const stealableIndices = [];
           victim.hand.forEach((c, idx) => {
-            if (c && c.rarity !== "Ultimate") stealableIndices.push(idx);
+            if (c && allowedStealRarities.has(c.rarity)) stealableIndices.push(idx);
           });
           if (stealableIndices.length > 0) {
             const pickIdx = stealableIndices[Math.floor(Math.random() * stealableIndices.length)];
             const stolenCard = victim.hand.splice(pickIdx, 1)[0];
             if (player.hand.length < state.rules.maxHandSize) player.hand.push(stolenCard);
-            stealMsg = ` & mencuri [${stolenCard.name}] dari ${victim.name}!`;
-            addLog(`[Phantom Thief]: ${player.name} stole [${stolenCard.name}] from ${victim.name}.`);
+            stealMsg = ` & mencuri [${stolenCard.name}] (${stolenCard.rarity}) dari ${victim.name}!`;
+            addLog(`[Phantom Thief]: ${player.name} stole [${stolenCard.name}] (${stolenCard.rarity}) from ${victim.name}.`);
           }
         }
         if (shouldActivateBlock && TILE_MAP[destId]) {
@@ -5013,7 +5081,7 @@
           expiresOnCycleEnd: !isCopied
         });
         const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
-        const msg = `Awaken, Arsene! aktif (${durLabel} — hangus saat ganti Cycle): mendarat di Event / Versus beri +1 ekstra dadu!`;
+        const msg = `Awaken, Arsene! aktif (${durLabel} — hangus saat ganti Cycle): mendarat di Positive/Negative Effect tile beri +1 ekstra dadu (maks. 1/turn)!`;
         addLog(`Passive Active: [Awaken, Arsene!] (${durLabel}).`);
         return msg;
       }
@@ -5086,8 +5154,15 @@
         return card.description;
       }
       case "passive_miasma_cloud": {
-        addOrRefreshPassive(player, { key: "passive_miasma_cloud", name: "Miasma Cloud", remainingTurns: getFullCycleTurns() });
-        addLog(`Passive Active: [Miasma Cloud].`);
+        const isCopied = Boolean(options.copiedUniqueDurationTurns);
+        const turns = options.copiedUniqueDurationTurns || getFullCycleTurns();
+        addOrRefreshPassive(player, {
+          key: "passive_miasma_cloud",
+          name: "Miasma Cloud",
+          remainingTurns: turns,
+          expiresOnCycleEnd: !isCopied
+        });
+        addLog(`Passive Active: [Miasma Cloud] (${getActiveCycleDurationLabel(options.copiedUniqueDurationTurns)}).`);
         return card.description;
       }
       case "place_restricted_zone": {
@@ -5156,7 +5231,14 @@
         return card.description;
       }
       case "passive_immune_steal": {
-        addOrRefreshPassive(player, { key: "passive_immune_steal", name: "Immune Steal", remainingTurns: getFullCycleTurns() });
+        const isCopied = Boolean(options.copiedUniqueDurationTurns);
+        const turns = options.copiedUniqueDurationTurns || getFullCycleTurns();
+        addOrRefreshPassive(player, {
+          key: "passive_immune_steal",
+          name: "Stellaron Hunter's Resolve",
+          remainingTurns: turns,
+          expiresOnCycleEnd: !isCopied
+        });
         return card.description;
       }
       case "transform_to_sam": {
@@ -5167,9 +5249,14 @@
         player.hand = [];
         player.deck = buildDeckForCharacter("firefly", state.compendiumId, true);
         drawCards(player, state.rules.startHandSize);
-        addOrRefreshPassive(player, { key: "passive_sam_armor", name: "SAM Armor", remainingTurns: getFullCycleTurns() });
-        addLog(`ULTIMATE [Complete Combustion]: Transformed into SAM.`);
-        return card.description;
+        addOrRefreshPassive(player, {
+          key: "passive_sam_armor",
+          name: "SAM Armor",
+          remainingTurns: getFullCycleTurns(),
+          expiresOnCycleEnd: true
+        });
+        addLog(`ULTIMATE [Complete Combustion]: ${player.name} bertransformasi menjadi SAM!`);
+        return `${player.name} bertransformasi menjadi SAM! Hand & Deck ditukar ke SAM.`;
       }
       case "sam_dash_aoe_5tc": {
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
@@ -5197,22 +5284,39 @@
         return card.description;
       }
       case "sam_push_back_3": {
-        movePlayerInstantAlongPath(targetPlayer, 3, -1, false);
-        modifyPlayerTC(targetPlayer, -10, "own_skill");
-        return card.description;
+        if (!targetPlayer || targetPlayer.index === player.index) return "Tidak ada lawan dalam radius 4 blok.";
+        const beforeTile = targetPlayer.tileId;
+        movePlayerInstantAlongPath(targetPlayer, 3, -1, shouldActivateBlock);
+        const pathIds = getDirectedPathToTile(beforeTile, targetPlayer.tileId, 5);
+        const hitSomething = pathIds.some((tid) => {
+          const hasOther = state.players.some((p) => p.index !== targetPlayer.index && !p.inSpawn && p.tileId === tid);
+          const hasTok = state.boardTokens.some((t) => t.tileId === tid);
+          return hasOther || hasTok;
+        });
+        if (hitSomething) {
+          modifyPlayerTC(targetPlayer, -10, "own_skill");
+          addLog(`[Supernova Overload]: ${targetPlayer.name} terdorong mundur 3 blok & menabrak Player/Token (-10 TC)!`);
+          return `${targetPlayer.name} terdorong mundur 3 blok & kehilangan 10 TC!`;
+        }
+        addLog(`[Supernova Overload]: ${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}]!`);
+        return `${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}]!`;
       }
       case "sam_discounted_versus": {
+        if (!targetPlayer || targetPlayer.index === player.index) return "Tidak ada lawan dalam radius 4 blok.";
         const samWins = Math.random() < 0.55;
         if (samWins) {
-          const prize = Math.min(20, targetPlayer.tc);
-          targetPlayer.tc -= prize;
-          player.tc += prize;
+          const oppBet = targetPlayer.tc >= 30 ? 30 : Math.min(15, targetPlayer.tc);
+          targetPlayer.tc -= oppBet;
+          player.tc += oppBet;
+          addLog(`[Scorched Earth Execution]: ${player.name} menang Versus melawan ${targetPlayer.name} (+${oppBet} TC)!`);
+          return `${player.name} menang Versus melawan ${targetPlayer.name} (+${oppBet} TC)!`;
         } else {
-          const loss = Math.min(10, player.tc);
-          player.tc -= loss;
-          targetPlayer.tc += loss;
+          const samBet = Math.min(15, player.tc);
+          player.tc -= samBet;
+          targetPlayer.tc += samBet;
+          addLog(`[Scorched Earth Execution]: ${targetPlayer.name} menang Versus melawan ${player.name} (+${samBet} TC)!`);
+          return `${targetPlayer.name} menang Versus melawan ${player.name} (${samBet} TC)!`;
         }
-        return card.description;
       }
       case "sam_fire_tiles": {
         const tObj = TILE_MAP[options.targetTileId || player.tileId];
@@ -5230,19 +5334,27 @@
         return card.description;
       }
       case "passive_sam_armor": {
-        addOrRefreshPassive(player, { key: "passive_sam_armor", name: "SAM Armor", remainingTurns: getFullCycleTurns() });
+        const isCopied = Boolean(options.copiedUniqueDurationTurns);
+        const turns = options.copiedUniqueDurationTurns || getFullCycleTurns();
+        addOrRefreshPassive(player, {
+          key: "passive_sam_armor",
+          name: "SAM Armor",
+          remainingTurns: turns,
+          expiresOnCycleEnd: !isCopied
+        });
         return card.description;
       }
       case "transform_to_firefly": {
         player.isSamMode = false;
         player.charName = "Firefly / SAM";
         player.name = player.username ? player.username : "Firefly / SAM";
+        player.passives = (player.passives || []).filter((p) => p.key !== "passive_sam_armor");
         player.discard = [];
         player.hand = [];
         player.deck = buildDeckForCharacter("firefly", state.compendiumId, false);
         drawCards(player, state.rules.startHandSize);
-        modifyPlayerTC(player, 15, "own_skill");
-        return card.description;
+        addLog(`ULTIMATE [Cooldown Protocol]: ${player.name} kembali ke mode Firefly!`);
+        return `${player.name} menonaktifkan armor dan kembali ke mode Firefly!`;
       }
       default:
         return card.description;
@@ -6227,7 +6339,7 @@
       const isAct = idx === state.activePlayerIndex;
       const walkCls = isAct && isWalkingAnim ? "walking-step" : "";
       const chData = DATA.CHARACTERS[p.charId] || {};
-      const chibiSrc = chData.chibi || "";
+      const chibiSrc = p.isSamMode && chData.samChibi ? chData.samChibi : chData.chibi || "";
       const pawnVisual = chibiSrc
         ? `<img class="board-chibi-img" src="${chibiSrc}" alt="${escapeHtml(p.name)}" decoding="async" />`
         : `<div class="board-pawn-fallback">${getCharacterSvgIcon(p.charId)}</div>`;
@@ -6609,7 +6721,12 @@
     }
     const compId = state ? state.compendiumId : "comp_beta1";
     const ch = getCharacterForCompendium(selectedCompendiumCharId, compId);
-    const allCards = [...ch.cards, ...(ch.ultimate ? [ch.ultimate] : [])];
+    const allCards = [
+      ...ch.cards,
+      ...(ch.ultimate ? [ch.ultimate] : []),
+      ...(Array.isArray(ch.samCards) ? ch.samCards : []),
+      ...(ch.samUltimate ? [ch.samUltimate] : [])
+    ];
     const selectedCard = allCards.find((c) => c.id === cardId) || allCards[0];
     if (!selectedCard) return;
 
@@ -6665,10 +6782,14 @@
           const cp = ch.compPortrait || (ch.portrait ? { src: ch.portrait.src, objectPosition: "50% 10%" } : null);
           const rgb = ch.colorRgb || "72, 158, 130";
           const label = ch.shortName || ch.name;
+          const devBadge = ch.underDevelopment
+            ? `<span class="comp-dev-badge">Under Dev</span>`
+            : "";
           return `
             <div class="comp-char-card"
                  style="--char-accent:${escapeHtml(ch.color || "#34d399")};--char-rgb:${escapeHtml(rgb)};"
                  onclick="window.EFT_APP.selectCompendiumCharacter('${cid}')">
+              ${devBadge}
               ${
                 cp && cp.src
                   ? `<img class="comp-char-portrait" src="${cp.src}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" style="object-position:${escapeHtml(cp.objectPosition || "50% 10%")};" />`
@@ -6676,7 +6797,7 @@
               }
               <div class="comp-char-bottom-scrim"></div>
               <div class="comp-char-card-footer">
-                <span class="comp-char-role-hint">${escapeHtml(ch.title)}</span>
+                <span class="comp-char-role-hint">${escapeHtml(ch.underDevelopment ? `${ch.title} · Under Dev` : ch.title)}</span>
                 <div class="comp-char-name-pill">${escapeHtml(label)}</div>
               </div>
             </div>`;
@@ -6715,7 +6836,12 @@
 
     // EXPANDED CHARACTER VIEW
     const ch = getCharacterForCompendium(selectedCompendiumCharId, compId);
-    const allCards = [...ch.cards, ...(ch.ultimate ? [ch.ultimate] : [])];
+    const baseCards = [...ch.cards, ...(ch.ultimate ? [ch.ultimate] : [])];
+    const samModeCards = [
+      ...(Array.isArray(ch.samCards) ? ch.samCards : []),
+      ...(ch.samUltimate ? [ch.samUltimate] : [])
+    ];
+    const allCards = [...baseCards, ...samModeCards];
     const selectedCard = allCards.find((c) => c.id === selectedCompendiumCardId) || allCards[0];
     selectedCompendiumCardId = selectedCard ? selectedCard.id : null;
 
@@ -6725,19 +6851,36 @@
     const cp = ch.compPortrait || (ch.portrait ? { src: ch.portrait.src, objectPosition: "50% 10%" } : null);
     const rgb = ch.colorRgb || "72, 158, 130";
 
-    const cardsGalleryHtml = allCards
-      .map((c) => {
-        const isSel = selectedCard && c.id === selectedCard.id;
-        const isUlt = c.rarity === "Ultimate";
-        return `
+    const renderGalleryRow = (list) =>
+      list
+        .map((c) => {
+          const isSel = selectedCard && c.id === selectedCard.id;
+          const isUlt = c.rarity === "Ultimate";
+          return `
           <div class="comp-exp-card-tile ${isSel ? "selected" : ""} ${isUlt ? "is-ult" : ""}"
                data-card-id="${escapeHtml(c.id)}"
                onclick="window.EFT_APP.selectCompendiumSkillCard('${c.id}')"
                title="${escapeHtml(c.name)}">
             <img src="${getCardImage(c, ch.id)}" alt="${escapeHtml(c.name)}" loading="lazy" decoding="async" />
           </div>`;
-      })
-      .join("");
+        })
+        .join("");
+
+    const cardsGalleryHtml = renderGalleryRow(baseCards);
+    const samGalleryHtml =
+      samModeCards.length > 0
+        ? `<div class="comp-exp-sam-section">
+             <div class="comp-exp-cards-label" style="margin-bottom:8px;">Mode: SAM — Skill Cards &amp; Transformation</div>
+             <div class="comp-exp-cards-row">
+               ${renderGalleryRow(samModeCards)}
+             </div>
+           </div>`
+        : "";
+    const devDisclaimerHtml = ch.underDevelopment
+      ? `<div class="comp-dev-disclaimer"><strong>Disclaimer (Under Development):</strong> ${escapeHtml(
+          ch.devDisclaimer || "Karakter ini masih dalam tahap pengembangan; efek kartu dan keseimbangan dapat berubah sewaktu-waktu."
+        )}</div>`
+      : "";
 
     const selectedDetailHtml = `<div id="comp-exp-card-detail-slot">${buildCompendiumCardDetailHtml(selectedCard, ch)}</div>`;
 
@@ -6760,6 +6903,7 @@
               <div class="comp-exp-title-line">
                 <span class="comp-exp-char-title">${escapeHtml(ch.name)}</span>
                 <span class="comp-exp-role-pill">${escapeHtml(ch.title)}</span>
+                ${ch.underDevelopment ? `<span class="comp-dev-inline-pill">Under Development</span>` : ""}
               </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
@@ -6767,6 +6911,8 @@
               <button class="btn btn-sm" onclick="window.EFT_APP.selectCompendiumCharacter('${nextCid}')">Next &gt;</button>
             </div>
           </div>
+
+          ${devDisclaimerHtml}
 
           <div class="comp-exp-specialty-box">
             <div class="comp-exp-spec-label">Spesialis Karakter</div>
@@ -6776,11 +6922,15 @@
           <p class="comp-exp-lore">${escapeHtml(ch.lore)}</p>
 
           <div>
-            <div class="comp-exp-cards-label" style="margin-bottom:8px;">Skill Cards &amp; Ultimate (Klik kartu untuk detail)</div>
+            <div class="comp-exp-cards-label" style="margin-bottom:8px;">${
+              samModeCards.length > 0 ? "Mode: Firefly — Skill Cards &amp; Ultimate" : "Skill Cards &amp; Ultimate"
+            } (Klik kartu untuk detail)</div>
             <div class="comp-exp-cards-row">
               ${cardsGalleryHtml}
             </div>
           </div>
+
+          ${samGalleryHtml}
 
           ${selectedDetailHtml}
         </div>
@@ -9198,13 +9348,21 @@
         ? `<img class="ph-portrait-img" src="${pt.src}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
         : `<div class="ph-portrait-fallback" style="background:radial-gradient(circle at 50% 42%, ${ch.color}55 0%, #07191a 82%);"><div class="ph-fallback-icon" style="fill:${ch.color};">${getCharacterSvgIcon(cid)}</div></div>`;
       const clickAttr = isTaken ? "" : `onclick="window.EFT_APP.selectSetupChar('${cid}')"`;
+      const devBadge = charBase.underDevelopment
+        ? `<span class="char-pick-dev-tag">Under Dev</span>`
+        : "";
+      const roleText = isTaken
+        ? "Dipilih: " + escapeHtml(takenBy)
+        : charBase.underDevelopment
+        ? "Under Development"
+        : escapeHtml(ch.title);
 
       return `
-      <div class="char-pick-card ${isSel ? "selected" : ""} ${isTaken ? "taken" : ""}" ${clickAttr}>
-        <div class="char-pick-thumb" style="--char-glow:${escapeHtml(ch.color || "#34d399")};">${thumbHtml}</div>
+      <div class="char-pick-card ${isSel ? "selected" : ""} ${isTaken ? "taken" : ""}" ${clickAttr} title="${escapeHtml(charBase.devDisclaimer || ch.name)}">
+        <div class="char-pick-thumb" style="--char-glow:${escapeHtml(ch.color || "#34d399")};">${thumbHtml}${devBadge}</div>
         <div class="char-pick-info">
           <div class="char-pick-name">${escapeHtml(ch.name)}</div>
-          <div class="char-pick-role">${isTaken ? "Dipilih: " + escapeHtml(takenBy) : escapeHtml(ch.title)}</div>
+          <div class="char-pick-role">${roleText}</div>
         </div>
       </div>`;
     });
@@ -9372,6 +9530,9 @@
             <div class="char-picker-grid">
               ${renderSetupCharPickerGrid(compId, me ? me.charId : setupDraft.charId, takenMap)}
             </div>
+            <div class="setup-dev-disclaimer">
+              <strong>Disclaimer (Under Development):</strong> Karakter <strong>Mao-Mao</strong> dan <strong>Firefly / SAM</strong> sudah bisa dimainkan namun masih dalam tahap pengembangan — efek kartu &amp; keseimbangan masih dapat berubah.
+            </div>
           </div>
 
           <div class="panel-box" style="display:flex;flex-direction:column;gap:8px;">
@@ -9480,6 +9641,9 @@
           <div class="setup-char-box-label">Pilih Karakter Kamu:</div>
           <div class="char-picker-grid">
             ${renderSetupCharPickerGrid(compId, setupDraft.charId, {})}
+          </div>
+          <div class="setup-dev-disclaimer">
+            <strong>Disclaimer (Under Development):</strong> Karakter <strong>Mao-Mao</strong> dan <strong>Firefly / SAM</strong> sudah bisa dimainkan namun masih dalam tahap pengembangan — efek kartu &amp; keseimbangan masih dapat berubah.
           </div>
         </div>
 

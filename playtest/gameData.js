@@ -273,9 +273,9 @@ window.EFT_DATA = {
     },
     comp_beta1: {
       id: "comp_beta1",
-      name: "Compendium Beta 1 (4 Active · 2 Unavailable)",
-      availableCharacters: ["bocchi", "aventurine", "joker", "lilith"],
-      unavailableCharacters: ["maomao", "firefly"],
+      name: "Compendium Beta 1 (6 Characters · 2 Under Development)",
+      availableCharacters: ["bocchi", "aventurine", "joker", "lilith", "maomao", "firefly"],
+      unavailableCharacters: [],
       overrides: {}
     }
   },
@@ -329,7 +329,7 @@ window.EFT_DATA = {
         { id: "bocchi_c1", name: "C# Chord", rarity: "Common", count: 3, activateTile: true, targetType: "any_player", choices: [1, 2, 3], effectKey: "move_steps", description: "[Activate Block Effect] Move 1/2/3 forward for yourself or other player.", image: "assets/cards/characters/bocchi/c1.png" },
         { id: "bocchi_c2", name: "Absus4 Chord", rarity: "Common", count: 2, activateTile: true, targetType: "any_player", choices: [-1, -2, -3], effectKey: "move_steps", description: "[Activate Block Effect] Move 1/2/3 backward for yourself or other player.", image: "assets/cards/characters/bocchi/c2.png" },
         { id: "bocchi_uc", name: "Crowd Surfing", rarity: "Uncommon", count: 3, radius: 5, targetType: "normal_tile_in_radius", effectKey: "teleport_normal_radius", description: "Move to any Normal Tile within a 5-block radius.", image: "assets/cards/characters/bocchi/uc.png" },
-        { id: "bocchi_r", name: "EADBGE", rarity: "Rare", count: 2, choices: [-8, -6, -4, -2, 2, 4, 6, 8], effectKey: "move_self_range", description: "Move 1-8 blocks forward or backward.", image: "assets/cards/characters/bocchi/r.png" },
+        { id: "bocchi_r", name: "EADBGE", rarity: "Rare", count: 2, choices: [-6, -4, -2, 2, 4, 6], effectKey: "move_self_range", description: "Move 1-6 blocks forward or backward.", image: "assets/cards/characters/bocchi/r.png" },
         { id: "bocchi_e", name: "Substitute Guitarist", rarity: "Epic", count: 1, activateTile: true, targetType: "other_player", effectKey: "swap_position", description: "[Activate Block Effect] Swap positions with another player.", image: "assets/cards/characters/bocchi/e.png" },
         { id: "bocchi_uq", name: "The Stage Is Mine", rarity: "Unique", count: 1, effectKey: "passive_stage_is_mine", durationCycles: 1, description: "[Activate Block Effect] Passive: When land on Normal Tiles, choose to move (+1/+2/-1). Duration: 1 Cycle (expires on Cycle transition).", image: "assets/cards/characters/bocchi/uq.png" }
       ],
@@ -354,7 +354,7 @@ window.EFT_DATA = {
       lore: "Aventurine rules the game through raw financial dominance, multi-target theft, exponential wealth multipliers, and all-in Shard duels.",
       cards: [
         { id: "avt_c", name: "That's Mine", rarity: "Common", count: 5, radius: 5, targetType: "opponent_in_radius", effectKey: "steal_5_or_10_tc", description: "Randomly steal 5 or 10 TC from one other player on a 5 blocks radius.", image: "assets/cards/characters/aventurine/c.png" },
-        { id: "avt_uc", name: "The Red or The Black", rarity: "Uncommon", count: 3, effectKey: "turn_tc_multiplier", multipliers: [1.25, 1.5, 2.0], description: "Gain a x1.25 / x1.5 / x2 multiplier on TC earnings for this turn.", image: "assets/cards/characters/aventurine/uc.png" },
+        { id: "avt_uc", name: "The Red or The Black", rarity: "Uncommon", count: 3, effectKey: "turn_tc_multiplier", multipliers: [1.15, 1.3, 1.5], description: "Gain a x1.15 / x1.3 / x1.5 multiplier on TC earnings for this turn.", image: "assets/cards/characters/aventurine/uc.png" },
         { id: "avt_r", name: "Hand of Midas", rarity: "Rare", count: 2, effectKey: "midas_gold", baseAmounts: [15, 20, 25], multipliers: [0.75, 1.0, 1.5], description: "Gain 15/20/25 TC with a random multiplier of x0.75 / x1 / x1.5.", image: "assets/cards/characters/aventurine/r.png" },
         { id: "avt_e", name: "The House Always Wins", rarity: "Epic", count: 1, effectKey: "tax_all_opponents_15", description: "Take 15 TC from all opponent. If a player cannot pay, they must surrender 1 random card.", image: "assets/cards/characters/aventurine/e.png" },
         { id: "avt_uq", name: "IPC Gems", rarity: "Unique", count: 1, effectKey: "passive_ipc_gems", passiveMultiplier: 1.3, durationCycles: 1, description: "Passive: Increase all TC earnings by 1.3x (does not apply to the results of your own skill cards). Duration: 1 Cycle (expires on Cycle transition).", image: "assets/cards/characters/aventurine/uq.png" }
@@ -380,13 +380,13 @@ window.EFT_DATA = {
       lore: "Lilith leaves opponents resource-starved by shredding enemy hands, placing proximity virus traps, reversing movement, and skipping turns.",
       cards: [
         { id: "lilith_c", name: "Marionette String", rarity: "Common", count: 5, radius: 5, targetType: "any_player_in_radius", effectKey: "discard_1_or_minus3_steps", description: "Target a player in a 5-block radius, they discard 1 random card. If their hand is empty, the target gets -3 steps on their next dice roll.", image: "assets/cards/characters/lilith/c.png" },
-        { id: "lilith_uc", name: "Punishing Virus", rarity: "Uncommon", count: 3, radius: 4, targetType: "normal_tile_in_radius", effectKey: "place_trap_virus", description: "Place a trap on a Normal Tile (4-block radius). Opponents who land or pass it lose 1 dice on their next dice roll. (Trap lasted for 1 cycle)", image: "assets/cards/characters/lilith/uc.png" },
-        { id: "lilith_r", name: "Mind Deviation", rarity: "Rare", count: 2, targetType: "any_player", effectKey: "debuff_reverse_move", description: "Target 1 player. The target must move backward according to their dice result in the first dice roll of their next turn.", image: "assets/cards/characters/lilith/r.png" },
-        { id: "lilith_e", name: "Soul Extraction", rarity: "Epic", count: 1, radius: 8, targetType: "opponents_in_radius_aoe", effectKey: "destroy_half_hand_radius", description: "Destroy 50% of the cards in the hands of all opponents within a 8-block radius instantly.", image: "assets/cards/characters/lilith/e.png" },
-        { id: "lilith_uq", name: "Unpredictable Tricks", rarity: "Unique", count: 1, effectKey: "passive_unpredictable_tricks", durationCycles: 1, description: "Passive: When you pass an opponent or they passed you, they lose 1 random card and must give you 5 TC. Duration: 1 Cycle (expires on Cycle transition).", image: "assets/cards/characters/lilith/uq.png" }
+        { id: "lilith_uc", name: "Punishing Virus", rarity: "Uncommon", count: 3, radius: 4, targetType: "normal_tile_in_radius", effectKey: "place_trap_virus", description: "Place a trap on a 4-block radius Normal Tile. Opponents who land on or pass it lose 1 dice on their next turn (max. 1 per player). (Trap lasted for 1 cycle)", image: "assets/cards/characters/lilith/uc.png" },
+        { id: "lilith_r", name: "Mind Deviation", rarity: "Rare", count: 2, targetType: "any_player", effectKey: "debuff_reverse_move", description: "Target 1 player. The target must move backward according to their first dice roll.", image: "assets/cards/characters/lilith/r.png" },
+        { id: "lilith_e", name: "Soul Extraction", rarity: "Epic", count: 1, radius: 8, targetType: "opponents_in_radius_aoe", effectKey: "destroy_half_hand_radius", description: "Destroy 50% of the cards in the hands randomly of all opponents within a 8-block radius instantly.", image: "assets/cards/characters/lilith/e.png" },
+        { id: "lilith_uq", name: "Unpredictable Tricks", rarity: "Unique", count: 1, effectKey: "passive_unpredictable_tricks", durationCycles: 1, description: "Passive: When you pass an opponent or they passed you, they lose 1 random card and must give you 5 TC. Duration: 1 Full Cycle", image: "assets/cards/characters/lilith/uq.png" }
       ],
       ultimate: {
-        id: "lilith_ult", name: "Dreamfall Showdown", rarity: "Ultimate", cost: 70, retain: true, targetType: "any_player", effectKey: "skip_target_turn_buff_self", description: "[Retain] Target 1 player, skips their next full turn. Lilith gains +1 extra phase and +1 skill use.", image: "assets/cards/characters/lilith/ult.png"
+        id: "lilith_ult", name: "Dreamfall Showdown", rarity: "Ultimate", cost: 70, retain: true, targetType: "any_player", effectKey: "skip_target_turn_buff_self", description: "[Retain] Target 1 player, skips their next full turn. Lilith gains extra dice roll and +2 skill use.", image: "assets/cards/characters/lilith/ult.png"
       }
     },
 
@@ -406,10 +406,10 @@ window.EFT_DATA = {
       lore: "A wildcard capable of shifting between card cycling, offensive disruption, mirroring enemy skills, and buying an indestructible Meta-Shard.",
       cards: [
         { id: "joker_c", name: "Showtime!", rarity: "Common", count: 5, tcGain: 10, effectKey: "choice_10tc_or_draw1", description: "Choose one: Gain 10 TC or draw 1 card from the deck.", image: "assets/cards/characters/joker/c.png" },
-        { id: "joker_uc", name: "Phantom Thief", rarity: "Uncommon", count: 3, choices: [1, 2, 3, 4, 5, 6], effectKey: "dash_1_6_steal_card", description: "Move 1-6 blocks. If you land on an opponent's tile, steal 1 random card from them.", image: "assets/cards/characters/joker/uc.png" },
+        { id: "joker_uc", name: "Phantom Thief", rarity: "Uncommon", count: 3, choices: [1, 2, 3, 4, 5, 6], effectKey: "dash_1_6_steal_card", description: "Move 1-6 blocks. If you land on an opponent's tile, steal 1 random Common/Uncommon/Rare card from them.", image: "assets/cards/characters/joker/uc.png" },
         { id: "joker_r", name: "All-Out Attack", rarity: "Rare", count: 2, radius: 6, targetType: "any_player_in_radius", effectKey: "aoa_15tc_silence", description: "Target in a 6-block radius loses 15 TC and is forbidden from using Skill Cards for 1 Phase.", image: "assets/cards/characters/joker/r.png" },
-        { id: "joker_e", name: "Will of Rebellion", rarity: "Epic", count: 1, effectKey: "copy_last_skill", description: "Choose and copy the effect of an opponent's skill card used within this turn. (When copying an unique card, the effect only last for 1 turn)", image: "assets/cards/characters/joker/e.png" },
-        { id: "joker_uq", name: "Awaken, Arsene!", rarity: "Unique", count: 1, effectKey: "passive_awaken_arsene", durationCycles: 1, description: "Passive: Each time you land on an Event or Versus tile, gain +1 extra dice roll for your next Phase. Duration: 1 Cycle (expires on Cycle transition).", image: "assets/cards/characters/joker/uq.png" }
+        { id: "joker_e", name: "Will of Rebellion", rarity: "Epic", count: 1, effectKey: "copy_last_skill", description: "Choose and copy the effect of other players' used skill card within this cycle. (When copying a Unique card, the effect only lasts for current turn)", image: "assets/cards/characters/joker/e.png" },
+        { id: "joker_uq", name: "Awaken, Arsene!", rarity: "Unique", count: 1, effectKey: "passive_awaken_arsene", durationCycles: 1, description: "Passive: Each time you land on Positive/Negative effect tile, gain +1 extra dice roll (max. 1 each turn). Duration: 1 Cycle", image: "assets/cards/characters/joker/uq.png" }
       ],
       ultimate: {
         id: "joker_ult", name: "Meta-Shard", rarity: "Ultimate", cost: 70, retain: true, effectKey: "grant_meta_shard", description: "[Retain] Purchase 1 permanent Meta-Shard that cannot be stolen, seized, or destroyed by opponents. (Can only be bought once per game)", image: "assets/cards/characters/joker/ult.png"
@@ -420,26 +420,28 @@ window.EFT_DATA = {
       id: "maomao",
       name: "Mao-Mao",
       shortName: "Mao-Mao",
-      unavailable: true,
+      underDevelopment: true,
+      devDisclaimer: "Under Development — Mao-Mao masih dalam tahap pengembangan; efek kartu & keseimbangan dapat berubah sewaktu-waktu.",
       title: "The Apothecary",
       specialty: "Reactive Negation, Threat Mitigation & Area Denial",
       color: "#10b981",
       colorRgb: "16, 185, 129",
-      portrait: null,
-      compPortrait: null,
+      portrait: { src: "assets/portraits/maomao.png", widthPct: 162, leftPct: -30, topPct: -4 },
+      compPortrait: { src: "assets/portraits/maomao.png", objectPosition: "50% 10%" },
       menuPortrait: "assets/menu-portraits/maomao.png",
+      chibi: "assets/chibi/maomao.png",
       ultCost: 70,
-      lore: "Defensive anti-meta specialist armed with Haste counters, healing Herb tiles, Common/Uncommon card taxes, and medical quarantine zones.",
+      lore: "Mao-Mao brings a defensive, anti-meta strategy to Tartarus—canceling enemy actions with swift counters, placing Medicinal Herb tiles, taxing basic cards, and locking down pathways with medical quarantine zones.",
       cards: [
-        { id: "maomao_c1", name: "Where's the castle", rarity: "Common", count: 3, effectKey: "choice_move1_2_or_10tc", description: "Move +1/+2 Tiles or gain 10 TC.", image: null },
-        { id: "maomao_c2", name: "Poison Testing", rarity: "Common", count: 2, haste: true, effectKey: "reactive_negate_target", description: "Can only be played when targeted by an opponent's card. Negate the card's effect (Exclude Epic/Ultimate). Cooldown: 1 Turn.", image: null },
-        { id: "maomao_uc", name: "Medicinal Herbs", rarity: "Uncommon", count: 3, radius: 4, targetType: "normal_tile_in_radius", effectKey: "place_herb_tile", description: "Place a Herb Tile on any Normal Tile in a 4-block radius. Landing/passing player gains 10 TC or draws 1 card.", image: null },
-        { id: "maomao_r", name: "No Please", rarity: "Rare", count: 2, haste: true, effectKey: "haste_negate_skill", description: "[Haste] Negate the activation of a skill card outside your turn (Exclude Epic/Unique/Ultimate). Cooldown: 1 Turn.", image: null },
-        { id: "maomao_e", name: "The Emperor's Favor", rarity: "Epic", count: 1, effectKey: "passive_emperor_tax", durationTurns: 8, description: "Passive (2 Turns): Every time an opponent uses a Common or Uncommon card, they must pay you 5 TC as tax.", image: null },
-        { id: "maomao_uq", name: "Miasma Cloud", rarity: "Unique", count: 1, effectKey: "passive_miasma_cloud", durationCycles: 1, description: "Passive (1 Full Cycle): When a player starts their play in a 4-block radius from you, they cannot play Epic or Ultimate cards.", image: null }
+        { id: "maomao_c1", name: "Where's the castle", rarity: "Common", count: 3, effectKey: "choice_move1_2_or_10tc", description: "Move +1/+2 Tiles or gain 10 TC.", image: "assets/cards/characters/maomao/c1.png" },
+        { id: "maomao_c2", name: "Poison Testing", rarity: "Common", count: 2, haste: true, effectKey: "reactive_negate_target", description: "Can only be played when targeted by an opponent's card. Negate the card's effect (Exclude Epic or Ultimate Card). (Cooldown: 1 Turn)", image: "assets/cards/characters/maomao/c2.png" },
+        { id: "maomao_uc", name: "Medicinal Herbs", rarity: "Uncommon", count: 3, radius: 4, targetType: "normal_tile_in_radius", effectKey: "place_herb_tile", description: "Place a \"Herb Tile\" on any Normal Tile in a 4-block radius. When a player lands or passes it, you gain 10 TC or draw 1 card. (Duration: Destroy on activation)", image: "assets/cards/characters/maomao/uc.png" },
+        { id: "maomao_r", name: "No Please", rarity: "Rare", count: 2, haste: true, effectKey: "haste_negate_skill", description: "[Haste] Negate the activation of that skill card. Haste: Can be used outside own turn. (Exclude Epic/Unique/Ultimate Cards) (Cooldown: 1 Turn)", image: "assets/cards/characters/maomao/r.png" },
+        { id: "maomao_e", name: "The Emperor's Favor", rarity: "Epic", count: 1, effectKey: "passive_emperor_tax", durationTurns: 8, description: "Passive: For 2 turns, every time an opponent uses a Common or Uncommon card, they must pay you 5 TC as \"tax\" to activate it.", image: "assets/cards/characters/maomao/e.png" },
+        { id: "maomao_uq", name: "Miasma Cloud", rarity: "Unique", count: 1, effectKey: "passive_miasma_cloud", durationCycles: 1, description: "Passive: When a player starts their play in a 4-block radius from you, they cannot play Epic or Ultimate cards. (Duration: 1 Full Cycle)", image: "assets/cards/characters/maomao/uq.png" }
       ],
       ultimate: {
-        id: "maomao_ult", name: "Grand Apothecary", rarity: "Ultimate", cost: 70, retain: true, targetType: "normal_tile_in_radius", effectKey: "place_restricted_zone", description: "[Retain] Place a permanent Restricted Zone token on 3 adjacent tiles. Any player landing here must pay 20 TC to you.", image: null
+        id: "maomao_ult", name: "Grand Apothecary", rarity: "Ultimate", cost: 70, retain: true, targetType: "normal_tile_in_radius", effectKey: "place_restricted_zone", description: "[Retain] Place a \"Restricted Zone\" token on 3 adjacent tiles. Any player landing there must pay 20 TC to you as a \"medical fee\"; if they cannot, they must surrender 1 card. (Duration: Permanent)", image: "assets/cards/characters/maomao/ult.png"
       }
     },
 
@@ -447,36 +449,39 @@ window.EFT_DATA = {
       id: "firefly",
       name: "Firefly / SAM",
       shortName: "Firefly",
-      unavailable: true,
+      underDevelopment: true,
+      devDisclaimer: "Under Development — Firefly / SAM masih dalam tahap pengembangan; efek kartu & transformasi SAM dapat berubah sewaktu-waktu.",
       title: "Stellaron Hunter",
       specialty: "Tactical Safe Zones & Complete Combustion Transformation",
       color: "#38bdf8",
       colorRgb: "56, 189, 248",
-      portrait: null,
-      compPortrait: null,
+      portrait: { src: "assets/portraits/firefly.png", widthPct: 215, leftPct: -54, topPct: -42 },
+      compPortrait: { src: "assets/portraits/firefly.png", objectPosition: "50% 24%" },
       menuPortrait: "assets/menu-portraits/firefly.png",
+      chibi: "assets/chibi/firefly.png",
+      samChibi: "assets/chibi/sam.png",
       ultCost: 50,
-      lore: "Starts in Firefly scouting mode with Safe Zones and trap control, then spends 50 TC to transform into SAM for high-impact combustion combat.",
+      lore: "Starts in Firefly scouting mode with Safe Zones, deck scouting, and trap relocation, then spends 50 TC to transform into SAM for explosive high-impact combustion combat.",
       cards: [
-        { id: "ff_c1", name: "Chronicle of Firefly", rarity: "Common", count: 3, effectKey: "ff_move_1_2_normal_bonus", description: "Move +1 or +2 steps. If you land on a blank Normal Tile, gain 10 TC.", image: null },
-        { id: "ff_c2", name: "Insect's Instinct", rarity: "Common", count: 2, effectKey: "scry_2_keep_1", description: "Look at the top 2 cards of your deck; choose to discard 1 and keep 1.", image: null },
-        { id: "ff_uc", name: "Oak Cake Break", rarity: "Uncommon", count: 3, targetType: "any_tile", effectKey: "place_safe_zone", description: "Create a Safe Zone token on the map. Any player landing there cannot be targeted until their next phase.", image: null },
-        { id: "ff_r", name: "Orderly Retreat", rarity: "Rare", count: 2, haste: true, effectKey: "retreat_2_negate", description: "Play when targeted by an opponent's card. Move backward 2 blocks to escape; opponent's effect is negated.", image: null },
-        { id: "ff_e", name: "Entrusted Dream", rarity: "Epic", count: 1, effectKey: "relocate_board_traps", description: "Change the position of un-activated Tokens/Traps on the board and activate the effect immediately.", image: null },
-        { id: "ff_uq", name: "Stellaron Hunter's Resolve", rarity: "Unique", count: 1, effectKey: "passive_immune_steal", durationCycles: 1, description: "Passive (1 Full Cycle): Immune to card-stealing effects.", image: null }
+        { id: "ff_c1", name: "Chronicle of Firefly", rarity: "Common", count: 3, effectKey: "ff_move_1_2_normal_bonus", description: "Move +1 or +2 steps. If you land on a blank Normal Tile, gain 10 TC.", image: "assets/cards/characters/firefly/c1.png" },
+        { id: "ff_c2", name: "Insect's Instinct", rarity: "Common", count: 2, effectKey: "scry_2_keep_1", description: "Look at the top 2 cards of your deck; choose to discard 1 and keep 1.", image: "assets/cards/characters/firefly/c2.png" },
+        { id: "ff_uc", name: "Oak Cake Break", rarity: "Uncommon", count: 3, targetType: "any_tile", effectKey: "place_safe_zone", description: "Create a 3-tiles radius \"Safe Zone\" token anywhere on the map. Any player landing there cannot be targeted by cards until their next phase. (Duration: Destroyed on activation).", image: "assets/cards/characters/firefly/uc.png" },
+        { id: "ff_r", name: "Orderly Retreat", rarity: "Rare", count: 2, haste: true, activateTile: true, effectKey: "retreat_2_negate", description: "[Activate Tile Effect] [Haste] Play when targeted by an opponent's card. Move backward 2 blocks to escape; the opponent's card effect is negated.", image: "assets/cards/characters/firefly/r.png" },
+        { id: "ff_e", name: "Entrusted Dream", rarity: "Epic", count: 1, effectKey: "relocate_board_traps", description: "Change the positions of un-activated Tokens/Trap currently on the board and activate the effect immediately. (Players on top of the trap are affected)", image: "assets/cards/characters/firefly/e.png" },
+        { id: "ff_uq", name: "Stellaron Hunter's Resolve", rarity: "Unique", count: 1, effectKey: "passive_immune_steal", durationCycles: 1, description: "Passive: Immune to card-stealing effects. (Duration: 1 Full Cycle)", image: "assets/cards/characters/firefly/uq.png" }
       ],
       ultimate: {
-        id: "ff_ult", name: "Complete Combustion (SAM)", rarity: "Ultimate", cost: 50, retain: true, effectKey: "transform_to_sam", description: "[50 TC | Retain] Transformation: Discard current hand and instantly swap your character and deck to SAM.", image: null
+        id: "ff_ult", name: "Complete Combustion (SAM)", rarity: "Ultimate", cost: 50, retain: true, effectKey: "transform_to_sam", description: "[50 TC | Retain] Transformation: Discard your current hand. Instantly swap your character and deck to SAM. (Round End)", image: "assets/cards/characters/firefly/ult.png"
       },
       samCards: [
-        { id: "sam_c", name: "BDH: Firefly Type-IV", rarity: "Common", count: 5, choices: [1, 2, 3, 4, 5, 6], effectKey: "sam_dash_aoe_5tc", description: "[SAM] Move 1–6 blocks forward. Deal 5 TC damage to all players within a 1-block radius of your landing spot.", image: null },
-        { id: "sam_uc", name: "Supernova Overload", rarity: "Uncommon", count: 3, radius: 4, targetType: "opponent_in_radius", effectKey: "sam_push_back_3", description: "[SAM] Target an opponent within 4 blocks. Push them backward 3 blocks. If they hit a trap/intersection, they lose 10 TC.", image: null },
-        { id: "sam_r", name: "Scorched Earth Execution", rarity: "Rare", count: 2, radius: 4, targetType: "opponent_in_radius", effectKey: "sam_discounted_versus", description: "[SAM] Force a player within 4 blocks into an immediate Versus minigame (SAM pays discounted 10/20 TC bet).", image: null },
-        { id: "sam_e", name: "Deathstar Destruction", rarity: "Epic", count: 1, targetType: "normal_tile_in_radius", effectKey: "sam_fire_tiles", description: "[SAM] Set 2 tiles on fire. Any player landing on them loses 15 TC and their next Phase 1 roll cannot exceed 6.", image: null },
-        { id: "sam_uq", name: "Firefly Type-IV Armor", rarity: "Unique", count: 1, effectKey: "passive_sam_armor", durationCycles: 1, description: "[SAM] Passive (1 Full Cycle): Immune to all Common cards. Additionally, SAM moves +1 step on every dice roll.", image: null }
+        { id: "sam_c", name: "BDH: Firefly Type-IV", rarity: "Common", count: 5, choices: [1, 2, 3, 4, 5, 6], effectKey: "sam_dash_aoe_5tc", description: "[SAM] Move 1-6 blocks forward. Deal 5 TC damage to all players within a 1-block radius of your landing spot. (Phase End)", image: "assets/cards/characters/firefly/sam_c.png" },
+        { id: "sam_uc", name: "Supernova Overload", rarity: "Uncommon", count: 3, radius: 4, activateTile: true, targetType: "opponent_in_radius", effectKey: "sam_push_back_3", description: "[SAM] Target an opponent within 4 blocks, push them backward 3 blocks and activate tiles effect. If they hit a Player/Token/Trap along the way, they lose 10 TC.", image: "assets/cards/characters/firefly/sam_uc.png" },
+        { id: "sam_r", name: "Scorched Earth Execution", rarity: "Rare", count: 2, radius: 4, targetType: "opponent_in_radius", effectKey: "sam_discounted_versus", description: "[SAM] Force a player within a 4-block radius into an immediate Versus minigame. SAM pays a discounted entry fee of Free/15 TC bet, while the opponent must bet the standard 15/30 TC.", image: "assets/cards/characters/firefly/sam_r.png" },
+        { id: "sam_e", name: "Deathstar Destruction", rarity: "Epic", count: 1, targetType: "normal_tile_in_radius", effectKey: "sam_fire_tiles", description: "[SAM] Set 2 tiles on fire. Any player landing on them loses 15 TC and their next Phase 1 dice roll cannot exceed 6. (Duration: Destroy on activation)", image: "assets/cards/characters/firefly/sam_e.png" },
+        { id: "sam_uq", name: "Firefly Type-IV Armor", rarity: "Unique", count: 1, effectKey: "passive_sam_armor", durationCycles: 1, description: "[SAM] Passive: Immune to being targeted or debuffed by all Common cards. Additionally, SAM moves +1 step on every dice roll. (Duration: 1 Full Cycle).", image: "assets/cards/characters/firefly/sam_uq.png" }
       ],
       samUltimate: {
-        id: "sam_ult", name: "Cooldown Protocol", rarity: "Ultimate", cost: 50, retain: true, effectKey: "transform_to_firefly", description: "[50 TC | Retain] Power down the armor. Discard current hand and revert back to Firefly character sheet and deck.", image: null
+        id: "sam_ult", name: "Cooldown Protocol", rarity: "Ultimate", cost: 50, retain: true, effectKey: "transform_to_firefly", description: "[50 TC | Retain] Transformation: Power down the armor. Discard your current hand and revert back to the Firefly character sheet and deck.", image: "assets/cards/characters/firefly/sam_ult.png"
       }
     }
   },
