@@ -1965,6 +1965,7 @@ body {
 }
 
 .ph-card-clip {
+  position: relative;
   display: flex;
   align-items: stretch;
   width: 100%;
@@ -7953,6 +7954,257 @@ body:not(.modal-open) .tucked-card:hover,
   font-size: 0.76rem;
   line-height: 1.4;
   color: #cbd5e1;
+}
+
+/* ============================================================================
+   LIGHTWEIGHT PLAYER FEEDBACK ANIMATIONS (DAMAGE, GAIN, BUFF, DEBUFF)
+   100% GPU-composited transform & opacity, zero canvas overhead.
+   ============================================================================ */
+.ph-hit-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 6;
+}
+
+.player-hud-card.fb-hit-tc .ph-hit-flash {
+  background: radial-gradient(circle at 45% 50%, rgba(239, 68, 68, 0.34), rgba(220, 38, 38, 0.14) 70%);
+  box-shadow: inset 0 0 0 2px #f87171;
+  animation: eftFbFlashFade 380ms ease-out forwards;
+}
+
+.player-hud-card.fb-hit-card .ph-hit-flash {
+  background: radial-gradient(circle at 45% 50%, rgba(244, 63, 94, 0.36), rgba(190, 18, 60, 0.14) 70%);
+  box-shadow: inset 0 0 0 2px #fb7185;
+  animation: eftFbFlashFade 400ms ease-out forwards;
+}
+
+.player-hud-card.fb-hit-debuff .ph-hit-flash {
+  background: radial-gradient(circle at 45% 50%, rgba(220, 38, 38, 0.38), rgba(127, 29, 29, 0.16) 72%);
+  box-shadow: inset 0 0 0 2px #ef4444;
+  animation: eftFbFlashFade 420ms ease-out forwards;
+}
+
+.player-hud-card.fb-gain-tc .ph-hit-flash {
+  background: radial-gradient(circle at 45% 50%, rgba(250, 204, 21, 0.3), rgba(202, 138, 4, 0.1) 70%);
+  box-shadow: inset 0 0 0 2px #facc15;
+  animation: eftFbFlashFade 400ms ease-out forwards;
+}
+
+.player-hud-card.fb-gain-card .ph-hit-flash {
+  background: radial-gradient(circle at 45% 50%, rgba(52, 211, 153, 0.3), rgba(16, 185, 129, 0.1) 70%);
+  box-shadow: inset 0 0 0 2px #34d399;
+  animation: eftFbFlashFade 400ms ease-out forwards;
+}
+
+.player-hud-card.fb-gain-buff .ph-hit-flash {
+  background: radial-gradient(circle at 45% 50%, rgba(34, 197, 94, 0.32), rgba(21, 128, 61, 0.12) 70%);
+  box-shadow: inset 0 0 0 2px #4ade80;
+  animation: eftFbFlashFade 420ms ease-out forwards;
+}
+
+.player-hud-card.fb-shake-neg {
+  animation: eftHudRecoilLight 320ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.player-hud-card.fb-lift-pos {
+  animation: eftHudLiftPop 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ph-curr-tc.fb-stat-neg,
+.ph-cards-line.fb-stat-neg {
+  animation: eftStatBlinkNeg 460ms ease-out;
+}
+
+.ph-curr-tc.fb-stat-pos,
+.ph-cards-line.fb-stat-pos {
+  animation: eftStatBlinkPos 460ms ease-out;
+}
+
+.pawn-hit-flash {
+  position: absolute;
+  inset: 8% 12% 14% 12%;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 6;
+}
+
+.board-chibi-pawn.pawn-fb-neg .pawn-hit-flash {
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.62) 0%, rgba(239, 68, 68, 0) 74%);
+  animation: eftFbFlashFade 360ms ease-out forwards;
+}
+
+.board-chibi-pawn.pawn-fb-pos .pawn-hit-flash {
+  background: radial-gradient(circle, rgba(250, 204, 21, 0.56) 0%, rgba(250, 204, 21, 0) 74%);
+  animation: eftFbFlashFade 380ms ease-out forwards;
+}
+
+.board-chibi-pawn.pawn-fb-buff .pawn-hit-flash {
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.58) 0%, rgba(52, 211, 153, 0) 74%);
+  animation: eftFbFlashFade 380ms ease-out forwards;
+}
+
+.board-chibi-pawn.pawn-fb-neg .board-chibi-img,
+.board-chibi-pawn.pawn-fb-neg .board-pawn-fallback {
+  animation: eftPawnFlinchLight 300ms ease-out;
+}
+
+.board-chibi-pawn.pawn-fb-pos .board-chibi-img,
+.board-chibi-pawn.pawn-fb-pos .board-pawn-fallback,
+.board-chibi-pawn.pawn-fb-buff .board-chibi-img,
+.board-chibi-pawn.pawn-fb-buff .board-pawn-fallback {
+  animation: eftPawnGainHop 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.eft-fb-float {
+  position: absolute;
+  pointer-events: none;
+  z-index: 95;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 0.78rem;
+  line-height: 1.15;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.62);
+  animation: eftFbFloatRise 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.eft-fb-float.is-tc-loss {
+  background: #450a0a;
+  border: 1px solid #f87171;
+  color: #fecaca;
+}
+
+.eft-fb-float.is-card-loss {
+  background: #4c0519;
+  border: 1px solid #fb7185;
+  color: #ffe4e6;
+}
+
+.eft-fb-float.is-debuff {
+  background: #5c0b16;
+  border: 1px solid #ef4444;
+  color: #fee2e2;
+}
+
+.eft-fb-float.is-tc-gain {
+  background: #3b2606;
+  border: 1px solid #facc15;
+  color: #fef08a;
+}
+
+.eft-fb-float.is-card-gain {
+  background: #06382b;
+  border: 1px solid #34d399;
+  color: #d1fae5;
+}
+
+.eft-fb-float.is-buff {
+  background: #0b3b1e;
+  border: 1px solid #4ade80;
+  color: #dcfce7;
+}
+
+.eft-fb-float.is-pawn {
+  left: 50%;
+  top: -16px;
+  font-size: 1.18rem;
+  padding: 4px 13px;
+  gap: 6px;
+  animation: eftFbFloatPawn 920ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.eft-fb-float.is-pawn svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes eftFbFlashFade {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes eftHudRecoilLight {
+  0% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-5px, 0, 0); }
+  45% { transform: translate3d(4px, 0, 0); }
+  72% { transform: translate3d(-2px, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes eftHudLiftPop {
+  0% { transform: translate3d(0, 0, 0); }
+  32% { transform: translate3d(0, -3px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes eftStatBlinkNeg {
+  0% { color: #ff4d4f; }
+  65% { color: #f87171; }
+  100% {}
+}
+
+@keyframes eftStatBlinkPos {
+  0% { color: #86efac; }
+  65% { color: #4ade80; }
+  100% {}
+}
+
+@keyframes eftPawnFlinchLight {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  22% { transform: translate3d(-7px, 2px, 0) scale(0.94); }
+  54% { transform: translate3d(5px, -1px, 0) scale(1.03); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes eftPawnGainHop {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  38% { transform: translate3d(0, -10px, 0) scale(1.06); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes eftFbFloatRise {
+  0% { opacity: 0; transform: translate3d(0, 6px, 0) scale(0.84); }
+  16% { opacity: 1; transform: translate3d(0, -4px, 0) scale(1.05); }
+  74% { opacity: 1; transform: translate3d(0, -24px, 0) scale(1); }
+  100% { opacity: 0; transform: translate3d(0, -34px, 0) scale(0.95); }
+}
+
+@keyframes eftFbFloatPawn {
+  0% { opacity: 0; transform: translateX(-50%) translate3d(0, 8px, 0) scale(0.84); }
+  18% { opacity: 1; transform: translateX(-50%) translate3d(0, -8px, 0) scale(1.07); }
+  74% { opacity: 1; transform: translateX(-50%) translate3d(0, -38px, 0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translate3d(0, -52px, 0) scale(0.95); }
+}
+
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-width: 960px) and (pointer: coarse) {
+  .eft-fb-float {
+    font-size: 0.56rem;
+    padding: 1px 5px;
+    gap: 2px;
+  }
+
+  .eft-fb-float svg {
+    width: 8px;
+    height: 8px;
+  }
+
+  .eft-fb-float.is-pawn {
+    font-size: 1.05rem;
+    padding: 3px 10px;
+  }
 }
 
 /* ============================================================================

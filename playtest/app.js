@@ -2496,6 +2496,7 @@
     lastRenderedTileModalKey = null;
     lastOpenedScryId = null;
     lastOpenedHasteId = null;
+    resetPlayerVisualStatsTracker();
     tileModalMinimizedForId = null;
     clearTimeout(tileModalAutoCloseTimerId);
     tileModalAutoCloseTimerId = null;
@@ -7588,6 +7589,7 @@
     syncSharedTileModal();
     syncScryPickModal();
     syncHasteReactionModal();
+    detectAndTriggerPlayerFeedback();
     applyCameraTransform();
     scheduleAutoEndTurnIfReady();
     scheduleMultiplayerBotIfNeeded();
@@ -7611,6 +7613,246 @@
   };
   let _staticBoardRoadsSvg = "";
   let _hadBranchPreviewClasses = false;
+  let _prevPlayerVisualStats = null;
+
+  function resetPlayerVisualStatsTracker() {
+    _prevPlayerVisualStats = null;
+  }
+
+  function snapshotPlayerVisualStats(players) {
+    if (!Array.isArray(players)) return null;
+    return players.map((p) => ({
+      tc: Number(p.tc) || 0,
+      handLen: Array.isArray(p.hand) ? p.hand.length : 0,
+      skillsUsed: Number(p.skillsUsedThisTurn) || 0,
+      isSamMode: Boolean(p.isSamMode),
+      safeZoneImmune: Boolean(p.safeZoneImmune),
+      metaShard: Number(p.metaShard) || 0,
+      turnTcMultiplier: Number(p.turnTcMultiplier) || 1,
+      nextTurnDiceMod: Number(p.nextTurnDiceMod) || 0,
+      nextPhaseDiceMod: Number(p.nextPhaseDiceMod) || 0,
+      nextRollMaxCap: Number(p.nextRollMaxCap) || 0,
+      reverseNextRoll: Boolean(p.reverseNextRoll),
+      skipNextTurn: Boolean(p.skipNextTurn),
+      silencedThisPhase: Boolean(p.silencedThisPhase),
+      passiveKeys: Array.isArray(p.passives) ? p.passives.map((ps) => ps.key) : []
+    }));
+  }
+
+  function buildFeedbackTagIconSvg(kind) {
+    if (kind === "card-loss" || kind === "card-gain") {
+      return kind === "card-loss"
+        ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`
+        : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="12" y1="8.5" x2="12" y2="15.5"/><line x1="8.5" y1="12" x2="15.5" y2="12"/></svg>`;
+    }
+    if (kind === "tc-loss" || kind === "tc-gain") {
+      return kind === "tc-loss"
+        ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`
+        : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
+    }
+    if (kind === "debuff") {
+      return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L21 20H3L12 4z"/><line x1="12" y1="10" x2="12" y2="14.5"/><circle cx="12" cy="17.2" r="0.8" fill="currentColor"/></svg>`;
+    }
+    return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>`;
+  }
+
+  function spawnFeedbackFloatBadge(parentEl, text, kind, opts = {}) {
+    if (!parentEl) return;
+    const tag = document.createElement("div");
+    tag.className = `eft-fb-float is-${kind}${opts.isPawn ? " is-pawn" : ""}`;
+    if (opts.topPx !== undefined) tag.style.top = `${opts.topPx}px`;
+    if (opts.rightPx !== undefined) tag.style.right = `${opts.rightPx}px`;
+    tag.innerHTML = `${buildFeedbackTagIconSvg(kind)}<span>${escapeHtml(text)}</span>`;
+    parentEl.appendChild(tag);
+    setTimeout(() => {
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, 960);
+  }
+
+  function triggerPlayerVisualFeedback(playerIndex, events) {
+    if (!Array.isArray(events) || events.length === 0) return;
+    const hudCard = document.querySelector(`.player-hud-card[data-player-idx="${playerIndex}"]`);
+    const pawnEl = document.querySelector(`.board-chibi-pawn[data-player-idx="${playerIndex}"]`);
+    if (!hudCard && !pawnEl) return;
+
+    const hasNegative = events.some((ev) => ev.tone === "neg");
+    const primaryKind = hasNegative
+      ? events.find((ev) => ev.tone === "neg").kind
+      : events[0].kind;
+
+    if (hudCard) {
+      hudCard.classList.remove(
+        "fb-hit-tc",
+        "fb-hit-card",
+        "fb-hit-debuff",
+        "fb-gain-tc",
+        "fb-gain-card",
+        "fb-gain-buff",
+        "fb-shake-neg",
+        "fb-lift-pos"
+      );
+      void hudCard.offsetWidth;
+      const flashCls =
+        primaryKind === "tc-loss"
+          ? "fb-hit-tc"
+          : primaryKind === "card-loss"
+          ? "fb-hit-card"
+          : primaryKind === "debuff"
+          ? "fb-hit-debuff"
+          : primaryKind === "tc-gain"
+          ? "fb-gain-tc"
+          : primaryKind === "card-gain"
+          ? "fb-gain-card"
+          : "fb-gain-buff";
+      hudCard.classList.add(flashCls, hasNegative ? "fb-shake-neg" : "fb-lift-pos");
+      setTimeout(() => {
+        hudCard.classList.remove(flashCls, "fb-shake-neg", "fb-lift-pos");
+      }, 460);
+
+      const tcSpan = hudCard.querySelector(".ph-curr-tc");
+      const cardSpan = hudCard.querySelector(".ph-cards-line");
+      events.forEach((ev) => {
+        if (tcSpan && (ev.kind === "tc-loss" || ev.kind === "tc-gain")) {
+          tcSpan.classList.remove("fb-stat-neg", "fb-stat-pos");
+          void tcSpan.offsetWidth;
+          tcSpan.classList.add(ev.kind === "tc-loss" ? "fb-stat-neg" : "fb-stat-pos");
+          setTimeout(() => tcSpan.classList.remove("fb-stat-neg", "fb-stat-pos"), 480);
+        }
+        if (cardSpan && (ev.kind === "card-loss" || ev.kind === "card-gain")) {
+          cardSpan.classList.remove("fb-stat-neg", "fb-stat-pos");
+          void cardSpan.offsetWidth;
+          cardSpan.classList.add(ev.kind === "card-loss" ? "fb-stat-neg" : "fb-stat-pos");
+          setTimeout(() => cardSpan.classList.remove("fb-stat-neg", "fb-stat-pos"), 480);
+        }
+      });
+    }
+
+    if (pawnEl) {
+      pawnEl.classList.remove("pawn-fb-neg", "pawn-fb-pos", "pawn-fb-buff");
+      void pawnEl.offsetWidth;
+      const pCls = hasNegative ? "pawn-fb-neg" : primaryKind === "buff" ? "pawn-fb-buff" : "pawn-fb-pos";
+      pawnEl.classList.add(pCls);
+      setTimeout(() => pawnEl.classList.remove(pCls), 420);
+    }
+
+    events.slice(0, 3).forEach((ev, idx) => {
+      const delay = idx * 145;
+      const topOffset = -8 - idx * 24;
+      setTimeout(() => {
+        const curHud = document.querySelector(`.player-hud-card[data-player-idx="${playerIndex}"]`);
+        const curPawn = document.querySelector(`.board-chibi-pawn[data-player-idx="${playerIndex}"]`);
+        if (curHud) {
+          spawnFeedbackFloatBadge(curHud, ev.label, ev.kind, { topPx: topOffset, rightPx: 8 });
+        }
+        if (curPawn) {
+          spawnFeedbackFloatBadge(curPawn, ev.label, ev.kind, { isPawn: true });
+        }
+      }, delay);
+    });
+  }
+
+  function detectAndTriggerPlayerFeedback() {
+    if (!state || !Array.isArray(state.players) || isInitializingMatch || !isMatchStarted || isTitleScreenVisible) {
+      _prevPlayerVisualStats = state && Array.isArray(state.players) ? snapshotPlayerVisualStats(state.players) : null;
+      return;
+    }
+
+    const nextSnap = snapshotPlayerVisualStats(state.players);
+    if (!_prevPlayerVisualStats || _prevPlayerVisualStats.length !== nextSnap.length) {
+      _prevPlayerVisualStats = nextSnap;
+      return;
+    }
+
+    for (let i = 0; i < nextSnap.length; i++) {
+      const prev = _prevPlayerVisualStats[i];
+      const cur = nextSnap[i];
+      const p = state.players[i];
+      const events = [];
+
+      // 1. TC Gain / Loss
+      const tcDelta = cur.tc - prev.tc;
+      if (tcDelta < 0) {
+        events.push({ kind: "tc-loss", tone: "neg", label: `${tcDelta} TC` });
+      } else if (tcDelta > 0) {
+        events.push({ kind: "tc-gain", tone: "pos", label: `+${tcDelta} TC` });
+      }
+
+      // 2. Card Gain / Loss (skip normal playing 1 card from own hand & SAM form swap)
+      const isFormSwap = cur.isSamMode !== prev.isSamMode;
+      const cardDelta = cur.handLen - prev.handLen;
+      const skillsUsedDelta = cur.skillsUsed - prev.skillsUsed;
+      if (!isFormSwap) {
+        if (cardDelta < 0) {
+          const effectiveLoss = skillsUsedDelta > 0 ? Math.max(0, Math.abs(cardDelta) - skillsUsedDelta) : Math.abs(cardDelta);
+          if (effectiveLoss > 0) {
+            events.push({
+              kind: "card-loss",
+              tone: "neg",
+              label: `-${effectiveLoss} ${effectiveLoss > 1 ? "Cards" : "Card"}`
+            });
+          }
+        } else if (cardDelta > 0) {
+          events.push({
+            kind: "card-gain",
+            tone: "pos",
+            label: `+${cardDelta} ${cardDelta > 1 ? "Cards" : "Card"}`
+          });
+        }
+      }
+
+      // 3. Positive Buffs
+      if (cur.isSamMode && !prev.isSamMode) {
+        events.push({ kind: "buff", tone: "pos", label: "SAM Mode!" });
+      }
+      if (cur.safeZoneImmune && !prev.safeZoneImmune) {
+        events.push({ kind: "buff", tone: "pos", label: "+Safe Zone" });
+      }
+      if (cur.metaShard > prev.metaShard) {
+        events.push({ kind: "buff", tone: "pos", label: "+Meta-Shard" });
+      }
+      if (cur.turnTcMultiplier > prev.turnTcMultiplier && cur.turnTcMultiplier > 1) {
+        events.push({ kind: "buff", tone: "pos", label: `x${cur.turnTcMultiplier} TC` });
+      }
+      if (cur.nextTurnDiceMod > prev.nextTurnDiceMod && cur.nextTurnDiceMod > 0) {
+        events.push({ kind: "buff", tone: "pos", label: `+${cur.nextTurnDiceMod} Dice` });
+      }
+      if (cur.nextPhaseDiceMod > prev.nextPhaseDiceMod && cur.nextPhaseDiceMod > 0) {
+        events.push({ kind: "buff", tone: "pos", label: `+${cur.nextPhaseDiceMod} Roll` });
+      }
+      const prevPasSet = new Set(prev.passiveKeys);
+      (p.passives || []).forEach((ps) => {
+        if (ps && ps.key && !prevPasSet.has(ps.key)) {
+          events.push({ kind: "buff", tone: "pos", label: `+${ps.name || "Buff"}` });
+        }
+      });
+
+      // 4. Negative Debuffs
+      if (cur.nextTurnDiceMod < prev.nextTurnDiceMod && cur.nextTurnDiceMod < 0) {
+        events.push({ kind: "debuff", tone: "neg", label: `${cur.nextTurnDiceMod} Dice` });
+      }
+      if (cur.nextPhaseDiceMod < prev.nextPhaseDiceMod && cur.nextPhaseDiceMod < 0) {
+        events.push({ kind: "debuff", tone: "neg", label: `${cur.nextPhaseDiceMod} Roll` });
+      }
+      if (cur.nextRollMaxCap > 0 && !prev.nextRollMaxCap) {
+        events.push({ kind: "debuff", tone: "neg", label: `Max ${cur.nextRollMaxCap} Roll` });
+      }
+      if (cur.reverseNextRoll && !prev.reverseNextRoll) {
+        events.push({ kind: "debuff", tone: "neg", label: "Reverse!" });
+      }
+      if (cur.skipNextTurn && !prev.skipNextTurn) {
+        events.push({ kind: "debuff", tone: "neg", label: "Skip Turn!" });
+      }
+      if (cur.silencedThisPhase && !prev.silencedThisPhase) {
+        events.push({ kind: "debuff", tone: "neg", label: "Silenced!" });
+      }
+
+      if (events.length > 0) {
+        triggerPlayerVisualFeedback(i, events);
+      }
+    }
+
+    _prevPlayerVisualStats = nextSnap;
+  }
 
   function invalidateHudCache() {
     _hudCache.topStatus = "";
@@ -8116,8 +8358,9 @@
         : "";
 
       return `
-      <div class="player-hud-card ${isTurn ? "is-active" : ""}" style="--p-color:${pColor};--p-rgb:${pRgb};" onclick="window.EFT_APP.focusCameraOnPlayer(${idx})" title="${escapeHtml(p.name)}${isAdminUnlocked ? " (Klik fokus, klik kanan edit)" : ""}"${rightClickAttr}>
+      <div class="player-hud-card ${isTurn ? "is-active" : ""}" data-player-idx="${idx}" style="--p-color:${pColor};--p-rgb:${pRgb};" onclick="window.EFT_APP.focusCameraOnPlayer(${idx})" title="${escapeHtml(p.name)}${isAdminUnlocked ? " (Klik fokus, klik kanan edit)" : ""}"${rightClickAttr}>
         <div class="ph-card-clip">
+          <div class="ph-hit-flash" aria-hidden="true"></div>
           <div class="ph-portrait-col">${portraitHtml}</div>
           <div class="ph-info-col">
             <div class="ph-title-row">
@@ -8887,11 +9130,13 @@
         const dirIndicator = buildChibiDirectionIndicatorHtml(p);
         return `
       <div class="board-chibi-pawn ${isAct ? "active-pawn" : ""} ${walkCls}"
+           data-player-idx="${idx}"
            style="left:${px}%;top:${py}%;--pawn-color:${p.color};"
            title="${escapeHtml(p.name)} @ ${p.tileId}"
            onclick="event.stopPropagation();window.EFT_APP.${isAdminUnlocked ? "openSandboxPlayerModal" : "focusCameraOnPlayer"}(${idx})">
         ${dirIndicator}
         ${pawnVisual}
+        <span class="pawn-hit-flash" aria-hidden="true"></span>
         <span class="chibi-base-ring"></span>
       </div>`;
       });
