@@ -3071,6 +3071,9 @@
     if (pendingInteraction && pendingInteraction.player && typeof pendingInteraction.player.index === "number") {
       return pendingInteraction.player.index;
     }
+    if (state.activeTileModal && typeof state.activeTileModal.actorIndex === "number") {
+      return state.activeTileModal.actorIndex;
+    }
     return state.activePlayerIndex;
   }
 
@@ -4329,7 +4332,7 @@
         return false;
       }
       case "merchant": {
-        openMerchantModal(tile.shopId || 1);
+        openMerchantModal(tile.shopId || 1, false, player);
         return false;
       }
       default:
@@ -9115,21 +9118,25 @@
     if ((!pendingInteraction || pendingInteraction.type === "choose_branch") && state && state.activeTileModal && state.activeTileModal.status === "selecting") {
       const tm = state.activeTileModal;
       const actor = state.players[tm.actorIndex] || getActivePlayer();
-      const isActor = canLocalPlayerAct();
+      const isActor = isLocalHumanTurnForPlayer(actor);
       bar.classList.add("visible");
       if (tm.type === "versus") {
-        bar.innerHTML = `
-          <div><strong>Versus Duel Aktif (${escapeHtml(actor.name)}):</strong> ${isActor ? "Pilih lawan &amp; jumlah taruhan TC" : "Sedang memilih lawan duel..."}</div>
+        bar.innerHTML = isActor
+          ? `
+          <div><strong>Versus Duel Aktif (${escapeHtml(actor.name)}):</strong> Pilih lawan &amp; jumlah taruhan TC</div>
           <div style="display:flex;gap:6px;">
             <button class="btn btn-gold btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Buka Pop-Up Versus</button>
-          </div>`;
+          </div>`
+          : `<div><strong>Versus Duel (${escapeHtml(actor.name)}):</strong> Menunggu ${escapeHtml(actor.name)} memilih lawan duel...</div>`;
       } else {
-        bar.innerHTML = `
-          <div><strong>Trading Post Aktif (${escapeHtml(actor.name)}):</strong> ${isActor ? "Pilih partner &amp; jenis barter kartu" : "Sedang memilih transaksi barter..."}</div>
+        bar.innerHTML = isActor
+          ? `
+          <div><strong>Trading Post Aktif (${escapeHtml(actor.name)}):</strong> Pilih partner &amp; jenis barter kartu</div>
           <div style="display:flex;gap:6px;">
             <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Buka Pop-Up Trade</button>
-            ${isActor ? `<button class="btn btn-sm" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati Trade</button>` : ""}
-          </div>`;
+            <button class="btn btn-sm" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati Trade</button>
+          </div>`
+          : `<div><strong>Trading Post (${escapeHtml(actor.name)}):</strong> Menunggu ${escapeHtml(actor.name)} menentukan transaksi barter...</div>`;
       }
       return;
     }
@@ -10766,9 +10773,9 @@
     openPlayCardModal(cardUid, player ? player.index : state.activePlayerIndex);
   }
 
-  function openMerchantModal(shopId = 1, fromAdmin = false) {
+  function openMerchantModal(shopId = 1, fromAdmin = false, targetPlayer = null) {
     if (!state) return;
-    const player = getActivePlayer();
+    const player = targetPlayer || getActivePlayer();
     if (fromAdmin) {
       if (!isAdminUnlocked) return;
     } else if (!isLocalHumanTurnForPlayer(player)) {
@@ -10919,18 +10926,28 @@
       return;
     }
 
+    const actor = state.players[tm.actorIndex] || getActivePlayer();
+    const isActor = isLocalHumanTurnForPlayer(actor);
+
+    // Pop-up efek tile hanya muncul untuk pemain yang terkena efek (bukan pemain lain)
+    if (!isActor) {
+      if (curKind === "shared_tile_modal") {
+        lastRenderedTileModalKey = null;
+        closeModal();
+      }
+      return;
+    }
+
     if (tm.status === "selecting" && tileModalMinimizedForId === tm.id) {
       return;
     }
 
-    const isActor = canLocalPlayerAct();
-    const renderKey = `${tm.id}_${tm.status}_${isActor ? "act" : "spec"}`;
+    const renderKey = `${tm.id}_${tm.status}_act_${actor.index}`;
     if (lastRenderedTileModalKey === renderKey && document.getElementById("app-modal")?.classList.contains("open")) {
       return;
     }
     lastRenderedTileModalKey = renderKey;
 
-    const actor = state.players[tm.actorIndex] || getActivePlayer();
     const statsHtml = buildTileModalPlayersStatsHtml(actor.index);
 
     if (tm.status === "resolved") {
@@ -10942,11 +10959,7 @@
             ${escapeHtml(tm.summaryText || "Transaksi selesai.")}
           </div>
           ${statsHtml}
-          ${
-            isActor
-              ? `<button class="btn btn-emerald" onclick="window.EFT_APP.dismissSharedTileModal()">Lanjut</button>`
-              : `<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;">Menutup otomatis...</div>`
-          }
+          <button class="btn btn-emerald" onclick="window.EFT_APP.dismissSharedTileModal()">Lanjut</button>
         </div>`,
         "shared_tile_modal"
       );
@@ -10961,108 +10974,82 @@
         }
         return;
       }
-      if (isActor) {
-        openInfoModal(
-          `Versus Duel: 1v1 Wager (${escapeHtml(actor.name)})`,
-          `<div style="display:flex;flex-direction:column;gap:12px;">
-            ${statsHtml}
-            <div class="form-grid">
-              <div class="form-field">
-                <label>Pilih Lawan Duel:</label>
-                <select id="versus-opponent-select">
-                  ${rivals
-                    .map(
-                      (r) =>
-                        `<option value="${r.index}">${escapeHtml(r.name)} (💰 ${r.tc} TC · 💎 ${
-                          (r.shards || 0) + (r.metaShard || 0)
-                        }/${state.rules.victoryShards})</option>`
-                    )
-                    .join("")}
-                </select>
-              </div>
-              <div class="form-field">
-                <label>Jumlah Taruhan (1–30 TC):</label>
-                <input
-                  type="number"
-                  id="versus-bet-input"
-                  min="1"
-                  max="30"
-                  step="1"
-                  value="15"
-                  placeholder="1 - 30 TC"
-                  oninput="if(this.value!==''){const v=Math.max(1,Math.min(30,Math.floor(Number(this.value)||1)));const lbl=document.getElementById('versus-pot-preview');if(lbl)lbl.textContent='Total Pot: 💰 '+(v*2)+' TC (Maks 30 TC)';}"
-                />
-                <div id="versus-pot-preview" style="font-size:0.72rem;color:var(--mint-light);margin-top:3px;">
-                  Total Pot: 💰 30 TC (Maks 30 TC)
-                </div>
+      openInfoModal(
+        `Versus Duel: 1v1 Wager (${escapeHtml(actor.name)})`,
+        `<div style="display:flex;flex-direction:column;gap:12px;">
+          ${statsHtml}
+          <div class="form-grid">
+            <div class="form-field">
+              <label>Pilih Lawan Duel:</label>
+              <select id="versus-opponent-select">
+                ${rivals
+                  .map(
+                    (r) =>
+                      `<option value="${r.index}">${escapeHtml(r.name)} (💰 ${r.tc} TC · 💎 ${
+                        (r.shards || 0) + (r.metaShard || 0)
+                      }/${state.rules.victoryShards})</option>`
+                  )
+                  .join("")}
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Jumlah Taruhan (1-30 TC):</label>
+              <input
+                type="number"
+                id="versus-bet-input"
+                min="1"
+                max="30"
+                step="1"
+                value="15"
+                placeholder="1 - 30 TC"
+                oninput="if(this.value!==''){const v=Math.max(1,Math.min(30,Math.floor(Number(this.value)||1)));const lbl=document.getElementById('versus-pot-preview');if(lbl)lbl.textContent='Total Pot: 💰 '+(v*2)+' TC (Maks 30 TC)';}"
+              />
+              <div id="versus-pot-preview" style="font-size:0.72rem;color:var(--mint-light);margin-top:3px;">
+                Total Pot: 💰 30 TC (Maks 30 TC)
               </div>
             </div>
-            <button class="btn btn-gold" onclick="window.EFT_APP.resolveVersusDuel()">Mulai Duel 1v1</button>
-          </div>`,
-          "shared_tile_modal"
-        );
-      } else {
-        openInfoModal(
-          `Versus Duel: ${escapeHtml(actor.name)}`,
-          `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
-            <div style="background:rgba(249,115,22,0.14);border:1px solid rgba(251,146,60,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ffedd5;line-height:1.45;text-align:center;">
-              <strong>${escapeHtml(actor.name)}</strong> mendarat di <strong>Versus Tile</strong> dan sedang memilih lawan serta jumlah taruhan TC...
-            </div>
-            ${statsHtml}
-          </div>`,
-          "shared_tile_modal"
-        );
-      }
+          </div>
+          <button class="btn btn-gold" onclick="window.EFT_APP.resolveVersusDuel()">Mulai Duel 1v1</button>
+        </div>`,
+        "shared_tile_modal"
+      );
     } else if (tm.type === "trading") {
       const others = state.players.filter((p) => p.index !== actor.index);
-      if (isActor) {
-        openInfoModal(
-          `Trading Post: Barter Kartu (${escapeHtml(actor.name)})`,
-          `<div style="display:flex;flex-direction:column;gap:12px;">
-            ${statsHtml}
-            <div class="form-grid">
-              <div class="form-field">
-                <label>Pilih Partner Barter:</label>
-                <select id="trade-partner-select">
-                  ${others
-                    .map((o) => {
-                      const nonUltCnt = (o.hand || []).filter((c) => c && c.rarity !== "Ultimate").length;
-                      const totShards = (o.shards || 0) + (o.metaShard || 0);
-                      return `<option value="${o.index}">${escapeHtml(o.name)} (💰 ${o.tc} TC · 💎 ${totShards}/${
-                        state.rules.victoryShards
-                      } · ${nonUltCnt} Kartu)</option>`;
-                    })
-                    .join("")}
-                </select>
-              </div>
-              <div class="form-field">
-                <label>Jenis Transaksi:</label>
-                <select id="trade-type-select">
-                  <option value="buy_card_15">Beli 1 Kartu Acak (Bayar 💰 15 TC)</option>
-                  <option value="sell_card_15">Jual 1 Kartu Acak (Terima 💰 15 TC)</option>
-                  <option value="swap_random_card">Tukar 1 Kartu Acak (1:1)</option>
-                </select>
-              </div>
+      openInfoModal(
+        `Trading Post: Barter Kartu (${escapeHtml(actor.name)})`,
+        `<div style="display:flex;flex-direction:column;gap:12px;">
+          ${statsHtml}
+          <div class="form-grid">
+            <div class="form-field">
+              <label>Pilih Partner Barter:</label>
+              <select id="trade-partner-select">
+                ${others
+                  .map((o) => {
+                    const nonUltCnt = (o.hand || []).filter((c) => c && c.rarity !== "Ultimate").length;
+                    const totShards = (o.shards || 0) + (o.metaShard || 0);
+                    return `<option value="${o.index}">${escapeHtml(o.name)} (💰 ${o.tc} TC · 💎 ${totShards}/${
+                      state.rules.victoryShards
+                    } · ${nonUltCnt} Kartu)</option>`;
+                  })
+                  .join("")}
+              </select>
             </div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-primary" style="flex:1;" onclick="window.EFT_APP.executeTradeAction()">Konfirmasi Trade</button>
-              <button class="btn" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati</button>
+            <div class="form-field">
+              <label>Jenis Transaksi:</label>
+              <select id="trade-type-select">
+                <option value="buy_card_15">Beli 1 Kartu Acak (Bayar 💰 15 TC)</option>
+                <option value="sell_card_15">Jual 1 Kartu Acak (Terima 💰 15 TC)</option>
+                <option value="swap_random_card">Tukar 1 Kartu Acak (1:1)</option>
+              </select>
             </div>
-          </div>`,
-          "shared_tile_modal"
-        );
-      } else {
-        openInfoModal(
-          `Trading Post: ${escapeHtml(actor.name)}`,
-          `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
-            <div style="background:rgba(132,204,22,0.14);border:1px solid rgba(163,230,53,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ecfccb;line-height:1.45;text-align:center;">
-              <strong>${escapeHtml(actor.name)}</strong> mendarat di <strong>Trading Post</strong> dan sedang memilih partner serta jenis barter kartu...
-            </div>
-            ${statsHtml}
-          </div>`,
-          "shared_tile_modal"
-        );
-      }
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="window.EFT_APP.executeTradeAction()">Konfirmasi Trade</button>
+            <button class="btn" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati</button>
+          </div>
+        </div>`,
+        "shared_tile_modal"
+      );
     }
   }
 
@@ -11101,7 +11088,11 @@
       sendClientActionToHost("resolve_versus", { oppIdx, bet });
       return;
     }
-    const challenger = getActivePlayer();
+    const actorIdx =
+      state.activeTileModal && typeof state.activeTileModal.actorIndex === "number"
+        ? state.activeTileModal.actorIndex
+        : state.activePlayerIndex;
+    const challenger = state.players[actorIdx] || getActivePlayer();
     const opponent = state.players[oppIdx];
     if (!opponent || opponent.index === challenger.index) return;
 
@@ -11147,7 +11138,11 @@
       sendClientActionToHost("execute_trade", { partnerIdx, tradeType });
       return;
     }
-    const trader = getActivePlayer();
+    const actorIdx =
+      state.activeTileModal && typeof state.activeTileModal.actorIndex === "number"
+        ? state.activeTileModal.actorIndex
+        : state.activePlayerIndex;
+    const trader = state.players[actorIdx] || getActivePlayer();
     const partner = state.players[partnerIdx];
     if (!partner) return;
 
@@ -11511,22 +11506,47 @@
       mp.mode === "local";
     if (!canDriveBots) return;
 
-    // Handle Bot reactive [Haste] window (even when active turn player is Human!)
-    if (pendingInteraction && pendingInteraction.type === "haste_reaction") {
-      const def = pendingInteraction.player;
-      if (!def || !def.isBot) return; // Pause Bot turn while Human decides Haste!
+    // Handle any pendingInteraction (Haste, Stage Is Mine, etc.) based on its owning player!
+    if (pendingInteraction) {
+      const pActor = pendingInteraction.player || getActivePlayer();
+      if (!pActor || !pActor.isBot) return; // Pause Bot turn while Human resolves interaction!
       window._mpBotTimer = setTimeout(() => {
         if (
           state &&
           !state.winner &&
-          pendingInteraction &&
-          pendingInteraction.type === "haste_reaction" &&
-          pendingInteraction.player &&
-          pendingInteraction.player.isBot
+          !isWalkingAnim &&
+          !isTileEffectAnimating &&
+          !tileShuffleState &&
+          pendingInteraction
         ) {
-          _executeBotStepInternal();
+          const curP = pendingInteraction.player || getActivePlayer();
+          if (curP && curP.isBot) {
+            _executeBotStepInternal();
+          }
         }
-      }, 950);
+      }, pendingInteraction.type === "haste_reaction" ? 950 : 1200);
+      return;
+    }
+
+    // Handle activeTileModal (e.g. pushed onto Versus/Trading by SAM/Bocchi) based on the affected actor!
+    if (state.activeTileModal) {
+      const modalActor = state.players[state.activeTileModal.actorIndex] || getActivePlayer();
+      if (!modalActor || !modalActor.isBot) return; // Pause Bot turn while Human affected by tile chooses!
+      window._mpBotTimer = setTimeout(() => {
+        if (
+          state &&
+          !state.winner &&
+          !isWalkingAnim &&
+          !isTileEffectAnimating &&
+          !tileShuffleState &&
+          state.activeTileModal
+        ) {
+          const curActor = state.players[state.activeTileModal.actorIndex] || getActivePlayer();
+          if (curActor && curActor.isBot) {
+            _executeBotStepInternal();
+          }
+        }
+      }, 1350);
       return;
     }
 
