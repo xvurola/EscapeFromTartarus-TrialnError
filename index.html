@@ -2,7 +2,10 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#081312" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <title>Escape From Tartarus</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,6 +17,35 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js" defer></script>
 </head>
 <body>
+  <!-- ========================================================================
+       MOBILE PORTRAIT -> LANDSCAPE ORIENTATION GUARD OVERLAY
+       ======================================================================== -->
+  <div id="mobile-landscape-guard" class="mobile-landscape-guard" role="dialog" aria-modal="true" aria-labelledby="mlg-title">
+    <div class="mlg-card">
+      <div class="mlg-phone-stage" aria-hidden="true">
+        <div class="mlg-phone-ring"></div>
+        <svg class="mlg-phone-svg" viewBox="0 0 64 96" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="10" y="6" width="44" height="84" rx="9" fill="rgba(16, 185, 129, 0.1)" />
+          <line x1="25" y1="14" x2="39" y2="14" stroke-opacity="0.7" />
+          <circle cx="32" cy="80" r="3" fill="currentColor" stroke="none" />
+          <path d="M22 44 L32 34 L42 44" stroke-opacity="0.85" />
+          <path d="M32 34 L32 58" stroke-opacity="0.85" />
+        </svg>
+      </div>
+      <div class="mlg-eyebrow">Mode Layar Horizontal Direkomendasikan</div>
+      <h2 id="mlg-title" class="mlg-title">Putar HP ke Mode Landscape</h2>
+      <p class="mlg-desc">
+        <strong>Escape From Tartarus</strong> dioptimalkan untuk mode <strong>Landscape (miring)</strong> agar papan permainan, kartu skill, dan seluruh HUD terlihat lega serta nyaman dimainkan.
+      </p>
+      <button type="button" class="mlg-action-btn" onclick="window.EFT_APP.requestMobileLandscapeFullscreen()">
+        Aktifkan Layar Penuh &amp; Landscape
+      </button>
+      <div id="mlg-status-hint" class="mlg-hint">
+        Putar perangkat secara horizontal &amp; pastikan <strong>Auto-Rotate</strong> HP aktif.
+      </div>
+    </div>
+  </div>
+
   <!-- ========================================================================
        INITIAL ASSET LOADING & MAIN TITLE SCREEN OVERLAY
        ======================================================================== -->
@@ -150,6 +182,9 @@
           </div>
         </div>
       </div>
+      <button id="btn-mobile-fullscreen" type="button" class="top-btn mobile-fs-btn" onclick="window.EFT_APP.toggleMobileFullscreen()" title="Layar Penuh">
+        Full
+      </button>
       <button class="top-btn top-btn-green" onclick="window.EFT_APP.openMultiplayerModal()">
         Multiplayer Room
       </button>

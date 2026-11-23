@@ -1285,24 +1285,100 @@
     }
   }
 
+  function isMobileLandscape() {
+    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    return (
+      window.innerWidth > window.innerHeight &&
+      (window.innerHeight <= 560 || (window.innerWidth <= 960 && coarse))
+    );
+  }
+
   function isMobilePortrait() {
-    return window.innerWidth <= 820;
+    return window.innerWidth <= 820 && window.innerHeight >= window.innerWidth;
+  }
+
+  function requestMobileLandscapeFullscreen() {
+    const hint = document.getElementById("mlg-status-hint");
+    const docEl = document.documentElement;
+    const reqFs =
+      docEl.requestFullscreen ||
+      docEl.webkitRequestFullscreen ||
+      docEl.mozRequestFullScreen ||
+      docEl.msRequestFullscreen;
+
+    const lockOrientation = () => {
+      try {
+        if (screen.orientation && typeof screen.orientation.lock === "function") {
+          screen.orientation.lock("landscape").catch(() => {
+            if (hint) {
+              hint.innerHTML =
+                "Browser ini memerlukan rotasi manual. <strong>Miringkan HP Anda</strong> ke posisi horizontal sekarang.";
+            }
+          });
+        } else if (hint) {
+          hint.innerHTML =
+            "Miringkan HP Anda secara horizontal &amp; pastikan <strong>Auto-Rotate</strong> aktif.";
+        }
+      } catch (e) {
+        if (hint) {
+          hint.innerHTML =
+            "Miringkan HP Anda secara horizontal &amp; pastikan <strong>Auto-Rotate</strong> aktif.";
+        }
+      }
+    };
+
+    if (reqFs) {
+      try {
+        const res = reqFs.call(docEl);
+        if (res && typeof res.then === "function") {
+          res.then(lockOrientation).catch(lockOrientation);
+        } else {
+          lockOrientation();
+        }
+      } catch (e) {
+        lockOrientation();
+      }
+    } else {
+      lockOrientation();
+    }
+  }
+
+  function toggleMobileFullscreen() {
+    const isFs = Boolean(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement
+    );
+    if (isFs) {
+      const exitFs =
+        document.exitFullscreen ||
+        document.webkitExitFullscreen ||
+        document.mozCancelFullScreen;
+      if (exitFs) {
+        try {
+          exitFs.call(document);
+        } catch (e) {}
+      }
+      return;
+    }
+    requestMobileLandscapeFullscreen();
   }
 
   function focusCameraOnTile(tileId, customZoom = null) {
     const t = TILE_MAP[tileId];
     if (!t) return;
-    const mobile = isMobilePortrait();
-    const defaultFollowZoom = mobile ? 0.72 : 0.96;
+    const mobileLand = isMobileLandscape();
+    const mobilePort = isMobilePortrait();
+    const defaultFollowZoom = mobileLand ? 0.58 : mobilePort ? 0.72 : 0.96;
     if (customZoom !== null) {
-      camera.zoom = customZoom;
-    } else if (camera.zoom < (mobile ? 0.54 : 0.74)) {
+      camera.zoom = mobileLand ? Math.min(customZoom, 0.68) : customZoom;
+    } else if (camera.zoom < (mobileLand ? 0.42 : mobilePort ? 0.54 : 0.74)) {
       camera.zoom = defaultFollowZoom;
     }
     const offsetFromCenterX = ((50 - t.x) / 100) * BOARD_W;
     const offsetFromCenterY = ((50 - t.y) / 100) * BOARD_H;
     camera.panX = offsetFromCenterX * camera.zoom;
-    camera.panY = offsetFromCenterY * camera.zoom + (mobile ? 10 : -36);
+    camera.panY = offsetFromCenterY * camera.zoom + (mobileLand ? -16 : mobilePort ? 10 : -36);
     applyCameraTransform();
   }
 
@@ -1312,8 +1388,10 @@
     const tiles = Array.from(uniqueIds)
       .map((tid) => TILE_MAP[tid])
       .filter(Boolean);
+    const mobileLand = isMobileLandscape();
+    const mobilePort = isMobilePortrait();
     if (tiles.length === 0) {
-      if (anchorTileId) focusCameraOnTile(anchorTileId, isMobilePortrait() ? 0.52 : 0.76);
+      if (anchorTileId) focusCameraOnTile(anchorTileId, mobileLand ? 0.46 : mobilePort ? 0.52 : 0.76);
       return;
     }
 
@@ -1325,15 +1403,16 @@
       if (t.y > maxY) maxY = t.y;
     });
 
-    const mobile = isMobilePortrait();
     const spanPxX = Math.max(240, ((maxX - minX) / 100) * BOARD_W + 240);
     const spanPxY = Math.max(240, ((maxY - minY) / 100) * BOARD_H + 240);
-    const availW = Math.max(260, window.innerWidth - (mobile ? 28 : 260));
-    const availH = Math.max(260, window.innerHeight - (mobile ? 270 : 210));
-    const minWideZoom = mobile
+    const availW = Math.max(220, window.innerWidth - (mobileLand ? 360 : mobilePort ? 28 : 260));
+    const availH = Math.max(180, window.innerHeight - (mobileLand ? 116 : mobilePort ? 270 : 210));
+    const minWideZoom = mobileLand
+      ? Math.max(0.13, Math.min(0.30, Math.min(availW / BOARD_W, availH / BOARD_H)))
+      : mobilePort
       ? Math.max(0.16, Math.min(0.36, (window.innerWidth - 16) / BOARD_W))
       : Math.max(0.24, Math.min(0.46, (window.innerWidth - 220) / BOARD_W));
-    const maxFocusZoom = mobile ? 0.64 : 0.86;
+    const maxFocusZoom = mobileLand ? 0.56 : mobilePort ? 0.64 : 0.86;
     const fitZoom = Math.min(availW / spanPxX, availH / spanPxY);
     const targetZoom = Math.max(minWideZoom, Math.min(maxFocusZoom, fitZoom));
 
@@ -1342,27 +1421,36 @@
     camera.mode = "free";
     camera.zoom = targetZoom;
     camera.panX = ((50 - centerX) / 100) * BOARD_W * targetZoom;
-    camera.panY = ((50 - centerY) / 100) * BOARD_H * targetZoom + (mobile ? 12 : -24);
+    camera.panY = ((50 - centerY) / 100) * BOARD_H * targetZoom + (mobileLand ? -14 : mobilePort ? 12 : -24);
     applyCameraTransform();
   }
 
   function setCameraMode(mode) {
     camera.mode = mode;
-    const mobile = isMobilePortrait();
+    const mobileLand = isMobileLandscape();
+    const mobilePort = isMobilePortrait();
     if (mode === "wide") {
-      if (mobile) {
+      if (mobileLand) {
+        const availW = Math.max(240, window.innerWidth - 350);
+        const availH = Math.max(180, window.innerHeight - 102);
+        camera.zoom = Math.max(0.13, Math.min(0.30, Math.min(availW / BOARD_W, availH / BOARD_H)));
+        camera.panX = 0;
+        camera.panY = -12;
+      } else if (mobilePort) {
         camera.zoom = Math.max(0.12, Math.min(0.35, (window.innerWidth - 14) / BOARD_W));
         camera.panX = 0;
         camera.panY = 4;
       } else {
-        camera.zoom = 0.34;
+        const availW = Math.max(480, window.innerWidth - 360);
+        const availH = Math.max(360, window.innerHeight - 170);
+        camera.zoom = Math.max(0.24, Math.min(0.36, Math.min(availW / BOARD_W, availH / BOARD_H)));
         camera.panX = 0;
         camera.panY = -26;
       }
       applyCameraTransform();
     } else if (mode === "follow" && state) {
       const p = getActivePlayer();
-      const followZoom = mobile ? 0.72 : 0.96;
+      const followZoom = mobileLand ? 0.58 : mobilePort ? 0.72 : 0.96;
       camera.zoom = followZoom;
       focusCameraOnTile(p.tileId, followZoom);
     }
@@ -10638,6 +10726,8 @@
     openNewMatchSetupModal,
     setCameraMode,
     focusCameraOnPlayer,
+    requestMobileLandscapeFullscreen,
+    toggleMobileFullscreen,
     cancelPendingInteraction: () => {
       if (!canLocalPlayerAct()) return;
       pendingInteraction = null;
@@ -10778,12 +10868,17 @@
       }
     });
 
-    window.addEventListener("resize", () => {
+    const handleViewportReflow = () => {
       if (!state) return;
       renderTuckedHandAndDice();
       if (document.getElementById("comp-strip-track")) updateCompendiumScrollControls();
       if (camera.mode === "wide") setCameraMode("wide");
       else if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
+    };
+
+    window.addEventListener("resize", handleViewportReflow);
+    window.addEventListener("orientationchange", () => {
+      setTimeout(handleViewportReflow, 160);
     });
 
     runInitialAssetPreload(() => {

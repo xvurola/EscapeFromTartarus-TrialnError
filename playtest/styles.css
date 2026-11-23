@@ -5591,9 +5591,9 @@ body:not(.modal-open) .tucked-card:hover,
 }
 
 /* ============================================================================
-   MOBILE VERTICAL / PORTRAIT SMARTPHONE COMPATIBILITY (<= 820px)
+   MOBILE VERTICAL / PORTRAIT FALLBACK (<= 820px & PORTRAIT ONLY)
    ============================================================================ */
-@media (max-width: 820px) {
+@media (max-width: 820px) and (orientation: portrait) {
   /* 1. Compact 2-Row Mobile Header */
   .studio-topbar {
     height: auto;
@@ -6503,7 +6503,7 @@ body:not(.modal-open) .tucked-card:hover,
   color: #ffffff;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px) and (orientation: portrait) {
   .mts-progress-track {
     height: 36px;
   }
@@ -6511,5 +6511,919 @@ body:not(.modal-open) .tucked-card:hover,
   .mts-mode-btn {
     height: 58px;
     font-size: 1.24rem;
+  }
+}
+
+/* ============================================================================
+   MOBILE FULLSCREEN BUTTON & PORTRAIT -> LANDSCAPE GUARD OVERLAY
+   ============================================================================ */
+.mobile-fs-btn {
+  display: none;
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  color: #a7f3d0;
+}
+
+.mobile-landscape-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 34%, #102a25 0%, #071312 62%, #040a0a 100%);
+  color: #f8fafc;
+  text-align: center;
+  user-select: none;
+}
+
+@media (max-width: 900px) and (orientation: portrait) {
+  .mobile-landscape-guard {
+    display: flex;
+  }
+}
+
+.mlg-card {
+  width: min(360px, 92vw);
+  padding: 30px 22px 24px;
+  border-radius: 22px;
+  background: rgba(9, 22, 24, 0.92);
+  border: 1px solid rgba(173, 224, 202, 0.28);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.78), 0 0 42px rgba(16, 185, 129, 0.16);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.mlg-phone-stage {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.mlg-phone-ring {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(110, 231, 183, 0.42);
+  animation: mlgRingSpin 9s linear infinite;
+}
+
+.mlg-phone-svg {
+  width: 54px;
+  height: 80px;
+  color: #6ee7b7;
+  filter: drop-shadow(0 6px 18px rgba(16, 185, 129, 0.42));
+  transform-origin: center center;
+  animation: mlgRotatePhone 2.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+@keyframes mlgRotatePhone {
+  0%, 16% {
+    transform: rotate(0deg) scale(1);
+  }
+  48%, 74% {
+    transform: rotate(-90deg) scale(1.04);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes mlgRingSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.mlg-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6ee7b7;
+}
+
+.mlg-title {
+  margin: 0;
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.12;
+  color: #ffffff;
+}
+
+.mlg-desc {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.mlg-action-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(16, 185, 129, 0.35);
+}
+
+.mlg-action-btn:active {
+  transform: scale(0.98);
+}
+
+.mlg-hint {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
+/* ============================================================================
+   MOBILE LANDSCAPE SMARTPHONE OPTIMIZATION (PRIMARY MOBILE EXPERIENCE)
+   Covers phones in landscape (568x320 up to 960x560 / coarse-pointer landscape)
+   ============================================================================ */
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-width: 960px) and (pointer: coarse) {
+  /* 1. Title Screen in Mobile Landscape */
+  .main-title-screen {
+    padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+  }
+
+  .mts-center-content {
+    transform: none;
+  }
+
+  .mts-logo-title {
+    font-size: clamp(2rem, 5.2vw, 3.1rem);
+    line-height: 0.96;
+  }
+
+  .mts-loading-section {
+    margin-top: 18px;
+  }
+
+  .mts-loading-label {
+    font-size: 0.92rem;
+    margin-bottom: 8px;
+  }
+
+  .mts-progress-track {
+    width: min(380px, 64vw);
+    height: 26px;
+  }
+
+  .mts-menu-section {
+    margin-top: 16px;
+  }
+
+  .mts-mode-buttons {
+    gap: 14px;
+    margin-top: 10px;
+    flex-wrap: nowrap;
+  }
+
+  .mts-mode-btn {
+    width: auto;
+    min-width: 196px;
+    height: 46px;
+    font-size: 1rem;
+    padding: 0 22px;
+  }
+
+  .mts-version-corner {
+    font-size: 0.78rem;
+    left: max(12px, env(safe-area-inset-left));
+    bottom: 8px;
+  }
+
+  /* 2. Ultra-Slim Single-Row Topbar with Safe-Area Notch Insets */
+  .studio-topbar {
+    height: 36px;
+    padding: 0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+    gap: 8px;
+  }
+
+  .brand-title {
+    font-size: 0.84rem;
+    white-space: nowrap;
+  }
+
+  .center-nav-pills {
+    gap: 4px;
+  }
+
+  .nav-oval-pill {
+    padding: 3px 10px;
+    font-size: 0.66rem;
+    white-space: nowrap;
+  }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .sound-control-pill {
+    padding: 2px 5px;
+    gap: 3px;
+  }
+
+  .sound-mute-btn,
+  .sound-voice-btn {
+    width: 22px;
+    height: 22px;
+  }
+
+  .sound-volume-slider,
+  .sound-volume-label {
+    display: none;
+  }
+
+  .audio-mixer-popover {
+    top: calc(100% + 6px);
+    max-height: calc(100dvh - 52px);
+    overflow-y: auto;
+    width: 236px;
+    padding: 10px;
+  }
+
+  .mobile-fs-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .top-btn {
+    padding: 4px 8px;
+    font-size: 0.64rem;
+    border-radius: 7px;
+    white-space: nowrap;
+  }
+
+  .view-container {
+    height: calc(100vh - 36px);
+    height: calc(100dvh - 36px);
+  }
+
+  /* 3. Left Player Strip: 4 Compact Stacked Cards Leaving Bottom-Left Open */
+  .hud-players-list {
+    top: 6px;
+    left: max(6px, env(safe-area-inset-left));
+    gap: 4px;
+  }
+
+  .player-hud-card {
+    width: 152px;
+    min-height: 44px;
+    border-radius: 9px;
+  }
+
+  .player-hud-card.is-active {
+    width: 168px;
+    min-height: 48px;
+  }
+
+  .ph-portrait-col {
+    width: 36px;
+  }
+
+  .player-hud-card.is-active .ph-portrait-col {
+    width: 40px;
+  }
+
+  .ph-info-col,
+  .player-hud-card.is-active .ph-info-col {
+    padding: 3px 6px 3px 5px;
+    gap: 2px;
+  }
+
+  .ph-name,
+  .ph-name.long-name,
+  .player-hud-card.is-active .ph-name,
+  .player-hud-card.is-active .ph-name.long-name {
+    font-size: 0.68rem;
+  }
+
+  .ph-icon-badge,
+  .player-hud-card.is-active .ph-icon-badge {
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+  }
+
+  .ph-icon-badge svg,
+  .player-hud-card.is-active .ph-icon-badge svg {
+    width: 8px;
+    height: 8px;
+  }
+
+  .ph-currency-bar,
+  .player-hud-card.is-active .ph-currency-bar {
+    padding: 1px 5px;
+    font-size: 0.58rem;
+    border-radius: 5px;
+    gap: 5px;
+  }
+
+  .ph-meta-row,
+  .player-hud-card.is-active .ph-meta-row {
+    font-size: 0.52rem;
+    gap: 5px;
+  }
+
+  .ph-effects-row {
+    gap: 3px;
+  }
+
+  .ph-effect-pill {
+    font-size: 0.48rem;
+    padding: 0 4px;
+  }
+
+  /* 4. Top-Right Status Stack + Compact Last Card Used + Side Card Activation */
+  .hud-top-right-status {
+    top: 6px;
+    right: max(6px, env(safe-area-inset-right));
+    width: 184px;
+    gap: 4px;
+  }
+
+  .status-info-card {
+    padding: 5px 8px 6px;
+    border-radius: 11px;
+  }
+
+  .status-cycle-main {
+    font-size: 0.94rem;
+  }
+
+  .status-cycle-sub {
+    font-size: 0.64rem;
+  }
+
+  .status-divider {
+    margin: 3px auto 4px;
+    height: 1px;
+  }
+
+  .status-meta-grid {
+    font-size: 0.56rem;
+    gap: 4px;
+    margin-bottom: 2px;
+  }
+
+  .status-card-use-row {
+    font-size: 0.56rem;
+  }
+
+  .status-turn-timer-row {
+    font-size: 0.56rem;
+    margin-top: 2px;
+    padding-top: 2px;
+  }
+
+  .shard-zones-pill {
+    padding: 3px 7px;
+    font-size: 0.58rem;
+    border-radius: 8px;
+  }
+
+  .world-event-pill-slot {
+    font-size: 0.56rem;
+  }
+
+  .last-card-used-card {
+    padding: 4px 6px;
+    gap: 6px;
+    border-radius: 9px;
+  }
+
+  .last-card-used-thumb {
+    width: 24px;
+    height: 34px;
+    border-radius: 4px;
+  }
+
+  .last-card-used-label {
+    font-size: 0.48rem;
+  }
+
+  .last-card-used-name {
+    font-size: 0.62rem;
+  }
+
+  .last-card-used-caster {
+    font-size: 0.54rem;
+  }
+
+  .last-card-used-empty {
+    padding: 4px 7px;
+    font-size: 0.56rem;
+  }
+
+  .recent-activity-feed {
+    display: none;
+  }
+
+  /* Compact Side Card Activation Notification under Last Card Used */
+  .card-activated-feed {
+    max-width: min(360px, calc(100vw - 210px));
+    margin-top: 1px;
+  }
+
+  .ca-side-panel {
+    padding: 7px 8px 7px 12px;
+    gap: 10px;
+    border-radius: 12px;
+  }
+
+  .ca-side-desc-col {
+    min-width: 108px;
+    max-width: 178px;
+    gap: 3px;
+  }
+
+  .ca-side-desc-text {
+    font-size: 0.72rem;
+    line-height: 1.28;
+  }
+
+  .ca-side-outcome-note {
+    font-size: 0.58rem;
+  }
+
+  .ca-side-divider {
+    margin: 6px 0;
+  }
+
+  .ca-side-card-col {
+    width: 100px;
+    gap: 4px;
+  }
+
+  .ca-side-head-top,
+  .ca-side-head-bot {
+    font-size: 0.84rem;
+  }
+
+  .ca-side-card-img {
+    width: 52px;
+    border-radius: 5px;
+  }
+
+  .ca-player-pill {
+    height: 20px;
+    min-width: 88px;
+    max-width: 100px;
+  }
+
+  .ca-player-pill-art {
+    width: 32px;
+  }
+
+  .ca-player-pill-name {
+    font-size: 0.6rem;
+    padding: 0 6px 0 3px;
+  }
+
+  .ca-side-rarity-bar {
+    width: 6px;
+  }
+
+  /* 5. Top-Center Live Status & Spotlight Banner */
+  .hud-top-center-float {
+    top: 6px;
+    max-width: calc(100vw - 384px);
+    gap: 4px;
+  }
+
+  .turn-reminder-banner,
+  .step-status-banner,
+  .effect-spotlight-banner {
+    padding: 4px 10px;
+    font-size: 0.66rem;
+    border-radius: 9px;
+  }
+
+  /* 6. Bottom-Left Utilities & Draw Pile */
+  .hud-bottom-left-utils {
+    bottom: 6px;
+    left: max(6px, env(safe-area-inset-left));
+    gap: 4px;
+    max-width: 220px;
+    flex-wrap: wrap;
+  }
+
+  .util-pill-btn {
+    padding: 4px 7px;
+    font-size: 0.58rem;
+    border-radius: 7px;
+  }
+
+  .draw-pile-dock {
+    margin-bottom: 6px;
+  }
+
+  .eft-draw-pile-btn {
+    padding: 5px 8px;
+    gap: 5px;
+    border-radius: 9px;
+  }
+
+  .draw-pile-title {
+    font-size: 0.62rem;
+  }
+
+  .draw-pile-count {
+    font-size: 0.56rem;
+  }
+
+  /* 7. Bottom-Center Compact Hand Cards + Bottom-Right Roll Dock */
+  .bottom-hand-stage {
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    gap: 8px;
+    padding-bottom: 0;
+    max-width: calc(100vw - 320px);
+  }
+
+  .tucked-cards-fan {
+    padding: 12px 10px 0 22px;
+    max-width: calc(100vw - 340px);
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tucked-cards-fan::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tucked-card {
+    width: 76px;
+    height: 110px;
+    flex-shrink: 0;
+    margin-left: -18px;
+    border-radius: 7px;
+    transform: translateY(50px) rotate(-2deg);
+  }
+
+  body:not(.modal-open) .tucked-card:hover,
+  .tucked-card.selected {
+    transform: translateY(-10px) rotate(0deg) scale(1.12) !important;
+  }
+
+  .roll-action-dock {
+    position: fixed;
+    bottom: 8px;
+    right: max(8px, env(safe-area-inset-right));
+    margin-bottom: 0;
+    gap: 4px;
+    z-index: 44;
+  }
+
+  .last-roll-readout {
+    font-size: 0.56rem;
+    padding: 2px 7px;
+    max-width: 144px;
+  }
+
+  .eft-roll-btn {
+    width: 84px;
+    height: 48px;
+    border-radius: 12px;
+  }
+
+  .eft-roll-title {
+    font-size: 1.16rem;
+  }
+
+  .eft-roll-count {
+    font-size: 0.62rem;
+  }
+
+  .eft-endturn-btn {
+    min-width: 80px;
+    padding: 5px 11px;
+    font-size: 0.66rem;
+  }
+
+  /* 8. Prompt Bar & Drawers */
+  .action-prompt-bar {
+    bottom: 74px;
+    padding: 5px 12px;
+    font-size: 0.68rem;
+    gap: 8px;
+    max-width: calc(100vw - 260px);
+  }
+
+  .floating-drawer {
+    bottom: 54px;
+    left: max(8px, env(safe-area-inset-left));
+    width: min(360px, 56vw);
+    max-height: calc(100dvh - 108px);
+  }
+
+  /* 9. Dramatic Unique & Ultimate Pop-Up (Preserve Horizontal 2-Col Design!) */
+  .skill-dramatic-overlay {
+    padding: 10px max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
+  }
+
+  .ca-dramatic-stage {
+    width: min(680px, 90vw);
+    max-height: 92dvh;
+    padding: 16px 24px 22px;
+    border-radius: 18px;
+    grid-template-columns: 186px 1.5px 1fr;
+    gap: 20px;
+  }
+
+  .ca-dramatic-left {
+    gap: 8px;
+  }
+
+  .ca-dramatic-head-top,
+  .ca-dramatic-head-bot {
+    font-size: 1.62rem;
+  }
+
+  .ca-dramatic-card-wrap::before {
+    width: 130px;
+    height: 168px;
+  }
+
+  .ca-dramatic-card-img {
+    width: 106px;
+  }
+
+  .ca-player-pill-lg {
+    height: 28px;
+    min-width: 132px;
+    max-width: 172px;
+  }
+
+  .ca-player-pill-lg .ca-player-pill-art {
+    width: 48px;
+  }
+
+  .ca-player-pill-lg .ca-player-pill-name {
+    font-size: 0.78rem;
+    padding: 0 10px 0 5px;
+  }
+
+  .ca-dramatic-divider {
+    min-height: 176px;
+  }
+
+  .ca-dramatic-sublabel {
+    font-size: 0.78rem;
+  }
+
+  .ca-dramatic-body {
+    font-size: 1.02rem;
+    line-height: 1.32;
+  }
+
+  .ca-dramatic-duration-block {
+    margin-top: 10px;
+  }
+
+  .ca-dramatic-duration-val {
+    font-size: 0.96rem;
+  }
+
+  .ca-dramatic-outcome {
+    margin-top: 8px;
+    padding: 5px 9px;
+    font-size: 0.7rem;
+  }
+
+  .ca-dramatic-hint {
+    bottom: 7px;
+    right: 14px;
+    font-size: 0.58rem;
+  }
+
+  /* 10. Tile Effect Shuffle Overlay */
+  .tef-stage {
+    padding: 12px 16px;
+    gap: 8px;
+    max-height: 92dvh;
+    overflow-y: auto;
+  }
+
+  .tef-deck-arena {
+    width: 240px;
+    height: 152px;
+  }
+
+  .tef-sat-card {
+    width: 96px;
+    height: 134px;
+  }
+
+  .tef-hero-wrap {
+    width: 106px;
+    height: 148px;
+  }
+
+  .tef-card-title {
+    font-size: 0.96rem;
+  }
+
+  .tef-card-desc,
+  .tef-outcome-pill {
+    font-size: 0.72rem;
+  }
+
+  /* 11. Modals & Card Detail Layout (Side-by-Side Horizontal for Landscape!) */
+  .modal-backdrop {
+    padding: 8px max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+  }
+
+  .modal-card {
+    padding: 12px 16px;
+    max-height: 92dvh;
+    border-radius: 14px;
+  }
+
+  .card-detail-layout {
+    grid-template-columns: 128px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .card-detail-art {
+    max-width: 128px;
+    border-radius: 9px;
+  }
+
+  .card-detail-title {
+    font-size: 1.24rem;
+  }
+
+  .card-detail-desc {
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
+  .card-detail-use-btn {
+    padding: 9px 14px;
+    font-size: 0.82rem;
+  }
+
+  .char-picker-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .last-used-detail-layout {
+    grid-template-columns: 118px 1fr;
+    gap: 12px;
+  }
+
+  /* 12. Character Compendium & Rules View in Mobile Landscape */
+  .workspace-page {
+    padding: 10px max(14px, env(safe-area-inset-right)) 14px max(14px, env(safe-area-inset-left));
+  }
+
+  .compendium-stage {
+    padding: 8px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+    height: calc(100vh - 36px);
+    height: calc(100dvh - 36px);
+  }
+
+  .comp-char-card {
+    flex: 0 0 180px;
+    min-width: 164px;
+  }
+
+  .comp-char-name-pill {
+    font-size: 1.02rem;
+    padding: 4px 16px;
+  }
+
+  .comp-expanded-panel {
+    grid-template-columns: 196px 1fr;
+  }
+
+  .comp-exp-content-col {
+    padding: 12px 14px;
+  }
+
+  .comp-exp-cards-row {
+    gap: 6px;
+  }
+
+  .comp-exp-card-detail {
+    grid-template-columns: 96px 1fr;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .comp-exp-detail-thumb {
+    max-width: 96px;
+  }
+
+  /* 13. Dice of Fate & Victory Overlay in Mobile Landscape */
+  .dice-of-fate-overlay {
+    padding: 8px max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+    gap: 6px;
+    overflow-y: auto;
+  }
+
+  .dof-header-bar {
+    padding: 5px 12px;
+  }
+
+  .dof-title {
+    font-size: 0.96rem;
+  }
+
+  .dof-payout-hint {
+    font-size: 0.68rem;
+  }
+
+  .dof-rows-stack {
+    gap: 5px;
+  }
+
+  .dof-row {
+    min-height: 56px;
+    padding: 4px 10px 4px 0;
+  }
+
+  .dof-portrait-col {
+    width: 68px;
+  }
+
+  .dof-name-pill {
+    padding: 2px 10px;
+    font-size: 0.82rem;
+  }
+
+  .dof-roll-label {
+    font-size: 1.15rem;
+  }
+
+  .dof-roll-num {
+    font-size: 1.32rem;
+  }
+
+  .dof-roll-btn {
+    padding: 6px 14px;
+    font-size: 0.78rem;
+  }
+
+  .victory-stage-card {
+    padding: 14px 18px;
+    gap: 10px;
+    max-height: 92dvh;
+    overflow-y: auto;
+  }
+
+  .victory-winner-name {
+    font-size: 1.38rem;
+  }
+}
+
+/* Extra-Short Landscape Phones (<= 385px height, e.g. Android w/ browser bar) */
+@media (orientation: landscape) and (max-height: 385px) {
+  .player-hud-card,
+  .player-hud-card.is-active {
+    min-height: 38px;
+  }
+
+  .ph-meta-row,
+  .player-hud-card.is-active .ph-meta-row {
+    display: none;
+  }
+
+  .tucked-card {
+    width: 68px;
+    height: 98px;
+    transform: translateY(44px) rotate(-2deg);
+  }
+
+  .eft-roll-btn {
+    width: 76px;
+    height: 42px;
+  }
+
+  .eft-roll-title {
+    font-size: 1.02rem;
   }
 }
