@@ -11480,7 +11480,7 @@
     document.body.classList.toggle("admin-mode", isAdminUnlocked);
     const btn = document.getElementById("btn-admin-mode");
     if (btn) {
-      btn.textContent = isAdminUnlocked ? "Admin: ON" : "Admin";
+      btn.textContent = isAdminUnlocked ? "Admin Mode: ON" : "Admin Mode";
       btn.classList.toggle("admin-unlocked", isAdminUnlocked);
     }
     const freeToggle = document.getElementById("admin-free-skill-toggle");
@@ -12017,6 +12017,10 @@
     if (modalCard) {
       modalCard.classList.remove("card-detail-modal");
       modalCard.classList.toggle("welcome-lobby-modal", modalKind === "welcome_lobby");
+      modalCard.classList.toggle(
+        "wide-popup-modal",
+        modalKind === "compendium_popup" || modalKind === "rules_popup"
+      );
     }
     const titleEl = document.getElementById("modal-title");
     titleEl.innerHTML = title;
@@ -12029,7 +12033,7 @@
   function openCardDetailModal(bodyHtml) {
     const modalCard = document.getElementById("app-modal-card");
     if (modalCard) {
-      modalCard.classList.remove("welcome-lobby-modal");
+      modalCard.classList.remove("welcome-lobby-modal", "wide-popup-modal");
       modalCard.classList.add("card-detail-modal");
     }
     const titleEl = document.getElementById("modal-title");
@@ -12065,16 +12069,166 @@
     scheduleAutoEndTurnIfReady();
   }
 
+  function toggleFloatingMenu(forceState) {
+    const pop = document.getElementById("floating-menu-popover");
+    const btn = document.getElementById("btn-floating-menu");
+    if (!pop || !btn) return;
+    const willOpen = typeof forceState === "boolean" ? forceState : !pop.classList.contains("open");
+    pop.classList.toggle("open", willOpen);
+    btn.classList.toggle("is-open", willOpen);
+    btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    playSfx("click");
+  }
+
+  function closeFloatingMenu(returnFocus = false) {
+    const pop = document.getElementById("floating-menu-popover");
+    const btn = document.getElementById("btn-floating-menu");
+    if (!pop || !btn) return;
+    const wasOpen = pop.classList.contains("open");
+    pop.classList.remove("open");
+    btn.classList.remove("is-open");
+    btn.setAttribute("aria-expanded", "false");
+    if (wasOpen && returnFocus) btn.focus();
+  }
+
+  function openCompendiumModal() {
+    openInfoModal(
+      "Character Compendium",
+      `<div class="compendium-modal-stage">
+        <div id="compendium-showcase-root" class="compendium-showcase-root is-modal-mode"></div>
+      </div>`,
+      "compendium_popup"
+    );
+    renderCompendiumView();
+  }
+
+  function openRulesModal() {
+    const curPatch = (state && state.patchId) || "alpha2";
+    openInfoModal(
+      "Official Rulebook &amp; Board Cards",
+      `<div class="rules-modal-stage">
+        <div class="panel-box">
+          <div class="panel-header" style="flex-wrap:wrap;gap:8px;">
+            <span>Official Rulebook &amp; Patch Selector</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:0.74rem;color:var(--text-muted);text-transform:none;">Active Patch:</span>
+              <select id="rules-patch-select" class="btn" onchange="window.EFT_APP.changeRulesPatch(this.value)">
+                <option value="alpha2"${curPatch === "alpha2" ? " selected" : ""}>Patch Alpha 2 (3 Shards / 2 Cycles, [Haste])</option>
+                <option value="alpha1_2"${curPatch === "alpha1_2" ? " selected" : ""}>Patch Alpha 1.2 (Fractional Rounding Law, 9 Events)</option>
+                <option value="alpha1_1"${curPatch === "alpha1_1" ? " selected" : ""}>Patch Alpha 1.1 (2x d6 System, Independent Shops)</option>
+                <option value="v0_1"${curPatch === "v0_1" ? " selected" : ""}>Version 0.1 (1x d12 per Phase, Shared Global Shop)</option>
+              </select>
+            </div>
+          </div>
+          <div id="rules-patch-details"></div>
+        </div>
+        <div class="panel-box">
+          <div class="panel-header">
+            <span>Board Effect &amp; Global Event Registry (19 Cards)</span>
+          </div>
+          <div id="rules-board-cards-grid" class="compendium-grid"></div>
+        </div>
+      </div>`,
+      "rules_popup"
+    );
+    renderRulesView();
+  }
+
+  function openSoundSettingsModal() {
+    const pct = Math.round((soundPrefs.volume || 0) * 100);
+    const skillPct = Math.round((soundPrefs.skillSfxVolume !== undefined ? soundPrefs.skillSfxVolume : 0.75) * 100);
+    const chars = [
+      { id: "bocchi", name: "Bocchi", tag: "Guitar" },
+      { id: "aventurine", name: "Aventurine", tag: "Casino" },
+      { id: "joker", name: "Joker", tag: "Jazz" },
+      { id: "lilith", name: "Lilith", tag: "Music Box" },
+      { id: "maomao", name: "Mao-Mao", tag: "Herbal Chime" },
+      { id: "firefly", name: "Firefly / SAM", tag: "Stellaron" }
+    ];
+    const charRowsHtml = chars
+      .map(
+        (c) => `
+          <div class="am-char-row">
+            <label class="am-char-check">
+              <input id="char-sfx-${c.id}" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('${c.id}', this.checked)" />
+              <span>${c.name} <small>${c.tag}</small></span>
+            </label>
+            <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('${c.id}')">Tes</button>
+          </div>`
+      )
+      .join("");
+
+    openInfoModal(
+      "Sound Settings &amp; Game Feel",
+      `<div class="sound-modal-wrap">
+        <div class="sound-modal-master-row" id="sound-control-pill">
+          <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Matikan atau aktifkan suara"></button>
+          <div class="sound-modal-slider-col">
+            <span class="sound-modal-label">Master Sound Effect</span>
+            <input id="sound-volume-slider" class="sound-volume-slider sound-modal-range" type="range" min="0" max="100" value="${pct}" aria-label="Volume Sound Effect" oninput="window.EFT_APP.setSoundVolume(this.value)" />
+          </div>
+          <span id="sound-volume-label" class="sound-volume-label">${pct}%</span>
+        </div>
+
+        <div class="sound-modal-section">
+          <label class="am-toggle-row">
+            <span>Getar Kamera (Screen Shake)</span>
+            <input id="screen-shake-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleScreenShake(this.checked)" />
+          </label>
+          <label class="am-toggle-row">
+            <span>Notifikasi Ganti Turn</span>
+            <span class="am-inline-ctrl">
+              <button type="button" class="am-mini-test-btn" onclick="event.preventDefault();event.stopPropagation();window.EFT_APP.previewTurnChangeSfx()">Tes</button>
+              <input id="turn-sfx-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleTurnSfx(this.checked)" />
+            </span>
+          </label>
+          <label class="am-toggle-row">
+            <span>Skill Card SFX Karakter</span>
+            <input id="skill-sfx-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleSkillSfx(this.checked)" />
+          </label>
+          <div class="am-slider-row">
+            <span>Volume Skill SFX</span>
+            <input id="skill-sfx-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="${skillPct}" oninput="window.EFT_APP.setSkillSfxVolume(this.value)" />
+            <span id="skill-sfx-volume-label" class="sound-volume-label">${skillPct}%</span>
+          </div>
+        </div>
+
+        <div class="am-test-label">SFX Skill Per Karakter:</div>
+        <div class="sound-modal-char-grid">${charRowsHtml}</div>
+      </div>`,
+      "sound_settings"
+    );
+    syncSoundControlUi();
+  }
+
+  function openMenuPopup(section) {
+    closeFloatingMenu(false);
+    playSfx("click");
+    if (section === "room") {
+      openWelcomeSetupModal(mp.mode === "local" ? "local" : "multiplayer");
+    } else if (section === "compendium") {
+      openCompendiumModal();
+    } else if (section === "rules") {
+      openRulesModal();
+    } else if (section === "guide") {
+      openQuickGuideModal(0);
+    } else if (section === "sound") {
+      openSoundSettingsModal();
+    } else if (section === "admin") {
+      openAdminModal();
+    }
+  }
+
   function switchTab(tabId) {
     playSfx("click");
-    document.querySelectorAll(".nav-oval-pill").forEach((b) => {
-      b.classList.toggle("active", b.dataset.tab === tabId);
-    });
-    document.querySelectorAll(".view-container").forEach((v) => {
-      v.classList.toggle("active", v.id === `view-${tabId}`);
-    });
-    if (tabId === "compendium") renderCompendiumView();
-    if (tabId === "rules") renderRulesView();
+    closeFloatingMenu(false);
+    if (tabId === "compendium") {
+      openCompendiumModal();
+    } else if (tabId === "rules") {
+      openRulesModal();
+    } else {
+      closeModal();
+    }
   }
 
   function toggleDrawer(drawerId) {
@@ -12496,6 +12650,12 @@
     openTitleSingleplayer,
     openTitleMultiplayer,
     switchTab,
+    toggleFloatingMenu,
+    closeFloatingMenu,
+    openMenuPopup,
+    openCompendiumModal,
+    openRulesModal,
+    openSoundSettingsModal,
     toggleDrawer,
     handleRollButton,
     handleEndTurnButton,
@@ -12730,6 +12890,11 @@
       "pointerdown",
       (ev) => {
         ensureAudioCtx(true);
+        const menuAnchor = document.getElementById("hud-floating-menu-anchor");
+        const menuPop = document.getElementById("floating-menu-popover");
+        if (menuPop && menuPop.classList.contains("open") && menuAnchor && !menuAnchor.contains(ev.target)) {
+          closeFloatingMenu(false);
+        }
         const audioPill = document.getElementById("sound-control-pill");
         const audioPop = document.getElementById("audio-mixer-popover");
         if (audioPop && audioPop.classList.contains("open") && audioPill && !audioPill.contains(ev.target)) {
@@ -12755,6 +12920,10 @@
         return;
       }
       if (e.key === "Escape") {
+        const menuPop = document.getElementById("floating-menu-popover");
+        if (menuPop && menuPop.classList.contains("open")) {
+          closeFloatingMenu(true);
+        }
         const audioPop = document.getElementById("audio-mixer-popover");
         if (audioPop && audioPop.classList.contains("open")) {
           audioPop.classList.remove("open");

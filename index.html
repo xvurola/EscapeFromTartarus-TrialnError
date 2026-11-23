@@ -80,145 +80,67 @@
       </div>
     </div>
 
-    <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.1</div>
+    <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.2</div>
   </div>
 
-  <!-- TOP BAR -->
-  <header class="studio-topbar">
-    <div class="topbar-brand-group">
-      <div class="brand-title">Escape From Tartarus</div>
-      <button id="btn-admin-mode" type="button" class="util-pill-btn topbar-admin-btn" onclick="window.EFT_APP.openAdminModal()">Admin</button>
-      <button type="button" class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1, true)">Shop</button>
-      <button type="button" class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
-      <button type="button" class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.undoLastAction()">Undo</button>
-    </div>
-
-    <nav class="center-nav-pills" aria-label="Navigasi Utama">
-      <button type="button" class="nav-oval-pill active" data-tab="simulator" onclick="window.EFT_APP.switchTab('simulator')">
-        Play Arena
-      </button>
-      <button type="button" class="nav-oval-pill" data-tab="compendium" onclick="window.EFT_APP.switchTab('compendium')">
-        Character Compendium
-      </button>
-      <button type="button" class="nav-oval-pill" data-tab="rules" onclick="window.EFT_APP.switchTab('rules')">
-        Rules
-      </button>
-      <button type="button" class="nav-oval-pill" onclick="window.EFT_APP.openQuickGuideModal(0)">
-        Guide
-      </button>
-    </nav>
-
-    <div class="topbar-right">
-      <div id="mp-conn-pill" class="mp-conn-pill" aria-live="polite"></div>
-      <div id="sound-control-pill" class="sound-control-pill" title="Kontrol Sound Effect &amp; Skill SFX">
-        <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Matikan atau aktifkan suara">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-          </svg>
-        </button>
-        <input id="sound-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="45" aria-label="Volume Sound Effect" oninput="window.EFT_APP.setSoundVolume(this.value)" />
-        <span id="sound-volume-label" class="sound-volume-label">45%</span>
-        <button id="btn-audio-mixer" class="sound-voice-btn" type="button" onclick="window.EFT_APP.toggleAudioMixerPopover()" title="Pengaturan Skill SFX Karakter &amp; Notifikasi Turn" aria-label="Pengaturan Audio &amp; Skill SFX">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="4" y1="21" x2="4" y2="14"></line>
-            <line x1="4" y1="10" x2="4" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12" y2="3"></line>
-            <line x1="20" y1="21" x2="20" y2="16"></line>
-            <line x1="20" y1="12" x2="20" y2="3"></line>
-            <line x1="1" y1="14" x2="7" y2="14"></line>
-            <line x1="9" y1="8" x2="15" y2="8"></line>
-            <line x1="17" y1="16" x2="23" y2="16"></line>
-          </svg>
-        </button>
-        <div id="audio-mixer-popover" class="audio-mixer-popover" onclick="event.stopPropagation()">
-          <div class="am-title">Audio, Skill SFX &amp; Feel</div>
-          <label class="am-toggle-row">
-            <span>Getar Kamera (Screen Shake)</span>
-            <input id="screen-shake-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleScreenShake(this.checked)" />
-          </label>
-          <label class="am-toggle-row">
-            <span>Notifikasi Ganti Turn</span>
-            <span class="am-inline-ctrl">
-              <button type="button" class="am-mini-test-btn" onclick="event.preventDefault();event.stopPropagation();window.EFT_APP.previewTurnChangeSfx()">Tes</button>
-              <input id="turn-sfx-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleTurnSfx(this.checked)" />
-            </span>
-          </label>
-          <label class="am-toggle-row">
-            <span>Skill Card SFX Karakter</span>
-            <input id="skill-sfx-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleSkillSfx(this.checked)" />
-          </label>
-          <div class="am-slider-row">
-            <span>Volume Skill</span>
-            <input id="skill-sfx-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="75" oninput="window.EFT_APP.setSkillSfxVolume(this.value)" />
-            <span id="skill-sfx-volume-label" class="sound-volume-label">75%</span>
-          </div>
-          <div class="am-test-label">SFX Skill Per Karakter:</div>
-          <div class="am-char-list">
-            <div class="am-char-row">
-              <label class="am-char-check">
-                <input id="char-sfx-bocchi" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('bocchi', this.checked)" />
-                <span>Bocchi <small>Guitar</small></span>
-              </label>
-              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('bocchi')">Tes</button>
-            </div>
-            <div class="am-char-row">
-              <label class="am-char-check">
-                <input id="char-sfx-aventurine" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('aventurine', this.checked)" />
-                <span>Aventurine <small>Casino</small></span>
-              </label>
-              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('aventurine')">Tes</button>
-            </div>
-            <div class="am-char-row">
-              <label class="am-char-check">
-                <input id="char-sfx-joker" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('joker', this.checked)" />
-                <span>Joker <small>Jazz</small></span>
-              </label>
-              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('joker')">Tes</button>
-            </div>
-            <div class="am-char-row">
-              <label class="am-char-check">
-                <input id="char-sfx-lilith" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('lilith', this.checked)" />
-                <span>Lilith <small>Music Box</small></span>
-              </label>
-              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('lilith')">Tes</button>
-            </div>
-            <div class="am-char-row">
-              <label class="am-char-check">
-                <input id="char-sfx-maomao" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('maomao', this.checked)" />
-                <span>Mao-Mao <small>Herbal Chime</small></span>
-              </label>
-              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('maomao')">Tes</button>
-            </div>
-            <div class="am-char-row">
-              <label class="am-char-check">
-                <input id="char-sfx-firefly" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('firefly', this.checked)" />
-                <span>Firefly / SAM <small>Stellaron</small></span>
-              </label>
-              <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('firefly')">Tes</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <button id="btn-mobile-fullscreen" type="button" class="top-btn mobile-fs-btn" onclick="window.EFT_APP.toggleMobileFullscreen()" title="Layar Penuh">
-        Full
-      </button>
-      <button class="top-btn top-btn-green" onclick="window.EFT_APP.openMultiplayerModal()">
-        Multiplayer Room
-      </button>
-      <button class="top-btn top-btn-blue" onclick="window.EFT_APP.openNewMatchSetupModal()">
-        New Match
-      </button>
-    </div>
-  </header>
-
   <!-- ========================================================================
-       VIEW 1: PLAY ARENA
+       FULL-SCREEN PLAY ARENA (FLOATING MENU + FLEXIBLE POP-UPS)
        ======================================================================== -->
   <main id="view-simulator" class="view-container active">
     <div class="arena-stage">
+      <!-- FLOATING CIRCULAR MENU ANCHOR (BESIDE TOP-RIGHT CYCLE HUD) -->
+      <div id="hud-floating-menu-anchor" class="hud-floating-menu-anchor">
+        <div id="mp-conn-pill" class="mp-conn-pill" aria-live="polite"></div>
+
+        <nav id="floating-menu-popover" class="floating-menu-popover" aria-label="Menu Utama">
+          <div class="fm-pill-stack">
+            <button type="button" class="fm-pill is-jade" style="--fm-i:0" onclick="window.EFT_APP.openMenuPopup('room')">
+              Room
+            </button>
+            <button type="button" class="fm-pill is-dark" style="--fm-i:1" onclick="window.EFT_APP.openMenuPopup('compendium')">
+              Character Compendium
+            </button>
+            <button type="button" class="fm-pill is-jade" style="--fm-i:2" onclick="window.EFT_APP.openMenuPopup('rules')">
+              Rules
+            </button>
+            <button type="button" class="fm-pill is-dark" style="--fm-i:3" onclick="window.EFT_APP.openMenuPopup('guide')">
+              Guide
+            </button>
+            <button type="button" class="fm-pill is-jade" style="--fm-i:4" onclick="window.EFT_APP.openMenuPopup('sound')">
+              Sound Settings
+            </button>
+          </div>
+          <div class="fm-footer-row">
+            <button id="btn-admin-mode" type="button" class="fm-admin-link" onclick="window.EFT_APP.openMenuPopup('admin')">
+              Admin Mode
+            </button>
+            <button id="btn-mobile-fullscreen" type="button" class="fm-fs-link mobile-fs-btn" onclick="window.EFT_APP.toggleMobileFullscreen()" title="Layar Penuh">
+              Fullscreen
+            </button>
+          </div>
+          <div class="fm-admin-tools-row admin-only-el">
+            <button type="button" class="fm-admin-mini-btn" onclick="window.EFT_APP.closeFloatingMenu();window.EFT_APP.openMerchantModal(1, true)">Shop</button>
+            <button type="button" class="fm-admin-mini-btn" onclick="window.EFT_APP.closeFloatingMenu();window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
+            <button type="button" class="fm-admin-mini-btn" onclick="window.EFT_APP.closeFloatingMenu();window.EFT_APP.undoLastAction()">Undo</button>
+          </div>
+        </nav>
+
+        <button
+          id="btn-floating-menu"
+          type="button"
+          class="floating-menu-trigger"
+          onclick="window.EFT_APP.toggleFloatingMenu()"
+          aria-expanded="false"
+          aria-controls="floating-menu-popover"
+          aria-label="Buka atau tutup menu navigasi"
+          title="Menu Utama"
+        >
+          <span class="fm-bar fm-bar-top" aria-hidden="true"></span>
+          <span class="fm-bar fm-bar-mid" aria-hidden="true"></span>
+          <span class="fm-bar fm-bar-bot" aria-hidden="true"></span>
+        </button>
+      </div>
+
       <!-- TOP-RIGHT GAME STATUS (BORDERLESS CYCLE + ROUND PROGRESS RING + TURN + TIMER + SHARDS) -->
       <div class="hud-top-right-status">
         <div class="status-info-card">
@@ -436,45 +358,6 @@
       </div>
     </div>
   </main>
-
-  <!-- ========================================================================
-       VIEW 2: CHARACTER COMPENDIUM
-       ======================================================================== -->
-  <section id="view-compendium" class="view-container">
-    <div class="compendium-stage">
-      <div id="compendium-showcase-root" class="compendium-showcase-root"></div>
-    </div>
-  </section>
-
-  <!-- ========================================================================
-       VIEW 3: RULES
-       ======================================================================== -->
-  <section id="view-rules" class="view-container">
-    <div class="workspace-page">
-      <div class="panel-box">
-        <div class="panel-header">
-          <span>Official Rulebook &amp; Patch Selector</span>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:0.74rem;color:var(--text-muted);text-transform:none;">Active Rulebook Patch:</span>
-            <select id="rules-patch-select" class="btn" onchange="window.EFT_APP.changeRulesPatch(this.value)">
-              <option value="alpha2">Patch Alpha 2 (3 Shards / 2 Cycles, [Haste])</option>
-              <option value="alpha1_2">Patch Alpha 1.2 (Fractional Rounding Law, 9 Events)</option>
-              <option value="alpha1_1">Patch Alpha 1.1 (2x d6 System, Independent Shops)</option>
-              <option value="v0_1">Version 0.1 (1x d12 per Phase, Shared Global Shop)</option>
-            </select>
-          </div>
-        </div>
-        <div id="rules-patch-details"></div>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header">
-          <span>Board Effect &amp; Global Event Registry (19 Cards)</span>
-        </div>
-        <div id="rules-board-cards-grid" class="compendium-grid"></div>
-      </div>
-    </div>
-  </section>
 
   <!-- MODAL OVERLAY -->
   <div id="app-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title" onclick="if(event.target===this)window.EFT_APP.closeModal()">
