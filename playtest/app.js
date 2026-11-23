@@ -3621,11 +3621,12 @@
     let needsMinigame = false;
 
     if (card.effectType === "global_buff") {
+      const eventTurns = card.durationTurns || 2;
       state.activeGlobalEvent = {
         card,
-        remainingTurns: card.durationTurns || 4
+        remainingTurns: eventTurns
       };
-      outcomeText = `Global Event aktif selama 1 ronde penuh!`;
+      outcomeText = `Global Event aktif selama ${eventTurns} Turn!`;
     } else if (card.effectType === "instant_all_tc") {
       state.players.forEach((p) => modifyPlayerTC(p, card.value, "tile"));
       const sign = card.value >= 0 ? "+" : "";
