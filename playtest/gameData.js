@@ -273,9 +273,9 @@ window.EFT_DATA = {
     },
     comp_beta1: {
       id: "comp_beta1",
-      name: "Compendium Beta 1 (6 Characters · 2 Under Development)",
+      name: "Compendium Beta 1 (6 Playable · 2 TBA)",
       availableCharacters: ["bocchi", "aventurine", "joker", "lilith", "maomao", "firefly"],
-      unavailableCharacters: [],
+      unavailableCharacters: ["mostima", "arlecchino"],
       overrides: {}
     }
   },
@@ -483,6 +483,48 @@ window.EFT_DATA = {
       samUltimate: {
         id: "sam_ult", name: "Cooldown Protocol", rarity: "Ultimate", cost: 50, retain: true, effectKey: "transform_to_firefly", description: "[50 TC | Retain] Transformation: Power down the armor. Discard your current hand and revert back to the Firefly character sheet and deck.", image: "assets/cards/characters/firefly/sam_ult.webp"
       }
+    },
+
+    mostima: {
+      id: "mostima",
+      name: "Mostima",
+      shortName: "Mostima",
+      origin: "Arknights",
+      unavailable: true,
+      tba: true,
+      title: "TBA · Arknights",
+      specialty: "To Be Announced",
+      color: "#3b82f6",
+      colorRgb: "59, 130, 246",
+      portrait: { src: "assets/portraits/mostima.svg", widthPct: 140, leftPct: -20, topPct: -8 },
+      compPortrait: { src: "assets/portraits/mostima.svg", objectPosition: "50% 30%" },
+      menuPortrait: "assets/menu-portraits/mostima.svg",
+      chibi: "",
+      ultCost: 70,
+      lore: "Coming Soon (TBA): Mostima dari Arknights sedang dalam tahap konsep dan perancangan skill set.",
+      cards: [],
+      ultimate: null
+    },
+
+    arlecchino: {
+      id: "arlecchino",
+      name: "Arlecchino",
+      shortName: "Arlecchino",
+      origin: "Genshin Impact",
+      unavailable: true,
+      tba: true,
+      title: "TBA · Genshin Impact",
+      specialty: "To Be Announced",
+      color: "#e11d48",
+      colorRgb: "225, 29, 72",
+      portrait: { src: "assets/portraits/arlecchino.svg", widthPct: 140, leftPct: -20, topPct: -8 },
+      compPortrait: { src: "assets/portraits/arlecchino.svg", objectPosition: "50% 30%" },
+      menuPortrait: "assets/menu-portraits/arlecchino.svg",
+      chibi: "",
+      ultCost: 70,
+      lore: "Coming Soon (TBA): Arlecchino dari Genshin Impact sedang dalam tahap konsep dan perancangan skill set.",
+      cards: [],
+      ultimate: null
     }
   },
 

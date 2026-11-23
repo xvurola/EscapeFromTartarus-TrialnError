@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 900" fill="none">
+  <defs>
+    <radialGradient id="mBg" cx="50%" cy="38%" r="68%">
+      <stop offset="0%" stop-color="#17325e"/>
+      <stop offset="55%" stop-color="#0a162b"/>
+      <stop offset="100%" stop-color="#050a14"/>
+    </radialGradient>
+    <radialGradient id="mHalo" cx="50%" cy="34%" r="42%">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.42"/>
+      <stop offset="65%" stop-color="#2563eb" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#1e3a8a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mSil" x1="50%" y1="18%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="60%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="900" fill="url(#mBg)"/>
+  <circle cx="300" cy="310" r="245" fill="url(#mHalo)"/>
+  <!-- Chronometer Astrolabe Rings (Mostima motif) -->
+  <circle cx="300" cy="320" r="205" stroke="#60a5fa" stroke-opacity="0.28" stroke-width="2" stroke-dasharray="14 10"/>
+  <circle cx="300" cy="320" r="168" stroke="#93c5fd" stroke-opacity="0.34" stroke-width="1.5"/>
+  <circle cx="300" cy="320" r="126" stroke="#3b82f6" stroke-opacity="0.32" stroke-width="1.5" stroke-dasharray="4 8"/>
+  <!-- Clock ticks -->
+  <g stroke="#93c5fd" stroke-opacity="0.45" stroke-width="2.5" stroke-linecap="round">
+    <line x1="300" y1="158" x2="300" y2="174"/>
+    <line x1="300" y1="466" x2="300" y2="482"/>
+    <line x1="138" y1="320" x2="154" y2="320"/>
+    <line x1="446" y1="320" x2="462" y2="320"/>
+    <line x1="186" y1="206" x2="198" y2="218"/>
+    <line x1="414" y1="206" x2="402" y2="218"/>
+    <line x1="186" y1="434" x2="198" y2="422"/>
+    <line x1="414" y1="434" x2="402" y2="422"/>
+  </g>
+  <!-- Clock hands -->
+  <line x1="300" y1="320" x2="300" y2="218" stroke="#bfdbfe" stroke-opacity="0.55" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="300" y1="320" x2="378" y2="356" stroke="#60a5fa" stroke-opacity="0.65" stroke-width="3" stroke-linecap="round"/>
+  <!-- Fallen Sankta Halo & Horns Hint -->
+  <ellipse cx="300" cy="206" rx="76" ry="16" stroke="#60a5fa" stroke-opacity="0.72" stroke-width="3" stroke-dasharray="28 10 12 8"/>
+  <path d="M 244 246 Q 214 218 228 190 Q 248 214 260 236 Z" fill="#1d4ed8" fill-opacity="0.65" stroke="#93c5fd" stroke-opacity="0.55" stroke-width="1.5"/>
+  <path d="M 356 246 Q 386 218 372 190 Q 352 214 340 236 Z" fill="#1d4ed8" fill-opacity="0.65" stroke="#93c5fd" stroke-opacity="0.55" stroke-width="1.5"/>
+  <!-- Mysterious Hooded Silhouette Placeholder -->
+  <path d="M 300 225 C 248 225 224 274 232 332 C 238 366 254 394 252 414 C 194 446 142 522 118 654 L 96 900 L 504 900 L 482 654 C 458 522 406 446 348 414 C 346 394 362 366 368 332 C 376 274 352 225 300 225 Z" fill="url(#mSil)" stroke="#60a5fa" stroke-opacity="0.45" stroke-width="2"/>
+  <!-- Glowing Question / Teaser Seal -->
+  <circle cx="300" cy="542" r="52" fill="#081326" fill-opacity="0.88" stroke="#60a5fa" stroke-opacity="0.75" stroke-width="2"/>
+  <text x="300" y="556" text-anchor="middle" font-family="Georgia, serif" font-size="38" font-weight="700" fill="#93c5fd">?</text>
+  <text x="300" y="632" text-anchor="middle" font-family="Georgia, serif" font-size="22" font-weight="700" letter-spacing="6" fill="#bfdbfe" fill-opacity="0.88">TBA · ARKNIGHTS</text>
+  <text x="300" y="662" text-anchor="middle" font-family="sans-serif" font-size="13" letter-spacing="3" fill="#60a5fa" fill-opacity="0.72">PHOTO PLACEHOLDER</text>
+</svg>

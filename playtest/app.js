@@ -139,6 +139,12 @@
       case "firefly":
         // Stellaron Flame / Mecha Wing crest
         return `<svg viewBox="0 0 24 24"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg>`;
+      case "mostima":
+        // Chronometer Clock crest (Arknights)
+        return `<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm1-13h-2v6l5.2 3.1 1-1.7-4.2-2.4z"/></svg>`;
+      case "arlecchino":
+        // Balemoon Crimson X-Cross crest (Genshin Impact)
+        return `<svg viewBox="0 0 24 24"><path d="M18.3 5.71L12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.3-6.3z"/></svg>`;
       default:
         return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg>`;
     }
@@ -9651,14 +9657,26 @@
         ...unavailableIds.map((cid) => {
           const ch = DATA.CHARACTERS[cid];
           const label = ch.shortName || ch.name;
+          const cp = ch.compPortrait || (ch.portrait ? { src: ch.portrait.src, objectPosition: "50% 30%" } : null);
+          const rgb = ch.colorRgb || "148, 163, 184";
+          const isTba = Boolean(ch.tba);
+          const originLine = ch.origin ? `${ch.origin} · TBA` : isTba ? "TBA · Coming Soon" : "Unavailable";
           return `
-            <div class="comp-char-card is-unavailable" title="${escapeHtml(ch.name)} (Saat ini belum tersedia)">
-              <div class="comp-unavailable-center">
-                <div class="comp-unavailable-crest">${getCharacterSvgIcon(cid)}</div>
-                <span class="comp-unavailable-tag">Unavailable</span>
-              </div>
+            <div class="comp-char-card is-unavailable ${isTba ? "is-tba" : ""}"
+                 style="--char-accent:${escapeHtml(ch.color || "#94a3b8")};--char-rgb:${escapeHtml(rgb)};"
+                 title="${escapeHtml(ch.name)} (${escapeHtml(originLine)})">
+              ${isTba ? `<span class="comp-tba-badge">TBA</span>` : ""}
+              ${
+                cp && cp.src
+                  ? `<img class="comp-char-portrait comp-tba-portrait" src="${cp.src}" alt="${escapeHtml(ch.name)} Placeholder" loading="lazy" decoding="async" style="object-position:${escapeHtml(cp.objectPosition || "50% 30%")};" />`
+                  : `<div class="comp-unavailable-center">
+                       <div class="comp-unavailable-crest">${getCharacterSvgIcon(cid)}</div>
+                       <span class="comp-unavailable-tag">${isTba ? "TBA" : "Unavailable"}</span>
+                     </div>`
+              }
               <div class="comp-char-bottom-scrim"></div>
               <div class="comp-char-card-footer">
+                <span class="comp-char-role-hint comp-tba-role-hint">${escapeHtml(originLine)}</span>
                 <div class="comp-char-name-pill">${escapeHtml(label)}</div>
               </div>
             </div>`;
@@ -12114,20 +12132,23 @@
 
     const lockedCards = unavailableIds.map((cid) => {
       const ch = DATA.CHARACTERS[cid];
+      const isTba = Boolean(ch.tba);
+      const badgeLabel = isTba ? "TBA" : "Coming Soon";
+      const roleLabel = ch.origin ? `${ch.origin} · TBA` : isTba ? "TBA" : "Unavailable";
       const teaseImg = ch.menuPortrait
         ? `<img class="char-pick-menu-img is-tease" src="${ch.menuPortrait}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" />
-           <span class="char-pick-tease-tag">Coming Soon</span>`
+           <span class="char-pick-tease-tag">${badgeLabel}</span>`
         : `<div class="ph-portrait-fallback" style="background:radial-gradient(circle at 50% 42%, rgba(148,163,184,0.22) 0%, #071214 82%);">
              <div class="ph-fallback-icon" style="fill:#64748b;">${getCharacterSvgIcon(cid)}</div>
            </div>`;
       return `
-      <div class="char-pick-card unavailable" title="${escapeHtml(ch.name)} (Coming Soon)">
+      <div class="char-pick-card unavailable ${isTba ? "is-tba" : ""}" title="${escapeHtml(ch.name)} (${escapeHtml(roleLabel)})">
         <div class="char-pick-thumb" style="--char-glow:${escapeHtml(ch.color || "#64748b")};">
           ${teaseImg}
         </div>
         <div class="char-pick-info">
           <div class="char-pick-name">${escapeHtml(ch.name)}</div>
-          <div class="char-pick-role">Unavailable</div>
+          <div class="char-pick-role">${escapeHtml(roleLabel)}</div>
         </div>
       </div>`;
     });

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 900" fill="none">
+  <defs>
+    <radialGradient id="aBg" cx="50%" cy="36%" r="68%">
+      <stop offset="0%" stop-color="#4c0c1b"/>
+      <stop offset="55%" stop-color="#1c080f"/>
+      <stop offset="100%" stop-color="#090407"/>
+    </radialGradient>
+    <radialGradient id="aMoon" cx="50%" cy="32%" r="42%">
+      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.44"/>
+      <stop offset="60%" stop-color="#9f1239" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#4c0519" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="aSil" x1="50%" y1="18%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#27141b"/>
+      <stop offset="60%" stop-color="#14090e"/>
+      <stop offset="100%" stop-color="#070305"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="900" fill="url(#aBg)"/>
+  <circle cx="300" cy="300" r="250" fill="url(#aMoon)"/>
+  <!-- Crimson Balemoon Eclipse -->
+  <circle cx="300" cy="305" r="176" fill="#881337" fill-opacity="0.22" stroke="#f43f5e" stroke-opacity="0.55" stroke-width="2.5"/>
+  <circle cx="328" cy="292" r="146" fill="#18070d" fill-opacity="0.82"/>
+  <!-- Balemoon Crimson Crosses (Arlecchino motif) -->
+  <g stroke="#fb7185" stroke-opacity="0.65" stroke-width="3.5" stroke-linecap="round">
+    <line x1="215" y1="220" x2="385" y2="390"/>
+    <line x1="385" y1="220" x2="215" y2="390"/>
+  </g>
+  <!-- Scythe Arc Hint -->
+  <path d="M 118 168 Q 332 94 494 248 Q 368 182 146 218 Z" fill="#e11d48" fill-opacity="0.28" stroke="#fda4af" stroke-opacity="0.5" stroke-width="1.8"/>
+  <!-- Mysterious Aristocrat Silhouette Placeholder -->
+  <path d="M 300 228 C 254 228 232 276 238 330 C 244 366 258 392 256 414 C 194 446 138 524 114 662 L 92 900 L 508 900 L 486 662 C 462 524 406 446 344 414 C 342 392 356 366 362 330 C 368 276 346 228 300 228 Z" fill="url(#aSil)" stroke="#f43f5e" stroke-opacity="0.5" stroke-width="2"/>
+  <!-- Collar V-Accent -->
+  <path d="M 256 414 L 300 474 L 344 414" stroke="#fda4af" stroke-opacity="0.52" stroke-width="2.2"/>
+  <!-- Glowing Question / Teaser Seal -->
+  <circle cx="300" cy="542" r="52" fill="#1a060d" fill-opacity="0.9" stroke="#f43f5e" stroke-opacity="0.78" stroke-width="2"/>
+  <text x="300" y="556" text-anchor="middle" font-family="Georgia, serif" font-size="38" font-weight="700" fill="#fda4af">?</text>
+  <text x="300" y="632" text-anchor="middle" font-family="Georgia, serif" font-size="21" font-weight="700" letter-spacing="5" fill="#fecdd3" fill-opacity="0.9">TBA · GENSHIN IMPACT</text>
+  <text x="300" y="662" text-anchor="middle" font-family="sans-serif" font-size="13" letter-spacing="3" fill="#fb7185" fill-opacity="0.74">PHOTO PLACEHOLDER</text>
+</svg>
