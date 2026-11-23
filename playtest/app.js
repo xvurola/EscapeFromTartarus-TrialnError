@@ -12440,6 +12440,11 @@
         onMinigameClosed
       });
     }
+    const verCorner = document.getElementById("mts-version-corner");
+    if (verCorner && window.EFT_VERSION && window.EFT_VERSION.version) {
+      verCorner.textContent = window.EFT_VERSION.version;
+      verCorner.title = `Upload #${window.EFT_VERSION.uploadCount || 1}`;
+    }
     syncAdminUiState();
     syncSoundControlUi();
     setupBoardDragAndZoom();
