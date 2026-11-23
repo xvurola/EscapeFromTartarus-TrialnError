@@ -359,7 +359,9 @@
       name: chosen.title,
       reasonTitle: opts.reasonTitle || (mode === "versus" ? "Versus Duel 1v1" : "Minigame Akhir Ronde"),
       afterAction: opts.afterAction || "none", // "advance_round" | "versus_wager" | "none"
-      wager: mode === "versus" ? Math.max(1, Number(opts.wager) || 15) : 0,
+      wager: mode === "versus" ? Math.max(0, Number(opts.wager) || 15) : 0,
+      challengerRisk: mode === "versus" && opts.challengerRisk !== undefined ? Math.max(0, Number(opts.challengerRisk)) : null,
+      opponentRisk: mode === "versus" && opts.opponentRisk !== undefined ? Math.max(0, Number(opts.opponentRisk)) : null,
       payouts: state.rules && state.rules.minigamePayouts ? state.rules.minigamePayouts : [30, 15, 15, 10],
       phase: "selecting", // "selecting" | "intro" | "playing" | "result"
       wheelPoolIds: pool.map((g) => g.id),
@@ -444,17 +446,24 @@
 
       const winnerP = state.players[winnerEntry.playerIndex];
       const loserP = state.players[loserEntry.playerIndex];
-      const bet = Math.max(1, mg.wager || 15);
+      const challengerWon = winnerEntry.playerIndex === challengerEntry.playerIndex;
+      const baseBet = Math.max(0, mg.wager || 15);
+      const effectiveBet =
+        challengerWon && mg.opponentRisk !== null && mg.opponentRisk !== undefined
+          ? Math.max(0, Number(mg.opponentRisk))
+          : !challengerWon && mg.challengerRisk !== null && mg.challengerRisk !== undefined
+          ? Math.max(0, Number(mg.challengerRisk))
+          : baseBet;
 
       if (winnerP && loserP) {
-        const taken = Math.min(bet, loserP.tc);
+        const taken = Math.min(effectiveBet, loserP.tc);
         loserP.tc = Math.max(0, loserP.tc - taken);
-        const gained = hostApi.modifyPlayerTC(winnerP, taken, "versus");
+        const gained = taken > 0 ? hostApi.modifyPlayerTC(winnerP, taken, "versus") : 0;
 
         winnerEntry.isWinner = true;
         winnerEntry.rank = 1;
         winnerEntry.rewardDelta = gained;
-        winnerEntry.rewardNote = `Menang Duel (+${gained} TC)`;
+        winnerEntry.rewardNote = gained > 0 ? `Menang Duel (+${gained} TC)` : "Menang Duel (Entry Gratis · 0 TC)";
 
         loserEntry.isWinner = false;
         loserEntry.rank = 2;
@@ -462,8 +471,13 @@
         loserEntry.rewardNote = taken > 0 ? `Kalah Taruhan (-${taken} TC)` : "Kalah Duel (0 TC)";
 
         mg.resultHeadline = `${winnerP.name} Memenangkan Duel!`;
-        mg.resultSub = `${winnerP.name} mengalahkan ${loserP.name} di ${mg.name} & merebut 💰 ${gained} TC!`;
-        hostApi.addLog(`Versus (${mg.name}): ${winnerP.name} mengalahkan ${loserP.name} & merebut 💰 ${gained} TC!`);
+        mg.resultSub =
+          gained > 0
+            ? `${winnerP.name} mengalahkan ${loserP.name} di ${mg.name} & merebut 💰 ${gained} TC!`
+            : `${winnerP.name} mengalahkan ${loserP.name} di ${mg.name} (Entry Fee 0 TC)!`;
+        hostApi.addLog(
+          `Versus (${mg.name}): ${winnerP.name} mengalahkan ${loserP.name}${gained > 0 ? ` & merebut 💰 ${gained} TC` : " (0 TC)"}!`
+        );
       }
       return;
     }

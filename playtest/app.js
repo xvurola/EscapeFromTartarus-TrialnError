@@ -378,6 +378,11 @@
   let tileModalAutoCloseTimerId = null;
   let lastShownDiceRollEventId = null;
   let lastShownDofRollEventId = null;
+  let lastProcessedBoardVfxId = null;
+  let lastProcessedSkillMoveAnimId = null;
+  let activeBoardVfxList = [];
+  let skillMoveAnimOverrides = {};
+  let skillMoveAnimTimers = {};
   let isInitializingMatch = false;
   let isMatchStarted = false;
   let isTitleScreenVisible = true;
@@ -752,6 +757,49 @@
           playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.07, freq: hz, duration: 0.34, attack: 0.018, gain: 0.26, type: "sine" });
         });
         break;
+      case "move_skill": {
+        const mvChar = String(variant || "").toLowerCase();
+        if (mvChar === "bocchi") {
+          // Rising guitar slide harmonic sweep
+          playSoftTone(ctx, warmFilter, { startTime: t, freq: 277.18, endFreq: 554.37, duration: 0.24, attack: 0.01, gain: 0.22, type: "sawtooth" });
+          playSoftTone(ctx, warmFilter, { startTime: t + 0.06, freq: 415.3, endFreq: 659.25, duration: 0.24, attack: 0.01, gain: 0.18, type: "triangle" });
+        } else if (mvChar === "aventurine") {
+          // Golden warp chime + coin zip
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 3200, duration: 0.05, gain: 0.16, q: 2.2 });
+          playSoftTone(ctx, warmFilter, { startTime: t + 0.02, freq: 659.25, endFreq: 1318.5, duration: 0.22, attack: 0.008, gain: 0.22, type: "sine" });
+        } else if (mvChar === "joker") {
+          // Phantom Thief dash whoosh + grappling zip
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "highpass", filterFreq: 1800, duration: 0.11, gain: 0.24, q: 1.2 });
+          playSoftTone(ctx, warmFilter, { startTime: t + 0.015, freq: 220, endFreq: 587.33, duration: 0.18, attack: 0.008, gain: 0.20, type: "triangle" });
+        } else if (mvChar === "lilith") {
+          // Shadow-warp swoosh + eerie descending chime
+          playSoftTone(ctx, warmFilter, { startTime: t, freq: 523.25, endFreq: 246.94, duration: 0.26, attack: 0.015, gain: 0.22, type: "sine" });
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1100, duration: 0.12, gain: 0.15, q: 1.4 });
+        } else if (mvChar === "maomao") {
+          // Herbal breeze whoosh + soft bamboo step
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1650, duration: 0.09, gain: 0.14, q: 1.0 });
+          playSoftTone(ctx, warmFilter, { startTime: t + 0.02, freq: 523.25, endFreq: 783.99, duration: 0.19, attack: 0.012, gain: 0.20, type: "sine" });
+        } else if (mvChar === "sam") {
+          // Heavy mecha thruster jet dash ignition
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1200, duration: 0.22, gain: 0.28, q: 0.8 });
+          playSoftTone(ctx, warmFilter, { startTime: t, freq: 110, endFreq: 330, duration: 0.26, attack: 0.01, gain: 0.28, type: "sawtooth" });
+        } else if (mvChar === "firefly") {
+          // Luminous Stellaron blink shimmer
+          playSoftTone(ctx, warmFilter, { startTime: t, freq: 783.99, endFreq: 1174.66, duration: 0.20, attack: 0.008, gain: 0.20, type: "sine" });
+          playSoftTone(ctx, warmFilter, { startTime: t + 0.05, freq: 1046.5, endFreq: 1567.98, duration: 0.22, attack: 0.008, gain: 0.16, type: "triangle" });
+        } else {
+          playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1700, duration: 0.09, gain: 0.16, q: 1.0 });
+          playSoftTone(ctx, warmFilter, { startTime: t + 0.01, freq: 392, endFreq: 659.25, duration: 0.18, attack: 0.01, gain: 0.20, type: "sine" });
+        }
+        break;
+      }
+      case "sam_impact": {
+        // Fiery SAM comet landing slam + crackle
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "lowpass", filterFreq: 1400, duration: 0.28, gain: 0.34, q: 0.7 });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 165, endFreq: 48, duration: 0.34, attack: 0.006, gain: 0.36, type: "sawtooth" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.05, freq: 523.25, endFreq: 261.63, duration: 0.24, attack: 0.01, gain: 0.18, type: "triangle" });
+        break;
+      }
       case "skill": {
         const charId = skillCharId;
         const theme = skillTheme;
@@ -1256,6 +1304,46 @@
     applyCameraTransform();
   }
 
+  function focusCameraOnTileGroup(tileIds = [], anchorTileId = null) {
+    const uniqueIds = new Set(Array.isArray(tileIds) ? tileIds : []);
+    if (anchorTileId && TILE_MAP[anchorTileId]) uniqueIds.add(anchorTileId);
+    const tiles = Array.from(uniqueIds)
+      .map((tid) => TILE_MAP[tid])
+      .filter(Boolean);
+    if (tiles.length === 0) {
+      if (anchorTileId) focusCameraOnTile(anchorTileId, isMobilePortrait() ? 0.52 : 0.76);
+      return;
+    }
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    tiles.forEach((t) => {
+      if (t.x < minX) minX = t.x;
+      if (t.x > maxX) maxX = t.x;
+      if (t.y < minY) minY = t.y;
+      if (t.y > maxY) maxY = t.y;
+    });
+
+    const mobile = isMobilePortrait();
+    const spanPxX = Math.max(240, ((maxX - minX) / 100) * BOARD_W + 240);
+    const spanPxY = Math.max(240, ((maxY - minY) / 100) * BOARD_H + 240);
+    const availW = Math.max(260, window.innerWidth - (mobile ? 28 : 260));
+    const availH = Math.max(260, window.innerHeight - (mobile ? 270 : 210));
+    const minWideZoom = mobile
+      ? Math.max(0.16, Math.min(0.36, (window.innerWidth - 16) / BOARD_W))
+      : Math.max(0.24, Math.min(0.46, (window.innerWidth - 220) / BOARD_W));
+    const maxFocusZoom = mobile ? 0.64 : 0.86;
+    const fitZoom = Math.min(availW / spanPxX, availH / spanPxY);
+    const targetZoom = Math.max(minWideZoom, Math.min(maxFocusZoom, fitZoom));
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    camera.mode = "free";
+    camera.zoom = targetZoom;
+    camera.panX = ((50 - centerX) / 100) * BOARD_W * targetZoom;
+    camera.panY = ((50 - centerY) / 100) * BOARD_H * targetZoom + (mobile ? 12 : -24);
+    applyCameraTransform();
+  }
+
   function setCameraMode(mode) {
     camera.mode = mode;
     const mobile = isMobilePortrait();
@@ -1681,6 +1769,8 @@
       lastDiceRollEvent: null,
       lastTileEffectReveal: null,
       lastPurchasedShard: null,
+      lastBoardVfxEvent: null,
+      lastSkillMoveAnim: null,
       activeMinigame: null,
       minigameHistory: { versus: null, ffa: null },
       activeTileModal: null,
@@ -1694,6 +1784,12 @@
     lastShownDiceRollEventId = null;
     lastShownDofRollEventId = null;
     lastShownTileEffectRevealId = null;
+    lastProcessedBoardVfxId = null;
+    lastProcessedSkillMoveAnimId = null;
+    activeBoardVfxList = [];
+    Object.values(skillMoveAnimTimers).forEach((tId) => clearTimeout(tId));
+    skillMoveAnimTimers = {};
+    skillMoveAnimOverrides = {};
     lastTrackedTurnTimerKey = null;
     lastRenderedTileModalKey = null;
     lastOpenedScryId = null;
@@ -4805,7 +4901,13 @@
       }
     }
 
-    if (targetPlayer && targetPlayer.index !== player.index) {
+    const isSinglePlayerTargetCard =
+      card.targetType === "any_player" ||
+      card.targetType === "any_player_in_radius" ||
+      card.targetType === "other_player" ||
+      card.targetType === "opponent_in_radius";
+
+    if (isSinglePlayerTargetCard && targetPlayer && targetPlayer.index !== player.index) {
       if (targetPlayer.inSpawn) {
         const msg = `${targetPlayer.name} terlindungi Spawn Protection.`;
         addLog(msg);
@@ -4832,6 +4934,7 @@
     }
 
     const shouldActivateBlock = cardActivatesBlockEffect(card);
+    const casterMoveTheme = player.isSamMode ? "sam" : player.charId;
 
     switch (card.effectKey) {
       case "move_steps": {
@@ -4841,6 +4944,7 @@
           const isBack =
             String(options.stepDelta || "").startsWith("-") ||
             Boolean(card.choices && card.choices.length > 0 && card.choices.every((v) => v < 0));
+          const animPath = buildSkillMovePath(prevTileId, options.targetTileId, 6);
           applySkillPathPassChecks(tgt, prevTileId, options.targetTileId);
           tgt.lastTileId = computeConsistentLastTileIdAfterJump(
             prevTileId,
@@ -4850,6 +4954,10 @@
           );
           tgt.tileId = options.targetTileId;
           if (tgt.inSpawn && options.targetTileId !== "T0") tgt.inSpawn = false;
+          triggerAnimatedSkillMovement(
+            [{ playerIndex: tgt.index, path: animPath }],
+            { soundTheme: casterMoveTheme, stepMs: 185 }
+          );
           const destTile = TILE_MAP[options.targetTileId];
           const msg = `${tgt.name} bergerak ke [${options.targetTileId}: ${destTile.name}]!`;
           addLog(`[${card.name}]: ${msg}`);
@@ -4859,7 +4967,9 @@
           return msg;
         } else {
           const steps = Number(options.choiceValue || (card.choices && card.choices[0]) || 1);
-          movePlayerInstantAlongPath(tgt, Math.abs(steps), steps >= 0 ? 1 : -1, shouldActivateBlock);
+          movePlayerInstantAlongPath(tgt, Math.abs(steps), steps >= 0 ? 1 : -1, shouldActivateBlock, {
+            soundTheme: casterMoveTheme
+          });
           const msg = `${tgt.name} bergerak ${steps > 0 ? "+" : ""}${steps} langkah!`;
           addLog(`[${card.name}]: ${msg}`);
           return msg;
@@ -4875,9 +4985,14 @@
             addLog(`[${card.name}]: ${msg}`);
             return msg;
           }
+          const prevTileId = player.tileId;
           player.tileId = destTileId;
           player.lastTileId = (PREV_MAP[destTileId] && PREV_MAP[destTileId][0]) || null;
           if (player.inSpawn && destTileId !== "T0") player.inSpawn = false;
+          triggerAnimatedSkillMovement(
+            [{ playerIndex: player.index, path: [prevTileId, destTileId] }],
+            { soundTheme: casterMoveTheme, stepMs: 170, landVfx: "warp_burst" }
+          );
           const destTile = TILE_MAP[destTileId];
           const msg = `${player.name} melompat ke Normal Tile [${destTileId}]!`;
           addLog(`[${card.name}]: ${msg}`);
@@ -4893,6 +5008,7 @@
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
           const prevTileId = player.tileId;
           const isBack = String(options.stepDelta || "").startsWith("-");
+          const animPath = buildSkillMovePath(prevTileId, options.targetTileId, 10);
           applySkillPathPassChecks(player, prevTileId, options.targetTileId);
           player.lastTileId = computeConsistentLastTileIdAfterJump(
             prevTileId,
@@ -4902,6 +5018,10 @@
           );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
+          triggerAnimatedSkillMovement(
+            [{ playerIndex: player.index, path: animPath }],
+            { soundTheme: casterMoveTheme, stepMs: 165 }
+          );
           const destTile = TILE_MAP[options.targetTileId];
           const msg = `${player.name} berpindah ke [${options.targetTileId}: ${destTile.name}]!`;
           addLog(`[${card.name}]: ${msg}`);
@@ -4911,7 +5031,9 @@
           return msg;
         } else {
           const steps = Number(options.choiceValue || 4);
-          movePlayerInstantAlongPath(player, Math.abs(steps), steps >= 0 ? 1 : -1, shouldActivateBlock);
+          movePlayerInstantAlongPath(player, Math.abs(steps), steps >= 0 ? 1 : -1, shouldActivateBlock, {
+            soundTheme: casterMoveTheme
+          });
           const msg = `${player.name} bergerak ${steps > 0 ? "+" : ""}${steps} blok!`;
           addLog(`[${card.name}]: ${msg}`);
           return msg;
@@ -4919,14 +5041,22 @@
       }
       case "swap_position": {
         if (targetPlayer && targetPlayer.index !== player.index) {
-          const temp = player.tileId;
+          const prevPlayerTile = player.tileId;
+          const prevTargetTile = targetPlayer.tileId;
           const tempLast = player.lastTileId;
-          player.tileId = targetPlayer.tileId;
+          player.tileId = prevTargetTile;
           player.lastTileId = targetPlayer.lastTileId;
-          targetPlayer.tileId = temp;
+          targetPlayer.tileId = prevPlayerTile;
           targetPlayer.lastTileId = tempLast;
           if (player.inSpawn && player.tileId !== "T0") player.inSpawn = false;
           if (targetPlayer.inSpawn && targetPlayer.tileId !== "T0") targetPlayer.inSpawn = false;
+          triggerAnimatedSkillMovement(
+            [
+              { playerIndex: player.index, path: [prevPlayerTile, prevTargetTile] },
+              { playerIndex: targetPlayer.index, path: [prevTargetTile, prevPlayerTile] }
+            ],
+            { soundTheme: casterMoveTheme, stepMs: 210, landVfx: "warp_burst" }
+          );
           const msg = `${player.name} (${player.tileId}) bertukar posisi dengan ${targetPlayer.name} (${targetPlayer.tileId})!`;
           addLog(`[${card.name}]: ${msg}`);
           if (shouldActivateBlock) {
@@ -4962,14 +5092,24 @@
           return msg;
         }
         let pulledNames = [];
+        const pullEntries = [];
         state.players.forEach((other) => {
           if (other.index !== player.index && !other.inSpawn) {
+            const fromTid = other.tileId;
             other.tileId = destTileId;
             other.lastTileId = (PREV_MAP[destTileId] && PREV_MAP[destTileId][0]) || null;
             pulledNames.push(other.name);
+            pullEntries.push({ playerIndex: other.index, path: [fromTid, destTileId] });
             resolveDirectTileEffectForPull(other, destTile);
           }
         });
+        if (pullEntries.length > 0) {
+          triggerAnimatedSkillMovement(pullEntries, {
+            soundTheme: casterMoveTheme,
+            stepMs: 220,
+            landVfx: "warp_burst"
+          });
+        }
         const msg =
           pulledNames.length > 0
             ? `Menarik ${pulledNames.join(", ")} ke [${destTileId}: ${destTile.name}] & mengaktifkan efek tile!`
@@ -5198,13 +5338,18 @@
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
           const prevTileId = player.tileId;
           destId = options.targetTileId;
+          const animPath = buildSkillMovePath(prevTileId, destId, 8);
           applySkillPathPassChecks(player, prevTileId, destId);
           player.lastTileId = computeConsistentLastTileIdAfterJump(prevTileId, destId, player.lastTileId, false);
           player.tileId = destId;
           if (player.inSpawn && destId !== "T0") player.inSpawn = false;
+          triggerAnimatedSkillMovement(
+            [{ playerIndex: player.index, path: animPath }],
+            { soundTheme: casterMoveTheme, stepMs: 160 }
+          );
         } else {
           const steps = Number(options.choiceValue || 4);
-          movePlayerInstantAlongPath(player, steps, 1, false);
+          movePlayerInstantAlongPath(player, steps, 1, false, { soundTheme: casterMoveTheme });
           destId = player.tileId;
         }
         let stealMsg = "";
@@ -5307,6 +5452,7 @@
       case "choice_move1_2_or_10tc": {
         if (options.choiceValue === "move" && options.targetTileId && TILE_MAP[options.targetTileId]) {
           const prevTileId = player.tileId;
+          const animPath = buildSkillMovePath(prevTileId, options.targetTileId, 4);
           applySkillPathPassChecks(player, prevTileId, options.targetTileId);
           player.lastTileId = computeConsistentLastTileIdAfterJump(
             prevTileId,
@@ -5316,12 +5462,16 @@
           );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
+          triggerAnimatedSkillMovement(
+            [{ playerIndex: player.index, path: animPath }],
+            { soundTheme: casterMoveTheme, stepMs: 185 }
+          );
           addLog(`[${card.name}]: ${player.name} moved to [${options.targetTileId}].`);
           if (shouldActivateBlock) {
             resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
           }
         } else if (options.choiceValue === "move2") {
-          movePlayerInstantAlongPath(player, 2, 1, shouldActivateBlock);
+          movePlayerInstantAlongPath(player, 2, 1, shouldActivateBlock, { soundTheme: casterMoveTheme });
         } else {
           modifyPlayerTC(player, 10, "own_skill");
         }
@@ -5392,6 +5542,7 @@
       case "ff_move_1_2_normal_bonus": {
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
           const prevTileId = player.tileId;
+          const animPath = buildSkillMovePath(prevTileId, options.targetTileId, 4);
           player.lastTileId = computeConsistentLastTileIdAfterJump(
             prevTileId,
             options.targetTileId,
@@ -5400,11 +5551,15 @@
           );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
+          triggerAnimatedSkillMovement(
+            [{ playerIndex: player.index, path: animPath }],
+            { soundTheme: casterMoveTheme, stepMs: 185 }
+          );
           if (shouldActivateBlock) {
             resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
           }
         } else {
-          movePlayerInstantAlongPath(player, 2, 1, shouldActivateBlock);
+          movePlayerInstantAlongPath(player, 2, 1, shouldActivateBlock, { soundTheme: casterMoveTheme });
         }
         if (TILE_MAP[player.tileId]?.type === "normal") modifyPlayerTC(player, 10, "own_skill");
         return card.description;
@@ -5459,7 +5614,7 @@
         return card.description;
       }
       case "retreat_2_negate": {
-        movePlayerInstantAlongPath(player, 2, -1, shouldActivateBlock);
+        movePlayerInstantAlongPath(player, 2, -1, shouldActivateBlock, { soundTheme: casterMoveTheme });
         return card.description;
       }
       case "relocate_board_traps": {
@@ -5503,8 +5658,10 @@
         return `${player.name} bertransformasi menjadi SAM! Hand & Deck ditukar ke SAM.`;
       }
       case "sam_dash_aoe_5tc": {
+        const prevTileId = player.tileId;
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
-          const prevTileId = player.tileId;
+          const animPath = buildSkillMovePath(prevTileId, options.targetTileId, 8);
+          applySkillPathPassChecks(player, prevTileId, options.targetTileId);
           player.lastTileId = computeConsistentLastTileIdAfterJump(
             prevTileId,
             options.targetTileId,
@@ -5513,69 +5670,110 @@
           );
           player.tileId = options.targetTileId;
           if (player.inSpawn && options.targetTileId !== "T0") player.inSpawn = false;
+          triggerAnimatedSkillMovement(
+            [{ playerIndex: player.index, path: animPath }],
+            { soundTheme: "sam", stepMs: 160, landVfx: "sam_fire_impact", landSfx: "sam_impact" }
+          );
           if (shouldActivateBlock) {
             resolveExactLandingTile(player, TILE_MAP[options.targetTileId]);
           }
         } else {
           const steps = Number(options.choiceValue || 4);
-          movePlayerInstantAlongPath(player, steps, 1, shouldActivateBlock);
+          movePlayerInstantAlongPath(player, steps, 1, shouldActivateBlock, {
+            soundTheme: "sam",
+            landVfx: "sam_fire_impact",
+            landSfx: "sam_impact"
+          });
         }
+        const hitVictims = [];
         state.players.forEach((other) => {
-          if (other.index !== player.index && !other.inSpawn && getTileDistance(player.tileId, other.tileId) <= 1) {
-            modifyPlayerTC(other, -5, "own_skill");
+          if (other.index !== player.index && !other.inSpawn && !other.safeZoneImmune) {
+            const dist = getTileDistance(player.tileId, other.tileId);
+            if (dist <= 1) {
+              const beforeTc = other.tc;
+              modifyPlayerTC(other, -5, "own_skill");
+              const actualLoss = Math.max(0, beforeTc - other.tc);
+              hitVictims.push(`${other.name} (-${actualLoss} TC)`);
+            }
           }
         });
-        return card.description;
+        const dmgMsg =
+          hitVictims.length > 0
+            ? `${player.name} menghantam [${player.tileId}] dengan ledakan api! Damage AOE: ${hitVictims.join(", ")}`
+            : `${player.name} mendarat dengan ledakan api di [${player.tileId}] (tidak ada lawan dalam radius 1 blok).`;
+        addLog(`[${card.name}]: ${dmgMsg}`);
+        return dmgMsg;
       }
       case "sam_push_back_3": {
         if (!targetPlayer || targetPlayer.index === player.index) return "Tidak ada lawan dalam radius 4 blok.";
         const beforeTile = targetPlayer.tileId;
-        movePlayerInstantAlongPath(targetPlayer, 3, -1, shouldActivateBlock);
-        const pathIds = getDirectedPathToTile(beforeTile, targetPlayer.tileId, 5);
-        const hitSomething = pathIds.some((tid) => {
+        const walked = movePlayerInstantAlongPath(targetPlayer, 3, -1, shouldActivateBlock, {
+          soundTheme: "sam",
+          stepMs: 195,
+          landVfx: "push_impact"
+        });
+        const checkTiles = walked && walked.length > 1 ? walked.slice(1) : getDirectedPathToTile(beforeTile, targetPlayer.tileId, 5);
+        const hitSomething = checkTiles.some((tid) => {
           const hasOther = state.players.some((p) => p.index !== targetPlayer.index && !p.inSpawn && p.tileId === tid);
           const hasTok = state.boardTokens.some((t) => t.tileId === tid);
           return hasOther || hasTok;
         });
         if (hitSomething) {
           modifyPlayerTC(targetPlayer, -10, "own_skill");
-          addLog(`[Supernova Overload]: ${targetPlayer.name} terdorong mundur 3 blok & menabrak Player/Token (-10 TC)!`);
-          return `${targetPlayer.name} terdorong mundur 3 blok & kehilangan 10 TC!`;
+          addLog(`[Supernova Overload]: ${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}] & menabrak Player/Token (-10 TC)!`);
+          return `${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}] & kehilangan 10 TC!`;
         }
         addLog(`[Supernova Overload]: ${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}]!`);
         return `${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}]!`;
       }
       case "sam_discounted_versus": {
         if (!targetPlayer || targetPlayer.index === player.index) return "Tidak ada lawan dalam radius 4 blok.";
-        const samWins = Math.random() < 0.55;
-        if (samWins) {
-          const oppBet = targetPlayer.tc >= 30 ? 30 : Math.min(15, targetPlayer.tc);
-          targetPlayer.tc -= oppBet;
-          player.tc += oppBet;
-          addLog(`[Scorched Earth Execution]: ${player.name} menang Versus melawan ${targetPlayer.name} (+${oppBet} TC)!`);
-          return `${player.name} menang Versus melawan ${targetPlayer.name} (+${oppBet} TC)!`;
-        } else {
-          const samBet = Math.min(15, player.tc);
-          player.tc -= samBet;
-          targetPlayer.tc += samBet;
-          addLog(`[Scorched Earth Execution]: ${targetPlayer.name} menang Versus melawan ${player.name} (+${samBet} TC)!`);
-          return `${targetPlayer.name} menang Versus melawan ${player.name} (${samBet} TC)!`;
-        }
+        const isTier2 = options.choiceValue === "tier2";
+        const samBet = isTier2 ? 15 : 0;
+        const oppBet = isTier2 ? 30 : 15;
+        const challengerIdx = player.index;
+        const opponentIdx = targetPlayer.index;
+        const stakeLabel = isTier2 ? `SAM 15 TC vs Lawan 30 TC` : `SAM Gratis (0 TC) vs Lawan 15 TC`;
+        addLog(`[Scorched Earth Execution]: ${player.name} memaksa ${targetPlayer.name} masuk duel Versus (${stakeLabel})!`);
+        setTimeout(() => {
+          if (!state || state.winner || state.activeMinigame) return;
+          dismissSkillPopup(true, true);
+          startRandomMinigame("versus", {
+            reasonTitle: `Scorched Earth Execution · ${stakeLabel}`,
+            afterAction: "versus_wager",
+            challengerIndex: challengerIdx,
+            opponentIndex: opponentIdx,
+            wager: oppBet,
+            challengerRisk: samBet,
+            opponentRisk: oppBet
+          });
+        }, 950);
+        return `${player.name} memaksa ${targetPlayer.name} duel Versus (${stakeLabel})!`;
       }
       case "sam_fire_tiles": {
-        const tObj = TILE_MAP[options.targetTileId || player.tileId];
-        const fireIds = [tObj.id, ...(tObj.next || []).slice(0, 1)];
+        const startId = options.targetTileId || player.tileId;
+        const tObj = TILE_MAP[startId];
+        const fireIds = [tObj.id];
+        const nextPlayable = getNextPlayableOptions(tObj.id, null, 1);
+        if (nextPlayable.length > 0 && nextPlayable[0].tileId !== tObj.id && nextPlayable[0].tileId !== "T0") {
+          fireIds.push(nextPlayable[0].tileId);
+        }
         fireIds.forEach((fid) => {
+          state.boardTokens = state.boardTokens.filter((tk) => !(tk.tileId === fid && tk.type === "fire_tile"));
           state.boardTokens.push({
-            id: "tok_" + Date.now() + "_" + fid,
+            id: "tok_" + Date.now() + "_" + fid + "_" + Math.random().toString(36).slice(2, 5),
             type: "fire_tile",
             name: "Deathstar Fire",
             ownerIndex: player.index,
             tileId: fid,
-            remainingCycles: 1
+            remainingCycles: 2
           });
         });
-        return card.description;
+        triggerBoardTileVfx(fireIds, "sam_fire_impact");
+        playSfx("sam_impact");
+        const msg = `${player.name} membakar tile [${fireIds.join(" & ")}] dengan Deathstar Destruction!`;
+        addLog(`[${card.name}]: ${msg}`);
+        return msg;
       }
       case "passive_sam_armor": {
         const isCopied = Boolean(options.copiedUniqueDurationTurns);
@@ -5608,9 +5806,113 @@
     }
   }
 
-  function movePlayerInstantAlongPath(player, steps, direction = 1, resolveLanding = true) {
+  function buildSkillMovePath(fromTileId, toTileId, maxDepth = 10) {
+    if (!fromTileId || !toTileId || fromTileId === toTileId) return [toTileId || fromTileId].filter(Boolean);
+    const tail = getDirectedPathToTile(fromTileId, toTileId, maxDepth);
+    if (tail && tail.length > 0) {
+      return [fromTileId, ...tail];
+    }
+    return [fromTileId, toTileId];
+  }
+
+  function spawnLocalBoardVfx(tileIds, kind = "sam_fire_impact") {
+    const ids = Array.isArray(tileIds) ? tileIds : [tileIds];
+    const now = Date.now();
+    ids.forEach((tid) => {
+      if (!tid || !TILE_MAP[tid]) return;
+      const vfxId = `vfx_${now}_${tid}_${Math.random().toString(36).slice(2, 5)}`;
+      activeBoardVfxList.push({ id: vfxId, tileId: tid, kind });
+      setTimeout(() => {
+        activeBoardVfxList = activeBoardVfxList.filter((v) => v.id !== vfxId);
+        renderDigitalBoard();
+      }, 1150);
+    });
+    renderDigitalBoard();
+  }
+
+  function triggerBoardTileVfx(tileIds, kind = "sam_fire_impact") {
+    if (!state) return;
+    const ids = (Array.isArray(tileIds) ? tileIds : [tileIds]).filter((tid) => tid && TILE_MAP[tid]);
+    if (ids.length === 0) return;
+    const ev = {
+      id: "bvfx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      tileIds: ids,
+      kind
+    };
+    state.lastBoardVfxEvent = ev;
+    lastProcessedBoardVfxId = ev.id;
+    spawnLocalBoardVfx(ids, kind);
+  }
+
+  function playLocalSkillMoveAnim(ev) {
+    if (!ev || !Array.isArray(ev.entries) || ev.entries.length === 0) return;
+    if (ev.soundTheme) {
+      playSfx("move_skill", ev.soundTheme);
+    }
+    const stepMs = ev.stepMs || 185;
+    ev.entries.forEach((entry) => {
+      const pIdx = entry.playerIndex;
+      const path = Array.isArray(entry.path) ? entry.path.filter((tid) => tid && TILE_MAP[tid]) : [];
+      if (path.length < 2) return;
+      if (skillMoveAnimTimers[pIdx]) {
+        clearTimeout(skillMoveAnimTimers[pIdx]);
+        delete skillMoveAnimTimers[pIdx];
+      }
+      let stepIdx = 0;
+      const advance = () => {
+        skillMoveAnimOverrides[pIdx] = path[stepIdx];
+        if (stepIdx > 0) playSfx("step");
+        if (camera.mode === "follow" && stepIdx === path.length - 1) {
+          focusCameraOnTile(path[stepIdx]);
+        }
+        renderDigitalBoard();
+        if (stepIdx < path.length - 1) {
+          stepIdx++;
+          skillMoveAnimTimers[pIdx] = setTimeout(advance, stepMs);
+        } else {
+          skillMoveAnimTimers[pIdx] = setTimeout(() => {
+            delete skillMoveAnimOverrides[pIdx];
+            delete skillMoveAnimTimers[pIdx];
+            if (ev.landVfx) {
+              spawnLocalBoardVfx([path[path.length - 1]], ev.landVfx);
+            }
+            if (ev.landSfx) {
+              playSfx(ev.landSfx);
+            }
+            renderDigitalBoard();
+          }, 120);
+        }
+      };
+      advance();
+    });
+  }
+
+  function triggerAnimatedSkillMovement(entries, opts = {}) {
+    if (!state || !Array.isArray(entries) || entries.length === 0) return;
+    const cleanEntries = entries
+      .map((e) => ({
+        playerIndex: e.playerIndex,
+        path: Array.isArray(e.path) ? e.path.filter((tid) => tid && TILE_MAP[tid]) : []
+      }))
+      .filter((e) => e.path.length >= 2);
+    if (cleanEntries.length === 0) return;
+    const ev = {
+      id: "smov_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      entries: cleanEntries,
+      soundTheme: opts.soundTheme || "",
+      stepMs: opts.stepMs || 185,
+      landVfx: opts.landVfx || "",
+      landSfx: opts.landSfx || ""
+    };
+    state.lastSkillMoveAnim = ev;
+    lastProcessedSkillMoveAnimId = ev.id;
+    playLocalSkillMoveAnim(ev);
+  }
+
+  function movePlayerInstantAlongPath(player, steps, direction = 1, resolveLanding = true, animOpts = {}) {
     let curr = player.tileId;
     let prev = player.lastTileId || null;
+    const walkedPath = [curr];
     const hitPlayers = new Set();
     for (let i = 0; i < steps; i++) {
       const opts = getNextPlayableOptions(curr, prev, i === 0 ? direction : 1);
@@ -5620,6 +5922,7 @@
       curr = chosen.tileId;
       player.lastTileId = prev;
       player.tileId = curr;
+      walkedPath.push(curr);
       if (player.inSpawn && curr !== "T0") player.inSpawn = false;
       triggerUnpredictableTricksOnTile(player, curr, hitPlayers);
       checkTokensOnStep(player, curr, i === steps - 1);
@@ -5627,9 +5930,21 @@
     if (direction < 0 && steps > 0) {
       player.lastTileId = getOppositeAdjacentNeighbor(player.tileId, player.lastTileId);
     }
+    if (walkedPath.length >= 2) {
+      triggerAnimatedSkillMovement(
+        [{ playerIndex: player.index, path: walkedPath }],
+        {
+          soundTheme: animOpts.soundTheme || (player.isSamMode ? "sam" : player.charId),
+          stepMs: animOpts.stepMs || 185,
+          landVfx: animOpts.landVfx || "",
+          landSfx: animOpts.landSfx || ""
+        }
+      );
+    }
     if (resolveLanding && TILE_MAP[curr]) {
       resolveExactLandingTile(player, TILE_MAP[curr]);
     }
+    return walkedPath;
   }
 
   // ============================================================================
@@ -5724,6 +6039,14 @@
     ) {
       lastProcessedPurchasedShardId = state.lastPurchasedShard.purchaseId;
       triggerShardFadeOut(state.lastPurchasedShard);
+    }
+    if (state.lastBoardVfxEvent && state.lastBoardVfxEvent.id && state.lastBoardVfxEvent.id !== lastProcessedBoardVfxId) {
+      lastProcessedBoardVfxId = state.lastBoardVfxEvent.id;
+      spawnLocalBoardVfx(state.lastBoardVfxEvent.tileIds, state.lastBoardVfxEvent.kind);
+    }
+    if (state.lastSkillMoveAnim && state.lastSkillMoveAnim.id && state.lastSkillMoveAnim.id !== lastProcessedSkillMoveAnimId) {
+      lastProcessedSkillMoveAnimId = state.lastSkillMoveAnim.id;
+      playLocalSkillMoveAnim(state.lastSkillMoveAnim);
     }
     const turnTrackKey = state.turnTimerKey
       ? `${state.cycle}:${state.roundInCycle}:${state.activePlayerIndex}:${state.turnTimerKey}`
@@ -6242,14 +6565,14 @@
     if (t.type === "intersect") {
       return `<div class="lgr-split-hub" title="Belokan Split (tidak terhitung langkah)">${buildSplitHubSvg(t)}</div>`;
     }
-    if (activeToken) {
+    if (activeToken && t.type === "normal") {
       const tm = getTrapTileMeta(activeToken);
       return `
         <div class="lgr-tile-shell">
           <div class="lgr-icon">${tm.icon}</div>
           <div class="lgr-pill-label">${escapeHtml(tm.label)}</div>
         </div>
-        <div class="tile-trap-badge ${tm.badgeCls}">${tm.icon}<span>${escapeHtml(tm.label)}</span></div>`;
+        <div class="tile-token-sublabel ${tm.badgeCls}">${tm.icon}<span>${escapeHtml(tm.label)}</span></div>`;
     }
     const labels = {
       spawn: "START",
@@ -6269,11 +6592,18 @@
       river_bottom: "EXIT"
     };
     const lbl = labels[t.type] !== undefined ? labels[t.type] : getCleanTileLabel(t);
+    const tokenSubHtml = activeToken
+      ? (() => {
+          const tm = getTrapTileMeta(activeToken);
+          return `<div class="tile-token-sublabel is-dual ${tm.badgeCls}">${tm.icon}<span>${escapeHtml(tm.label)}</span></div>`;
+        })()
+      : "";
     return `
       <div class="lgr-tile-shell">
         <div class="lgr-icon">${getTileSvgIcon(t.type)}</div>
         ${lbl ? `<div class="lgr-pill-label">${escapeHtml(lbl)}</div>` : ""}
-      </div>`;
+      </div>
+      ${tokenSubHtml}`;
   }
 
   function getTileRadius(tile) {
@@ -6622,6 +6952,9 @@
       if (hasTok) {
         const tm = getTrapTileMeta(tokOnTile);
         classes.push("tile-has-trap", tm.tileCls);
+        if (t.type !== "normal") {
+          classes.push("tile-dual-effect");
+        }
       }
 
       let branchTagAttr = "";
@@ -6705,20 +7038,23 @@
 
     // Group players by tile and position floating pins around the upper rim so they NEVER cover the tile block!
     const tileOccupants = {};
-    state.players.forEach((p) => {
-      if (!tileOccupants[p.tileId]) tileOccupants[p.tileId] = [];
-      tileOccupants[p.tileId].push(p);
+    state.players.forEach((p, idx) => {
+      const renderTid = skillMoveAnimOverrides[idx] || p.tileId;
+      if (!tileOccupants[renderTid]) tileOccupants[renderTid] = [];
+      tileOccupants[renderTid].push(p);
     });
 
     const pawnsHtml = state.players.map((p, idx) => {
-      const tile = TILE_MAP[p.tileId] || TILE_MAP.T0;
-      const group = tileOccupants[p.tileId] || [p];
+      const renderTid = skillMoveAnimOverrides[idx] || p.tileId;
+      const tile = TILE_MAP[renderTid] || TILE_MAP.T0;
+      const group = tileOccupants[renderTid] || [p];
       const posInGroup = group.indexOf(p);
       const spreadX = (posInGroup - (group.length - 1) / 2) * 1.45;
       const px = tile.x + spreadX;
       const py = tile.y;
       const isAct = idx === state.activePlayerIndex;
-      const walkCls = isAct && isWalkingAnim ? "walking-step" : "";
+      const isSkillAnim = Boolean(skillMoveAnimOverrides[idx]);
+      const walkCls = (isAct && isWalkingAnim) || isSkillAnim ? "walking-step" : "";
       const chData = DATA.CHARACTERS[p.charId] || {};
       const chibiSrc = p.isSamMode && chData.samChibi ? chData.samChibi : chData.chibi || "";
       const pawnVisual = chibiSrc
@@ -6736,7 +7072,18 @@
       </div>`;
     });
 
-    nodesLayer.innerHTML = tilesHtml.join("") + shardHtml.join("") + fadingShardHtml.join("") + pawnsHtml.join("");
+    const boardVfxHtml = activeBoardVfxList.map((v) => {
+      const tile = TILE_MAP[v.tileId];
+      if (!tile) return "";
+      return `
+      <div class="board-tile-vfx vfx-${escapeHtml(v.kind)}" style="left:${tile.x}%;top:${tile.y}%;">
+        <div class="btv-ring"></div>
+        <div class="btv-core"></div>
+        <div class="btv-sparks"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>`;
+    });
+
+    nodesLayer.innerHTML = tilesHtml.join("") + shardHtml.join("") + fadingShardHtml.join("") + boardVfxHtml.join("") + pawnsHtml.join("");
     applyBranchPreviewTileClasses();
   }
 
@@ -8204,6 +8551,15 @@
             <option value="tc">Gain +10 T-Coins</option>
           </select>
         </div>`;
+    } else if (targetCard.effectKey === "sam_discounted_versus") {
+      controlsHtml += `
+        <div class="form-field">
+          <label>Pilih Taruhan Versus (Diskon SAM):</label>
+          <select id="card-modal-choice-val">
+            <option value="tier1">Tier 1: SAM Gratis (0 TC) vs Lawan 15 TC</option>
+            <option value="tier2">Tier 2: SAM 15 TC vs Lawan 30 TC</option>
+          </select>
+        </div>`;
     }
 
     return { html: controlsHtml, missingTarget: missingValidTarget };
@@ -8376,6 +8732,13 @@
         tile: t,
         distance: getTileDistance(player.tileId, t.id)
       }));
+    } else if (effectiveCard.targetType === "any_tile") {
+      matches = DATA.BOARD_TILES.filter(
+        (t) => t.type !== "spawn" && t.type !== "intersect" && !t.offTrack
+      ).map((t) => ({
+        tile: t,
+        distance: getTileDistance(player.tileId, t.id)
+      }));
     } else {
       const excludeSelfTile = effectiveCard.effectKey === "teleport_normal_radius";
       matches = getTilesWithinRadius(player.tileId, radius, onlyNormal, excludeSelfTile);
@@ -8386,6 +8749,7 @@
       return;
     }
     closeModal();
+    const validTileIds = matches.map((m) => m.tile.id);
     pendingInteraction = {
       type: "select_tile_target",
       cardUid,
@@ -8393,12 +8757,15 @@
       player,
       movingPlayerIndex: player.index,
       options,
-      validTileIds: matches.map((m) => m.tile.id),
+      validTileIds,
       tileStepLabels: {},
       canChangeTarget: card.effectKey === "copy_last_skill"
     };
-    if (effectiveCard.targetType === "non_event_tile" || radius >= 5) setCameraMode("wide");
-    else focusCameraOnTile(player.tileId, isMobilePortrait() ? 0.56 : 0.78);
+    if (effectiveCard.targetType === "non_event_tile" || effectiveCard.targetType === "any_tile") {
+      setCameraMode("wide");
+    } else {
+      focusCameraOnTileGroup(validTileIds, player.tileId);
+    }
     renderAll();
   }
 
@@ -8460,8 +8827,7 @@
         card.effectKey === "copy_last_skill"
     };
 
-    if (moveSpec.maxSteps >= 6) setCameraMode("wide");
-    else focusCameraOnTile(movingPlayer.tileId, isMobilePortrait() ? 0.56 : 0.78);
+    focusCameraOnTileGroup(validTileIds, movingPlayer.tileId);
     renderAll();
   }
 

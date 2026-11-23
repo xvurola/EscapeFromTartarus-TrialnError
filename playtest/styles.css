@@ -5089,6 +5089,197 @@ body:not(.modal-open) .tucked-card:hover,
   align-items: end;
 }
 
+/* ============================================================================
+   DUAL-EFFECT TILE HIGHLIGHT, TOKEN SUB-LABEL BELOW TILE & BOARD IMPACT VFX
+   ============================================================================ */
+.digital-tile.tile-dual-effect {
+  box-shadow:
+    0 0 0 4px rgba(251, 146, 60, 0.92),
+    0 0 24px 7px rgba(249, 115, 22, 0.78),
+    inset 0 0 14px rgba(253, 186, 116, 0.45) !important;
+  animation: dualTileGlowPulse 1.55s ease-in-out infinite;
+  z-index: 16;
+}
+
+.digital-tile.tile-dual-effect.tile-trap-virus {
+  box-shadow:
+    0 0 0 4px rgba(192, 132, 252, 0.95),
+    0 0 24px 7px rgba(168, 85, 247, 0.82),
+    inset 0 0 14px rgba(216, 180, 254, 0.42) !important;
+}
+
+.digital-tile.tile-dual-effect.tile-trap-herb {
+  box-shadow:
+    0 0 0 4px rgba(52, 211, 153, 0.95),
+    0 0 24px 7px rgba(16, 185, 129, 0.82) !important;
+}
+
+.digital-tile.tile-dual-effect.tile-trap-safe {
+  box-shadow:
+    0 0 0 4px rgba(56, 189, 248, 0.95),
+    0 0 24px 7px rgba(14, 165, 233, 0.82) !important;
+}
+
+.digital-tile.tile-dual-effect.tile-trap-restricted {
+  box-shadow:
+    0 0 0 4px rgba(251, 191, 36, 0.95),
+    0 0 24px 7px rgba(245, 158, 11, 0.82) !important;
+}
+
+@keyframes dualTileGlowPulse {
+  0%, 100% { filter: brightness(1.04); }
+  50% { filter: brightness(1.22); }
+}
+
+.tile-token-sublabel {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.78);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.tile-token-sublabel svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+
+.tile-token-sublabel.badge-fire {
+  background: linear-gradient(135deg, #c2410c, #ea580c);
+  border-color: #fde047;
+  color: #fef9c3;
+}
+
+.tile-token-sublabel.badge-virus {
+  background: linear-gradient(135deg, #6b21a8, #9333ea);
+  border-color: #e9d5ff;
+  color: #faf5ff;
+}
+
+.tile-token-sublabel.badge-herb {
+  background: linear-gradient(135deg, #047857, #10b981);
+  border-color: #a7f3d0;
+  color: #ecfdf5;
+}
+
+.tile-token-sublabel.badge-safe {
+  background: linear-gradient(135deg, #0369a1, #0ea5e9);
+  border-color: #bae6fd;
+  color: #f0f9ff;
+}
+
+.tile-token-sublabel.badge-restricted {
+  background: linear-gradient(135deg, #b45309, #d97706);
+  border-color: #fde68a;
+  color: #fffbeb;
+}
+
+.board-tile-vfx {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 36;
+}
+
+.board-tile-vfx .btv-ring {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 5px solid #fb923c;
+  box-shadow: 0 0 28px rgba(249, 115, 22, 0.95), inset 0 0 20px rgba(253, 186, 116, 0.75);
+  animation: btvRingExpand 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.board-tile-vfx .btv-core {
+  position: absolute;
+  inset: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(254, 240, 138, 0.95) 0%, rgba(249, 115, 22, 0.78) 45%, rgba(220, 38, 38, 0) 76%);
+  animation: btvCoreFlash 0.95s ease-out forwards;
+}
+
+.board-tile-vfx.vfx-warp_burst .btv-ring {
+  border-color: #38bdf8;
+  box-shadow: 0 0 26px rgba(56, 189, 248, 0.95), inset 0 0 18px rgba(186, 230, 253, 0.7);
+}
+
+.board-tile-vfx.vfx-warp_burst .btv-core {
+  background: radial-gradient(circle, rgba(224, 242, 254, 0.95) 0%, rgba(56, 189, 248, 0.72) 45%, rgba(14, 165, 233, 0) 76%);
+}
+
+.board-tile-vfx.vfx-push_impact .btv-ring {
+  border-color: #f43f5e;
+  box-shadow: 0 0 26px rgba(244, 63, 94, 0.92), inset 0 0 18px rgba(253, 164, 175, 0.7);
+}
+
+.board-tile-vfx.vfx-push_impact .btv-core {
+  background: radial-gradient(circle, rgba(255, 228, 230, 0.92) 0%, rgba(244, 63, 94, 0.72) 45%, rgba(190, 18, 60, 0) 76%);
+}
+
+.board-tile-vfx .btv-sparks {
+  position: absolute;
+  inset: 0;
+}
+
+.board-tile-vfx .btv-sparks span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fde047;
+  box-shadow: 0 0 12px #f97316;
+  animation: btvSparkOut 0.85s ease-out forwards;
+}
+
+.board-tile-vfx.vfx-warp_burst .btv-sparks span {
+  background: #bae6fd;
+  box-shadow: 0 0 12px #38bdf8;
+}
+
+.board-tile-vfx .btv-sparks span:nth-child(1) { --dx: 0px; --dy: -66px; }
+.board-tile-vfx .btv-sparks span:nth-child(2) { --dx: 58px; --dy: -34px; }
+.board-tile-vfx .btv-sparks span:nth-child(3) { --dx: 58px; --dy: 34px; }
+.board-tile-vfx .btv-sparks span:nth-child(4) { --dx: 0px; --dy: 66px; }
+.board-tile-vfx .btv-sparks span:nth-child(5) { --dx: -58px; --dy: 34px; }
+.board-tile-vfx .btv-sparks span:nth-child(6) { --dx: -58px; --dy: -34px; }
+
+@keyframes btvRingExpand {
+  0% { transform: scale(0.28); opacity: 1; }
+  65% { transform: scale(1.18); opacity: 0.9; }
+  100% { transform: scale(1.48); opacity: 0; }
+}
+
+@keyframes btvCoreFlash {
+  0% { transform: scale(0.35); opacity: 1; }
+  35% { transform: scale(1.15); opacity: 0.95; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes btvSparkOut {
+  0% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2); opacity: 0; }
+}
+
 @media (max-width: 640px) {
   .last-used-detail-layout,
   .scry-pick-grid,
@@ -5224,96 +5415,156 @@ body:not(.modal-open) .tucked-card:hover,
     text-align: center;
   }
 
-  /* 2. Compact Status Card & Shard Zones Strip at Top on Mobile Portrait */
+  /* 2. Compact Non-Overlapping Top Status Strip + Last Card Used on Mobile Portrait */
   .hud-top-right-status {
     top: 4px;
     left: 6px;
     right: 6px;
     width: auto;
-    gap: 4px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 4px 6px;
+    align-items: center;
   }
 
   .status-info-card {
-    padding: 5px 10px;
-    border-radius: 11px;
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    padding: 4px 8px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .status-cycle-row {
+    justify-content: flex-start;
+    gap: 5px;
   }
 
   .status-cycle-main {
-    font-size: 0.96rem;
+    font-size: 0.78rem;
   }
 
   .status-cycle-sub {
-    font-size: 0.74rem;
+    font-size: 0.64rem;
   }
 
   .status-divider {
-    margin: 3px auto 4px;
+    display: none;
   }
 
   .status-meta-grid {
-    font-size: 0.66rem;
-    margin-bottom: 2px;
+    font-size: 0.6rem;
+    margin-bottom: 0;
+    justify-content: flex-start;
+    gap: 8px;
   }
 
   .status-card-use-row {
-    font-size: 0.68rem;
+    display: none;
+  }
+
+  .status-turn-timer-row {
+    font-size: 0.6rem;
+    padding-top: 1px;
+    justify-content: flex-start;
+    gap: 4px;
   }
 
   .shard-zones-pill {
-    padding: 2px 10px;
-    font-size: 0.66rem;
+    grid-column: 1 / 3;
+    grid-row: 2 / 3;
+    padding: 2px 8px;
+    font-size: 0.6rem;
+    text-align: center;
+  }
+
+  .world-event-pill-slot {
+    grid-column: 1 / 3;
+    font-size: 0.6rem;
+  }
+
+  .last-card-used-slot {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    width: auto;
+    max-width: 128px;
+  }
+
+  .last-card-used-card {
+    padding: 4px 6px;
+    gap: 6px;
+    border-radius: 9px;
+  }
+
+  .last-card-used-thumb {
+    width: 26px;
+    height: 36px;
+    border-radius: 4px;
+  }
+
+  .last-card-used-label {
+    font-size: 0.48rem;
+  }
+
+  .last-card-used-name {
+    font-size: 0.62rem;
+  }
+
+  .last-card-used-caster {
+    display: none;
+  }
+
+  .last-card-used-empty {
+    padding: 5px 7px;
+    font-size: 0.56rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
   }
 
   .recent-activity-feed {
-    position: absolute;
-    top: 210px;
-    right: 2px;
-    width: min(230px, 68vw);
-    z-index: 28;
-    margin-top: 0;
-  }
-
-  .recent-activity-item {
-    font-size: 0.61rem;
-    padding: 2px 7px;
+    display: none;
   }
 
   .hud-top-center-float {
-    top: 208px;
+    top: 196px;
     width: 94vw;
   }
 
   .step-status-banner {
-    padding: 5px 12px;
-    font-size: 0.7rem;
+    padding: 4px 10px;
+    font-size: 0.66rem;
   }
 
-  /* 3. Convert Player List into a Compact 2x2 Top Grid below Status Card */
+  /* 3. Ultra-Compact 2x2 Player Strip cleanly BELOW Status & Shard Bar (Zero Overlap) */
   .hud-players-list {
     top: 90px;
     left: 6px;
     right: 6px;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 5px;
+    gap: 4px;
     align-items: stretch;
   }
 
   .player-hud-card,
   .player-hud-card.is-active {
     width: 100%;
-    min-height: 54px;
-    border-radius: 10px;
+    min-height: 44px;
+    border-radius: 9px;
   }
 
   .ph-portrait-col,
   .player-hud-card.is-active .ph-portrait-col {
-    width: 46px;
+    width: 38px;
   }
 
   .ph-info-col,
   .player-hud-card.is-active .ph-info-col {
-    padding: 4px 6px 4px 4px;
+    padding: 3px 5px 3px 4px;
     gap: 2px;
   }
 
@@ -5321,138 +5572,151 @@ body:not(.modal-open) .tucked-card:hover,
   .ph-name.long-name,
   .player-hud-card.is-active .ph-name,
   .player-hud-card.is-active .ph-name.long-name {
-    font-size: 0.76rem;
+    font-size: 0.68rem;
   }
 
   .ph-icon-badge,
   .player-hud-card.is-active .ph-icon-badge {
-    width: 15px;
-    height: 15px;
+    width: 13px;
+    height: 13px;
     border-radius: 4px;
   }
 
   .ph-icon-badge svg,
   .player-hud-card.is-active .ph-icon-badge svg {
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
   }
 
   .ph-currency-bar,
   .player-hud-card.is-active .ph-currency-bar {
-    padding: 2px 5px;
-    font-size: 0.6rem;
-    border-radius: 5px;
+    padding: 1px 4px;
+    font-size: 0.56rem;
+    border-radius: 4px;
     gap: 4px;
   }
 
   .ph-meta-row,
   .player-hud-card.is-active .ph-meta-row {
-    font-size: 0.54rem;
-  }
-
-  .ph-meta-right {
     display: none;
   }
 
   .ph-effects-row {
-    display: none; /* Keep mobile ribbon ultra-compact; tap player card to inspect full passives */
+    display: none;
   }
 
-  /* 4. Utility Pills above Bottom Card Fan on Left */
+  /* 4. Compact Utility Pills above Bottom Card Fan on Left */
   .hud-bottom-left-utils {
-    bottom: 102px;
+    bottom: 98px;
     left: 6px;
-    gap: 4px;
-    max-width: 56vw;
+    gap: 3px;
+    max-width: 64vw;
+    flex-wrap: wrap;
   }
 
   .util-pill-btn {
-    padding: 4px 7px;
-    font-size: 0.63rem;
+    padding: 4px 6px;
+    font-size: 0.58rem;
     border-radius: 6px;
   }
 
-  /* 5. Bottom Tucked Card Fan + Floating Dice Roller for Vertical Screen */
+  .draw-pile-pill-btn {
+    bottom: 128px;
+    left: 6px;
+    padding: 4px 8px;
+    font-size: 0.6rem;
+  }
+
+  /* 5. Bottom Scrollable Compact Card Fan + Floating Dice Roller for Vertical Screen */
   .bottom-hand-stage {
     width: 100vw;
     left: 0;
     transform: none;
     justify-content: center;
     gap: 0;
+    padding-bottom: 0;
   }
 
   .tucked-cards-fan {
     width: 100vw;
-    justify-content: center;
-    padding-left: 24px;
-    padding-right: 6px;
-    overflow-x: visible;
+    justify-content: flex-start;
+    padding: 18px 14px 0 26px;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tucked-cards-fan::-webkit-scrollbar {
+    display: none;
   }
 
   .tucked-card {
-    width: 104px;
-    height: 152px;
-    margin-left: -34px;
-    border-radius: 9px;
-    transform: translateY(68px) rotate(-3deg);
+    width: 88px;
+    height: 126px;
+    flex-shrink: 0;
+    margin-left: -20px;
+    border-radius: 8px;
+    transform: translateY(50px) rotate(-2deg);
   }
 
   body:not(.modal-open) .tucked-card:hover,
   .tucked-card.selected {
-    transform: translateY(-10px) rotate(0deg) scale(1.12) !important;
+    transform: translateY(-10px) rotate(0deg) scale(1.1) !important;
   }
 
   /* Float Roll & End Turn Dock cleanly at bottom-right above the cards on Mobile Portrait */
   .roll-action-dock {
     position: absolute;
-    bottom: 96px;
-    right: 8px;
+    bottom: 98px;
+    right: 6px;
     margin-bottom: 0;
-    gap: 6px;
+    gap: 4px;
     z-index: 44;
   }
 
   .last-roll-readout {
-    font-size: 0.6rem;
-    padding: 2px 8px;
+    font-size: 0.56rem;
+    padding: 2px 6px;
+    max-width: 135px;
   }
 
   .eft-roll-btn {
-    width: 82px;
-    height: 52px;
-    border-radius: 12px;
+    width: 72px;
+    height: 46px;
+    border-radius: 11px;
   }
 
   .eft-roll-title {
-    font-size: 1.35rem;
+    font-size: 1.15rem;
   }
 
   .eft-roll-count {
-    font-size: 0.72rem;
+    font-size: 0.64rem;
   }
 
   .eft-endturn-btn {
-    min-width: 78px;
-    padding: 5px 12px;
-    font-size: 0.72rem;
+    min-width: 70px;
+    padding: 4px 10px;
+    font-size: 0.66rem;
   }
 
   /* 6. Interactive Prompt Bar & Drawers on Mobile */
   .action-prompt-bar {
-    bottom: 145px;
+    bottom: 162px;
     width: 94vw;
-    padding: 8px 10px;
-    font-size: 0.72rem;
+    padding: 7px 10px;
+    font-size: 0.68rem;
     flex-direction: column;
     text-align: center;
-    gap: 6px;
+    gap: 5px;
   }
 
   .floating-drawer {
-    bottom: 142px;
+    bottom: 158px;
     left: 3vw;
     width: 94vw;
-    max-height: 52vh;
+    max-height: 48vh;
   }
 
   /* 7. Responsive Modals & Pages for Mobile Portrait */
