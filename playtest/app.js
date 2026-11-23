@@ -373,6 +373,7 @@
   let lastTimerWarnSec = -1;
   let autoEndTurnTimerId = null;
   let lastRenderedTileModalKey = null;
+  let lastOpenedScryId = null;
   let tileModalMinimizedForId = null;
   let tileModalAutoCloseTimerId = null;
   let lastShownDiceRollEventId = null;
@@ -1201,9 +1202,9 @@
     compendiumId: "comp_beta1",
     playerCount: 4,
     extraPlayers: [
-      { username: "", charId: "aventurine" },
-      { username: "", charId: "joker" },
-      { username: "", charId: "lilith" }
+      { username: "", charId: "aventurine", controlType: "bot" },
+      { username: "", charId: "joker", controlType: "bot" },
+      { username: "", charId: "lilith", controlType: "bot" }
     ]
   };
 
@@ -1492,7 +1493,7 @@
     return copy;
   }
 
-  function buildDeckForCharacter(charId, compVersionId, isSamMode = false) {
+  function buildDeckForCharacter(charId, compVersionId, isSamMode = false, ownerPlayerId = null) {
     const charDef = getCharacterForCompendium(charId, compVersionId);
     if (!charDef) return [];
     const sourceCards = isSamMode && charDef.samCards ? charDef.samCards : charDef.cards;
@@ -1502,11 +1503,71 @@
         deck.push({
           ...c,
           uid: `${c.id}_${i}_${Math.random().toString(36).slice(2, 7)}`,
-          charId
+          charId,
+          ownerCharId: charId,
+          ownerPlayerId: ownerPlayerId || null
         });
       }
     });
     return shuffleArray(deck);
+  }
+
+  function isCardForeignToPlayer(card, player) {
+    if (!card || !player) return false;
+    if (card.ownerPlayerId && card.ownerPlayerId !== player.id) return true;
+    const origChar = card.ownerCharId || card.charId;
+    if (origChar && origChar !== player.charId) return true;
+    return false;
+  }
+
+  function returnForeignCardToOwner(card, fromPlayer = null) {
+    if (!card || !state || !Array.isArray(state.players)) return false;
+    if (card.rarity === "Ultimate") return false;
+    let owner = null;
+    if (card.ownerPlayerId) {
+      owner = state.players.find((o) => o.id === card.ownerPlayerId) || null;
+    }
+    if (!owner) {
+      const origChar = card.ownerCharId || card.charId;
+      owner = state.players.find((o) => o.charId === origChar && (!fromPlayer || o.index !== fromPlayer.index)) || null;
+    }
+    if (!owner) return false;
+    if (owner.charId === "firefly") {
+      const isSamCard = String(card.id || "").startsWith("sam_");
+      if ((owner.isSamMode && !isSamCard) || (!owner.isSamMode && isSamCard)) {
+        return false;
+      }
+    }
+    const alreadyExists =
+      (owner.hand || []).some((c) => c && c.uid === card.uid) ||
+      (owner.deck || []).some((c) => c && c.uid === card.uid) ||
+      (owner.discard || []).some((c) => c && c.uid === card.uid);
+    if (!alreadyExists) {
+      if (!Array.isArray(owner.discard)) owner.discard = [];
+      owner.discard.push(card);
+    }
+    return true;
+  }
+
+  function returnAllForeignCardsBeforeReshuffle() {
+    if (!state || !Array.isArray(state.players)) return;
+    state.players.forEach((p) => {
+      const keepOwn = (arr) => {
+        const own = [];
+        (arr || []).forEach((c) => {
+          if (!c) return;
+          if (isCardForeignToPlayer(c, p)) {
+            returnForeignCardToOwner(c, p);
+          } else {
+            own.push(c);
+          }
+        });
+        return own;
+      };
+      p.hand = keepOwn(p.hand);
+      p.deck = keepOwn(p.deck);
+      p.discard = keepOwn(p.discard);
+    });
   }
 
   function createShopState(rules) {
@@ -1551,7 +1612,8 @@
     const seatMap = {};
     const players = rosterEntries.map((entry, idx) => {
       const charDef = getCharacterForCompendium(entry.charId, compendiumId);
-      const deck = buildDeckForCharacter(entry.charId, compendiumId, false);
+      const pid = `P${idx + 1}`;
+      const deck = buildDeckForCharacter(entry.charId, compendiumId, false, pid);
       const hand = deck.splice(0, rules.startHandSize);
       const cleanUser = entry.username;
       if (entry.clientId) {
@@ -1559,7 +1621,7 @@
       }
       return {
         index: idx,
-        id: `P${idx + 1}`,
+        id: pid,
         username: cleanUser,
         charName: charDef.name,
         name: cleanUser || charDef.name,
@@ -1614,6 +1676,7 @@
       activeGlobalEvent: null,
       lastOpponentSkillUsed: null,
       recentOpponentSkills: [],
+      lastSkillCardUsed: null,
       lastSkillEvent: null,
       lastDiceRollEvent: null,
       lastTileEffectReveal: null,
@@ -1633,6 +1696,7 @@
     lastShownTileEffectRevealId = null;
     lastTrackedTurnTimerKey = null;
     lastRenderedTileModalKey = null;
+    lastOpenedScryId = null;
     tileModalMinimizedForId = null;
     clearTimeout(tileModalAutoCloseTimerId);
     tileModalAutoCloseTimerId = null;
@@ -1845,7 +1909,11 @@
       if (eligibleIndices.length === 0) break;
       const pickIdx = eligibleIndices[Math.floor(Math.random() * eligibleIndices.length)];
       const c = player.hand.splice(pickIdx, 1)[0];
-      player.discard.push(c);
+      if (isCardForeignToPlayer(c, player)) {
+        returnForeignCardToOwner(c, player);
+      } else {
+        player.discard.push(c);
+      }
       removed.push(c);
     }
     return removed;
@@ -2202,7 +2270,14 @@
 
   function canLocalPlayerAct() {
     if (isProcessingRemoteAction) return true;
-    if (mp.mode === "local" || mp.mySeat === -1) return true;
+    if (mp.mode === "local" || mp.mySeat === -1) {
+      if (state && Array.isArray(state.players)) {
+        const expectedSeat = getExpectedActingSeat();
+        const actingP = state.players[expectedSeat];
+        if (actingP && actingP.isBot) return false;
+      }
+      return true;
+    }
     return mp.mySeat === getExpectedActingSeat();
   }
 
@@ -2212,7 +2287,7 @@
     if (mp.mode !== "local" && mp.mySeat !== -1) {
       return mp.mySeat === player.index;
     }
-    return true;
+    return !player.isBot;
   }
 
   function handleRollButton() {
@@ -3377,6 +3452,7 @@
         runClashOfFateMinigame("Global Event: Sudden Minigame");
       }
     } else if (card.effectType === "instant_shuffle_all") {
+      returnAllForeignCardsBeforeReshuffle();
       state.players.forEach((p) => reshufflePlayerCycleDeck(p));
       outcomeText = "Seluruh deck pemain dikocok ulang & menarik kartu baru!";
     }
@@ -3388,12 +3464,21 @@
   }
 
   function reshufflePlayerCycleDeck(p) {
-    const retained = p.hand.filter((c) => c.retain || c.rarity === "Ultimate");
-    const nonRetained = p.hand.filter((c) => !c.retain && c.rarity !== "Ultimate");
-    const cleanDeck = (p.deck || []).filter((c) => c.rarity !== "Ultimate");
-    const cleanDiscard = (p.discard || []).filter((c) => c.rarity !== "Ultimate");
-    const fullPool = [...cleanDeck, ...cleanDiscard, ...nonRetained];
-    p.deck = shuffleArray(fullPool);
+    const retained = (p.hand || []).filter((c) => c && (c.retain || c.rarity === "Ultimate") && !isCardForeignToPlayer(c, p));
+    const nonRetained = (p.hand || []).filter((c) => c && !c.retain && c.rarity !== "Ultimate");
+    const cleanDeck = (p.deck || []).filter((c) => c && c.rarity !== "Ultimate");
+    const cleanDiscard = (p.discard || []).filter((c) => c && c.rarity !== "Ultimate");
+
+    const ownPool = [];
+    [...cleanDeck, ...cleanDiscard, ...nonRetained].forEach((c) => {
+      if (isCardForeignToPlayer(c, p)) {
+        returnForeignCardToOwner(c, p);
+      } else {
+        ownPool.push(c);
+      }
+    });
+
+    p.deck = shuffleArray(ownPool);
     p.discard = [];
     p.hand = [...retained];
     drawCards(p, state.rules.startHandSize);
@@ -3703,6 +3788,9 @@
     state.shops = createShopState(state.rules);
     state.recentOpponentSkills = [];
     state.lastOpponentSkillUsed = null;
+
+    // Return any stolen/foreign cards back to their original owners BEFORE reshuffling Cycle decks
+    returnAllForeignCardsBeforeReshuffle();
 
     // Expire all active Unique / Passive effects on cycle transition & reshuffle decks
     state.players.forEach((p) => {
@@ -4440,6 +4528,7 @@
     }
     if (!skipQueueFlush && !isSkillActivationInFlight) {
       flushNextQueuedTileEffect();
+      scheduleMultiplayerBotIfNeeded();
     }
   }
 
@@ -4599,7 +4688,11 @@
 
     player.hand.splice(cardIdx, 1);
     if (card.rarity !== "Ultimate") {
-      player.discard.push(card);
+      if (isCardForeignToPlayer(card, player)) {
+        returnForeignCardToOwner(card, player);
+      } else {
+        player.discard.push(card);
+      }
     }
     if (!(isAdminUnlocked && adminFreeSkillUse)) {
       player.skillsUsedThisTurn++;
@@ -4628,13 +4721,28 @@
       outcomeText += " -> Passive [The Stage Is Mine] Aktif! Pilih pindah +1 / +2 / -1 di peta.";
     }
 
+    const usedCardImg = getCardImage(card, card.ownerCharId || card.charId || player.charId);
+    state.lastSkillCardUsed = {
+      id: "lcu_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      charId: player.charId,
+      cardId: card.id,
+      casterName: player.name,
+      cardName: card.name,
+      rarity: card.rarity,
+      cardImg: usedCardImg,
+      description: card.description,
+      outcomeText,
+      cycle: state.cycle,
+      round: state.roundInCycle
+    };
+
     triggerDramaticSkillEvent({
       charId: player.charId,
       cardId: card.id,
       casterName: player.name,
       cardName: card.name,
       rarity: card.rarity,
-      cardImg: getCardImage(card, player.charId),
+      cardImg: usedCardImg,
       description: card.description,
       outcomeText,
       profile: getSkillDramaticProfile(card, player.charId)
@@ -5302,8 +5410,41 @@
         return card.description;
       }
       case "scry_2_keep_1": {
-        drawCards(player, 1);
-        return card.description;
+        if (!Array.isArray(player.deck) || player.deck.length === 0) {
+          const msg = "Deck kosong — tidak ada kartu teratas untuk diperiksa.";
+          addLog(`[${card.name}]: ${msg}`);
+          return msg;
+        }
+        const topCards = [];
+        while (topCards.length < 2 && player.deck.length > 0) {
+          topCards.push(player.deck.pop());
+        }
+        if (topCards.length === 1) {
+          const onlyCard = topCards[0];
+          const lim = getEffectiveHandLimit(player);
+          if (player.hand.length < lim) {
+            player.hand.push(onlyCard);
+            const msg = `Hanya tersisa 1 kartu di deck: [${onlyCard.name}] diambil ke tangan!`;
+            addLog(`[${card.name}]: ${msg}`);
+            return msg;
+          } else {
+            if (isCardForeignToPlayer(onlyCard, player)) returnForeignCardToOwner(onlyCard, player);
+            else player.discard.push(onlyCard);
+            const msg = `Tangan penuh — [${onlyCard.name}] dibuang ke discard.`;
+            addLog(`[${card.name}]: ${msg}`);
+            return msg;
+          }
+        }
+        pendingInteraction = {
+          id: "scry_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+          type: "scry_2_keep_1",
+          player,
+          cards: topCards,
+          cardName: card.name
+        };
+        const msg = `${player.name} memeriksa 2 kartu teratas deck — pilih 1 untuk disimpan ke tangan (1 lainnya dibuang)!`;
+        addLog(`[${card.name}]: ${msg}`);
+        return msg;
       }
       case "place_safe_zone": {
         const tid = options.targetTileId || player.tileId;
@@ -5342,12 +5483,15 @@
         return card.description;
       }
       case "transform_to_sam": {
+        [...(player.hand || []), ...(player.discard || [])].forEach((c) => {
+          if (isCardForeignToPlayer(c, player)) returnForeignCardToOwner(c, player);
+        });
         player.isSamMode = true;
         player.charName = "SAM";
         player.name = player.username ? player.username : "SAM";
         player.discard = [];
         player.hand = [];
-        player.deck = buildDeckForCharacter("firefly", state.compendiumId, true);
+        player.deck = buildDeckForCharacter("firefly", state.compendiumId, true, player.id);
         drawCards(player, state.rules.startHandSize);
         addOrRefreshPassive(player, {
           key: "passive_sam_armor",
@@ -5445,13 +5589,16 @@
         return card.description;
       }
       case "transform_to_firefly": {
+        [...(player.hand || []), ...(player.discard || [])].forEach((c) => {
+          if (isCardForeignToPlayer(c, player)) returnForeignCardToOwner(c, player);
+        });
         player.isSamMode = false;
         player.charName = "Firefly / SAM";
         player.name = player.username ? player.username : "Firefly / SAM";
         player.passives = (player.passives || []).filter((p) => p.key !== "passive_sam_armor");
         player.discard = [];
         player.hand = [];
-        player.deck = buildDeckForCharacter("firefly", state.compendiumId, false);
+        player.deck = buildDeckForCharacter("firefly", state.compendiumId, false, player.id);
         drawCards(player, state.rules.startHandSize);
         addLog(`ULTIMATE [Cooldown Protocol]: ${player.name} kembali ke mode Firefly!`);
         return `${player.name} menonaktifkan armor dan kembali ke mode Firefly!`;
@@ -5609,6 +5756,7 @@
     renderDiceOfFateOverlay();
     renderVictoryScreenOverlay();
     syncSharedTileModal();
+    syncScryPickModal();
     applyCameraTransform();
     scheduleAutoEndTurnIfReady();
     scheduleMultiplayerBotIfNeeded();
@@ -5664,6 +5812,146 @@
         weSlot.innerHTML = "";
       }
     }
+
+    const lcuSlot = document.getElementById("last-card-used-slot");
+    if (lcuSlot) {
+      const lcu = state.lastSkillCardUsed;
+      if (lcu && lcu.cardName) {
+        lcuSlot.innerHTML = `
+          <button type="button" class="last-card-used-card" onclick="window.EFT_APP.openLastUsedCardModal()" title="Klik untuk melihat efek kartu &amp; kejadian penggunaan terakhir">
+            ${lcu.cardImg ? `<img class="last-card-used-thumb" src="${lcu.cardImg}" alt="${escapeHtml(lcu.cardName)}" loading="lazy" decoding="async" />` : ""}
+            <div class="last-card-used-meta">
+              <span class="last-card-used-label">Last Card Used</span>
+              <span class="last-card-used-name">${escapeHtml(lcu.cardName)}</span>
+              <span class="last-card-used-caster">${escapeHtml(lcu.casterName || "-")} · Klik detail</span>
+            </div>
+          </button>`;
+      } else {
+        lcuSlot.innerHTML = `
+          <div class="last-card-used-empty">
+            <span class="last-card-used-label">Last Card Used</span>
+            <span>Belum ada</span>
+          </div>`;
+      }
+    }
+  }
+
+  function openLastUsedCardModal() {
+    if (!state || !state.lastSkillCardUsed) return;
+    playSfx("click");
+    const lcu = state.lastSkillCardUsed;
+    openInfoModal(
+      `Last Card Used — ${escapeHtml(lcu.cardName)}`,
+      `<div class="last-used-detail-layout">
+        ${lcu.cardImg ? `<img class="last-used-detail-img" src="${lcu.cardImg}" alt="${escapeHtml(lcu.cardName)}" />` : ""}
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <strong style="font-size:1.05rem;color:#f8fafc;">${escapeHtml(lcu.cardName)}</strong>
+            <span class="tag-badge">${escapeHtml(lcu.rarity || "Skill")}</span>
+          </div>
+          <div style="font-size:0.76rem;color:var(--text-muted);">
+            Digunakan oleh <strong style="color:#fff;">${escapeHtml(lcu.casterName || "-")}</strong> · Cycle ${lcu.cycle || 1} (Round ${lcu.round || 1})
+          </div>
+          <div class="last-used-detail-section">
+            <div class="last-used-detail-heading">Efek Skill Card</div>
+            <div style="font-size:0.84rem;color:#e2e8f0;line-height:1.48;">${escapeHtml(lcu.description || "-")}</div>
+          </div>
+          <div class="last-used-detail-section">
+            <div class="last-used-detail-heading">Apa yang Terjadi</div>
+            <div style="font-size:0.84rem;color:var(--mint-light);font-weight:700;line-height:1.48;">${escapeHtml(lcu.outcomeText || lcu.description || "-")}</div>
+          </div>
+        </div>
+      </div>`
+    );
+  }
+
+  function openScryPickModal() {
+    if (!pendingInteraction || pendingInteraction.type !== "scry_2_keep_1") return;
+    const { player, cards, cardName } = pendingInteraction;
+    if (!isLocalHumanTurnForPlayer(player) || !Array.isArray(cards) || cards.length === 0) return;
+
+    const cardsHtml = cards
+      .map((c) => {
+        const imgUrl = getCardImage(c, c.ownerCharId || c.charId || player.charId);
+        return `
+          <div class="scry-pick-card">
+            <img class="scry-pick-img" src="${imgUrl}" alt="${escapeHtml(c.name)}" />
+            <div class="scry-pick-title">${escapeHtml(c.name)}</div>
+            <span class="tag-badge">${escapeHtml(c.rarity || "Skill")}</span>
+            <div class="scry-pick-desc">${escapeHtml(c.description || "")}</div>
+            <button type="button" class="btn btn-emerald" style="width:100%;" onclick="window.EFT_APP.resolveScryKeepChoice('${escapeHtml(c.uid)}')">
+              Ambil ke Tangan
+            </button>
+          </div>`;
+      })
+      .join("");
+
+    openInfoModal(
+      `${escapeHtml(cardName || "Insect's Instinct")} — Pilih 1 dari 2 Kartu Teratas`,
+      `<div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:0.8rem;color:#cbd5e1;">
+          Pilih <strong>1 kartu</strong> untuk dimasukkan ke tangan <strong>${escapeHtml(player.name)}</strong>. Kartu yang tidak dipilih akan otomatis dibuang.
+        </div>
+        <div class="scry-pick-grid">${cardsHtml}</div>
+      </div>`,
+      "scry_pick"
+    );
+  }
+
+  function syncScryPickModal() {
+    if (!pendingInteraction || pendingInteraction.type !== "scry_2_keep_1") {
+      lastOpenedScryId = null;
+      return;
+    }
+    if (!isLocalHumanTurnForPlayer(pendingInteraction.player)) return;
+    if (lastOpenedScryId !== pendingInteraction.id) {
+      lastOpenedScryId = pendingInteraction.id;
+      openScryPickModal();
+    }
+  }
+
+  function resolveScryKeepChoice(chosenUid) {
+    if (!canLocalPlayerAct()) return;
+    if (isRemoteClient()) {
+      sendClientActionToHost("scry_keep_choice", { chosenUid });
+      closeModal();
+      return;
+    }
+    if (!pendingInteraction || pendingInteraction.type !== "scry_2_keep_1") return;
+    const { player, cards, cardName } = pendingInteraction;
+    pendingInteraction = null;
+    lastOpenedScryId = null;
+    closeModal();
+
+    if (Array.isArray(cards) && cards.length > 0) {
+      const chosen = cards.find((c) => c.uid === chosenUid) || cards[0];
+      const discarded = cards.filter((c) => c.uid !== chosen.uid);
+      const lim = getEffectiveHandLimit(player);
+      let keepMsg = "";
+      if (player.hand.length < lim) {
+        player.hand.push(chosen);
+        keepMsg = `mengambil [${chosen.name}] ke tangan`;
+      } else {
+        if (isCardForeignToPlayer(chosen, player)) returnForeignCardToOwner(chosen, player);
+        else player.discard.push(chosen);
+        keepMsg = `tangan penuh sehingga [${chosen.name}] ikut dibuang`;
+      }
+      const discNames = [];
+      discarded.forEach((dc) => {
+        discNames.push(dc.name);
+        if (isCardForeignToPlayer(dc, player)) returnForeignCardToOwner(dc, player);
+        else player.discard.push(dc);
+      });
+      const fullMsg = `${player.name} ${keepMsg}${discNames.length > 0 ? ` & membuang [${discNames.join(", ")}]` : ""}!`;
+      addLog(`[${cardName || "Insect's Instinct"}]: ${fullMsg}`);
+      if (state.lastSkillCardUsed && state.lastSkillCardUsed.cardName === (cardName || "Insect's Instinct")) {
+        state.lastSkillCardUsed.outcomeText = fullMsg;
+      }
+      playSfx("card");
+    }
+
+    renderAll();
+    broadcastMultiplayerState();
   }
 
   function renderStepStatusBanner() {
@@ -6464,9 +6752,12 @@
   }
 
   function renderTuckedHandAndDice() {
-    const viewPlayerIdx = mp.mySeat !== -1 ? mp.mySeat : state.activePlayerIndex;
-    const player = state.players[viewPlayerIdx] || getActivePlayer();
     const activeP = getActivePlayer();
+    let viewPlayerIdx = mp.mySeat !== -1 ? mp.mySeat : state.activePlayerIndex;
+    if (mp.mode === "local" && activeP && activeP.isBot && state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
+      viewPlayerIdx = state.seatMap[mp.clientId];
+    }
+    const player = state.players[viewPlayerIdx] || activeP;
 
     const drawCountEl = document.getElementById("draw-pile-count");
     if (drawCountEl && player) {
@@ -6737,6 +7028,12 @@
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
           ${btns}
           <button class="btn btn-sm" onclick="window.EFT_APP.resolveStageIsMineChoice(null)">Tetap di Sini</button>
+        </div>`;
+    } else if (pendingInteraction.type === "scry_2_keep_1") {
+      bar.innerHTML = `
+        <div><strong>${escapeHtml(pendingInteraction.cardName || "Insect's Instinct")}</strong> — Pilih 1 dari 2 kartu teratas deck untuk disimpan ke tangan.</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openScryPickModal()">Pilih Kartu</button>
         </div>`;
     }
   }
@@ -7488,6 +7785,7 @@
       else if (act.action === "execute_trade") executeTradeAction(d.partnerIdx, d.tradeType);
       else if (act.action === "close_tile_modal") dismissSharedTileModal();
       else if (act.action === "stage_is_mine_choice") resolveStageIsMineChoice(d.tileId);
+      else if (act.action === "scry_keep_choice") resolveScryKeepChoice(d.chosenUid);
       else if (act.action === "forced_all_in_choice") resolveForcedAllInChoice(d.choice);
       else if (act.action === "minigame_roll") rollDiceOfFateCurrent();
       else if (act.action === "minigame_action") {
@@ -8899,23 +9197,63 @@
     broadcastMultiplayerState();
   }
 
+  function isSkillCutinOrDiceAnimActive() {
+    const skillOv = document.getElementById("skill-dramatic-overlay");
+    if (skillOv && skillOv.classList.contains("visible")) return true;
+    const diceOv = document.getElementById("dice-roll-overlay");
+    if (diceOv && diceOv.classList.contains("visible")) return true;
+    return false;
+  }
+
   function scheduleMultiplayerBotIfNeeded() {
     clearTimeout(window._mpBotTimer);
     if (!state || state.winner || isWalkingAnim || isTileEffectAnimating || tileShuffleState) return;
+    if (!isMatchStarted || isTitleScreenVisible) return;
     if (state.activeMinigame) {
       scheduleDiceOfFateBotIfNeeded();
       return;
     }
-    if (isMultiplayerHost() && mp.lobby.status === "playing") {
-      const activeP = getActivePlayer();
-      if (activeP && activeP.isBot) {
-        window._mpBotTimer = setTimeout(() => {
-          if (state && !state.winner && !isWalkingAnim && !isTileEffectAnimating && !tileShuffleState && getActivePlayer()?.isBot) {
-            _executeBotStepInternal();
-          }
-        }, 560);
-      }
+    const canDriveBots =
+      (isMultiplayerHost() && mp.lobby.status === "playing") ||
+      mp.mode === "local";
+    if (!canDriveBots) return;
+
+    const activeP = getActivePlayer();
+    if (!activeP || !activeP.isBot) return;
+
+    // Wait naturally if dramatic skill cut-in or dice roll animation is still playing
+    if (isSkillCutinOrDiceAnimActive()) {
+      window._mpBotTimer = setTimeout(() => {
+        scheduleMultiplayerBotIfNeeded();
+      }, 650);
+      return;
     }
+
+    // Natural human-like thinking tempo
+    let delayMs = 1750 + Math.floor(Math.random() * 650); // 1.75s - 2.4s before skill/roll
+    if (pendingInteraction) {
+      delayMs = 1250 + Math.floor(Math.random() * 450); // 1.25s - 1.7s for branch/shard/scry
+    } else if (state.activeTileModal) {
+      delayMs = 1650 + Math.floor(Math.random() * 550); // 1.65s - 2.2s for versus/trade
+    } else if (state.phaseIndex === 5) {
+      delayMs = 1200 + Math.floor(Math.random() * 450); // 1.2s - 1.65s before End Turn
+    }
+
+    window._mpBotTimer = setTimeout(() => {
+      if (
+        state &&
+        !state.winner &&
+        !isWalkingAnim &&
+        !isTileEffectAnimating &&
+        !tileShuffleState &&
+        !isSkillCutinOrDiceAnimActive() &&
+        getActivePlayer()?.isBot
+      ) {
+        _executeBotStepInternal();
+      } else if (state && !state.winner && getActivePlayer()?.isBot) {
+        scheduleMultiplayerBotIfNeeded();
+      }
+    }, delayMs);
   }
 
   function _executeBotStepInternal() {
@@ -8978,6 +9316,10 @@
           const goodTypes = new Set(["tc_plus10", "pos_effect", "card_plus1", "merchant", "event"]);
           const goodTid = (p.validTileIds || []).find((tid) => TILE_MAP[tid] && goodTypes.has(TILE_MAP[tid].type));
           resolveStageIsMineChoice(goodTid || null);
+        } else if (p.type === "scry_2_keep_1") {
+          const rank = { Ultimate: 6, Unique: 5, Epic: 4, Rare: 3, Uncommon: 2, Common: 1 };
+          const sorted = [...(p.cards || [])].sort((a, b) => (rank[b.rarity] || 0) - (rank[a.rarity] || 0));
+          resolveScryKeepChoice(sorted[0] ? sorted[0].uid : null);
         } else if (p.type === "forced_all_in_reward") {
           resolveForcedAllInChoice("shard");
         } else {
@@ -9233,6 +9575,9 @@
   function updateSetupExtraPlayer(slotIdx, field, val) {
     if (!setupDraft.extraPlayers[slotIdx]) return;
     setupDraft.extraPlayers[slotIdx][field] = val;
+    if (field === "controlType") {
+      openWelcomeSetupModal(setupDraft.tab);
+    }
   }
 
   function selectSetupChar(charId) {
@@ -9356,9 +9701,9 @@
 
           ${
             isHost
-              ? `<label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#cbd5e1;cursor:pointer;">
+              ? `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;color:#e2e8f0;cursor:pointer;" title="Isi slot kosong secara otomatis dengan AI hingga 4 pemain">
                    <input type="checkbox" ${mp.lobby.fillWithBots ? "checked" : ""} onchange="window.EFT_APP.toggleLobbyFillBots(this.checked)" />
-                   Isi slot kosong dengan Bot hingga 4 pemain (urutan tetap diacak)
+                   AI Fill In
                  </label>
                  <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">Acak Urutan &amp; Mulai Game</button>`
               : `<button class="btn ${me && me.ready ? "btn-gold" : "btn-emerald"} setup-action-btn" onclick="window.EFT_APP.toggleLobbyReady()">${
@@ -9380,15 +9725,16 @@
       const freeDefaults = playableIds.filter((cid) => cid !== setupDraft.charId);
       let extraRows = "";
       for (let i = 0; i < otherCount; i++) {
-        const ext = setupDraft.extraPlayers[i] || { username: "", charId: freeDefaults[i % freeDefaults.length] };
+        const ext = setupDraft.extraPlayers[i] || { username: "", charId: freeDefaults[i % freeDefaults.length], controlType: "bot" };
+        const ctrlType = ext.controlType || "bot";
         const chosenId = playableIds.includes(ext.charId)
           ? ext.charId
           : freeDefaults[i % freeDefaults.length] || playableIds[0];
         extraRows += `
-          <div class="form-grid" style="align-items:end;">
+          <div class="setup-extra-row-3col">
             <div class="form-field">
               <label>Pemain ${i + 2} Username (opsional):</label>
-              <input type="text" value="${escapeHtml(ext.username)}" placeholder="Bot / Pemain ${i + 2}" oninput="window.EFT_APP.updateSetupExtraPlayer(${i}, 'username', this.value)" />
+              <input type="text" value="${escapeHtml(ext.username)}" placeholder="${ctrlType === "bot" ? `Bot ${i + 2}` : `Pemain ${i + 2}`}" oninput="window.EFT_APP.updateSetupExtraPlayer(${i}, 'username', this.value)" />
             </div>
             <div class="form-field">
               <label>Karakter Pemain ${i + 2}:</label>
@@ -9396,6 +9742,13 @@
                 ${allowedChars
                   .map((c) => `<option value="${c.id}" ${c.id === chosenId ? "selected" : ""}>${c.name}</option>`)
                   .join("")}
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Kontrol:</label>
+              <select onchange="window.EFT_APP.updateSetupExtraPlayer(${i}, 'controlType', this.value)">
+                <option value="bot" ${ctrlType === "bot" ? "selected" : ""}>Bot (AI)</option>
+                <option value="human" ${ctrlType === "human" ? "selected" : ""}>Player</option>
               </select>
             </div>
           </div>`;
@@ -9490,16 +9843,19 @@
 
     for (let i = 0; i < total - 1; i++) {
       const ext = setupDraft.extraPlayers[i] || {};
+      const isBotSlot = (ext.controlType || "bot") === "bot";
       const cid = playableIds.includes(ext.charId)
         ? ext.charId
         : freeDefaults[i % freeDefaults.length] || playableIds[0];
       const ch = getCharacterForCompendium(cid, setupDraft.compendiumId);
-      const extName = (ext.username || "").trim() || `${ch ? ch.name : "Player"} (P${i + 2})`;
+      const extName =
+        (ext.username || "").trim() ||
+        `${ch ? ch.name : "Player"} (${isBotSlot ? "Bot" : `P${i + 2}`})`;
       roster.push({
         charId: cid,
         username: extName,
         clientId: null,
-        isBot: !ext.username
+        isBot: isBotSlot
       });
     }
 
@@ -9581,6 +9937,9 @@
     updateCompendiumScrollControls,
     renderRulesView,
     resolveStageIsMineChoice,
+    openLastUsedCardModal,
+    openScryPickModal,
+    resolveScryKeepChoice,
     resolveForcedAllInChoice,
     rollDiceOfFateCurrent,
     finishDiceOfFateMinigame,

@@ -4919,6 +4919,184 @@ body:not(.modal-open) .tucked-card:hover,
   border-top: 1px solid rgba(173, 224, 202, 0.14);
 }
 
+/* ============================================================================
+   LAST CARD USED HUD WIDGET & SCRY 2-CARD PICKER MODAL
+   ============================================================================ */
+.last-card-used-slot {
+  width: 100%;
+  pointer-events: auto;
+}
+
+.last-card-used-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 12px;
+  background: rgba(7, 22, 24, 0.92);
+  border: 1px solid rgba(173, 224, 202, 0.3);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, transform 0.14s ease, background 0.16s ease;
+}
+
+.last-card-used-card:hover {
+  border-color: var(--mint-light);
+  background: rgba(11, 34, 36, 0.96);
+  transform: translateY(-1px);
+}
+
+.last-card-used-thumb {
+  width: 40px;
+  height: 56px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: #061414;
+}
+
+.last-card-used-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.last-card-used-label {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mint-light);
+}
+
+.last-card-used-name {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.last-card-used-caster {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.last-card-used-empty {
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(7, 22, 24, 0.66);
+  border: 1px dashed rgba(173, 224, 202, 0.2);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.last-used-detail-layout {
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.last-used-detail-img {
+  width: 100%;
+  border-radius: 10px;
+  border: 1.5px solid rgba(173, 224, 202, 0.4);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65);
+}
+
+.last-used-detail-section {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(173, 224, 202, 0.16);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.last-used-detail-heading {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mint-light);
+  margin-bottom: 4px;
+}
+
+.scry-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scry-pick-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(7, 22, 24, 0.85);
+  border: 1.5px solid rgba(173, 224, 202, 0.28);
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.scry-pick-card:hover {
+  border-color: #38bdf8;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(56, 189, 248, 0.22);
+}
+
+.scry-pick-img {
+  width: 152px;
+  max-width: 100%;
+  aspect-ratio: 826 / 1181;
+  object-fit: cover;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.scry-pick-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #f8fafc;
+  text-align: center;
+}
+
+.scry-pick-desc {
+  font-size: 0.74rem;
+  color: #cbd5e1;
+  text-align: center;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.setup-extra-row-3col {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 0.85fr;
+  gap: 8px;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .last-used-detail-layout,
+  .scry-pick-grid,
+  .setup-extra-row-3col {
+    grid-template-columns: 1fr;
+  }
+}
+
 .char-pick-info {
   padding: 7px 9px;
   display: flex;
