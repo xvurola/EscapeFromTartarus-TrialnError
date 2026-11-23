@@ -354,7 +354,9 @@
   let diceAnimIntervalId = null;
   let diceAnimTimeoutId = null;
   let skillPopupTimerId = null;
+  let sideCardPopupTimerId = null;
   let skillPopupShownAt = 0;
+  let pendingEmperorTaxPlay = null;
   let lastShownSkillEventId = null;
   let fadingShards = [];
   let lastProcessedPurchasedShardId = null;
@@ -4610,6 +4612,87 @@
     return { ...meta, accent, accentRgb };
   }
 
+  function getRarityVisualMeta(rarity) {
+    const r = String(rarity || "Common").toLowerCase();
+    if (r === "uncommon") return { key: "uncommon", color: "#22c55e", rgb: "34, 197, 94" };
+    if (r === "rare") return { key: "rare", color: "#38bdf8", rgb: "56, 189, 248" };
+    if (r === "epic") return { key: "epic", color: "#a855f7", rgb: "168, 85, 247" };
+    if (r === "unique") return { key: "unique", color: "#ef4444", rgb: "239, 68, 68" };
+    if (r === "ultimate") return { key: "ultimate", color: "#facc15", rgb: "250, 204, 21" };
+    return { key: "common", color: "#9ca3af", rgb: "156, 163, 175" };
+  }
+
+  function formatDramaticCardDescription(rawDesc, fallbackName = "") {
+    let text = String(rawDesc || fallbackName || "").trim();
+    const badges = [];
+    text = text.replace(/^\s*(?:\[([^\]]+)\]\s*)+/, (match) => {
+      const inner = match.match(/\[([^\]]+)\]/g) || [];
+      inner.forEach((b) => badges.push(b.slice(1, -1).trim()));
+      return "";
+    }).trim();
+
+    let leadLabel = "";
+    const passiveLead = text.match(/^(Passive|Transformation)\s*:\s*/i);
+    if (passiveLead) {
+      leadLabel = passiveLead[1] + ":";
+      text = text.slice(passiveLead[0].length).trim();
+    } else if (badges.length > 0) {
+      leadLabel = badges.join(" · ");
+    }
+
+    let durationText = "";
+    const durMatch = text.match(/\s*(?:\(?\s*Duration\s*:\s*([^)]+?)\s*\)?\.?\s*)$/i);
+    if (durMatch) {
+      durationText = durMatch[1].replace(/\.+$/, "").trim();
+      text = text.slice(0, durMatch.index).trim();
+    }
+
+    let html = "";
+    if (leadLabel) {
+      html += `<div class="ca-dramatic-sublabel">${escapeHtml(leadLabel)}</div>`;
+    }
+    html += `<div class="ca-dramatic-body">${escapeHtml(text || rawDesc || "")}</div>`;
+    if (durationText) {
+      html += `
+        <div class="ca-dramatic-duration-block">
+          <div class="ca-dramatic-sublabel">Duration:</div>
+          <div class="ca-dramatic-duration-val">${escapeHtml(durationText)}</div>
+        </div>`;
+    }
+    return html;
+  }
+
+  function buildCasterPillHtml(payload, isLarge = false) {
+    const ch = DATA.CHARACTERS[payload.charId] || {};
+    const pillSrc =
+      ch.menuPortrait ||
+      (ch.compPortrait && ch.compPortrait.src) ||
+      (ch.portrait && ch.portrait.src) ||
+      "";
+    const pillPos = (ch.compPortrait && ch.compPortrait.objectPosition) || "50% 22%";
+    return `
+      <div class="ca-player-pill ${isLarge ? "ca-player-pill-lg" : ""}">
+        <div class="ca-player-pill-art">
+          ${
+            pillSrc
+              ? `<img src="${pillSrc}" alt="${escapeHtml(payload.casterName || "")}" style="object-position:${pillPos};" />`
+              : `<div class="ca-player-pill-fallback">${getCharacterSvgIcon(payload.charId)}</div>`
+          }
+        </div>
+        <span class="ca-player-pill-name">${escapeHtml(payload.casterName || "Player")}</span>
+      </div>`;
+  }
+
+  function dismissSideCardPopup() {
+    clearTimeout(sideCardPopupTimerId);
+    sideCardPopupTimerId = null;
+    const feed = document.getElementById("card-activated-feed");
+    if (feed) {
+      feed.classList.remove("visible");
+      feed.innerHTML = "";
+    }
+  }
+
   function dismissSkillPopup(force = false, skipQueueFlush = false) {
     if (!force && skillPopupShownAt && Date.now() - skillPopupShownAt < 180) {
       return;
@@ -4622,6 +4705,9 @@
       overlay.classList.remove("visible");
       overlay.innerHTML = "";
     }
+    if (force) {
+      dismissSideCardPopup();
+    }
     if (!skipQueueFlush && !isSkillActivationInFlight) {
       flushNextQueuedTileEffect();
       scheduleMultiplayerBotIfNeeded();
@@ -4629,47 +4715,109 @@
   }
 
   function showDramaticSkillPopup(payload) {
-    const overlay = document.getElementById("skill-dramatic-overlay");
-    if (!overlay || !payload) return;
-    dismissSkillPopup(true, true);
-
-    const ch = DATA.CHARACTERS[payload.charId] || {};
-    const ptSrc = (ch.compPortrait && ch.compPortrait.src) || (ch.portrait && ch.portrait.src) || "";
-    const ptPos = (ch.compPortrait && ch.compPortrait.objectPosition) || "50% 10%";
+    if (!payload) return;
     const prof = payload.profile || { theme: "sonic", tagline: "SKILL ACTIVATED", accent: "#34d399", accentRgb: "52, 211, 153" };
-    const isPassiveOrUlt = prof.theme === "ultimate" || prof.theme === "passive";
-    const autoMs = prof.theme === "ultimate" ? 5900 : 5250;
+    const rarityStr = String(payload.rarity || "Common");
+    const isUltimate = rarityStr === "Ultimate";
+    const isUnique = rarityStr === "Unique";
+    const isDramaticCenter = isUnique || isUltimate;
 
-    overlay.innerHTML = `
-      <div class="skill-cutin-banner theme-${escapeHtml(prof.theme)}"
-           style="--skill-accent:${escapeHtml(prof.accent)};--skill-rgb:${escapeHtml(prof.accentRgb)};">
-        <div class="skill-cutin-portrait-col">
+    // Keep exact same character skill SFX for every card activation
+    playSfx("skill", `${payload.charId || ""}:${prof.theme}`);
+
+    if (isDramaticCenter) {
+      const overlay = document.getElementById("skill-dramatic-overlay");
+      if (!overlay) return;
+      dismissSkillPopup(true, true);
+
+      const autoMs = isUltimate ? 6100 : 5400;
+      const hasDistinctOutcome =
+        payload.outcomeText &&
+        String(payload.outcomeText).trim() !== String(payload.description || "").trim();
+
+      overlay.innerHTML = `
+        <div class="ca-dramatic-stage ${isUltimate ? "is-ultimate" : "is-unique"}">
+          <div class="ca-dramatic-left">
+            <div class="ca-dramatic-heading">
+              <span class="ca-dramatic-head-top">${isUltimate ? "Ultimate" : "Unique"}</span>
+              <span class="ca-dramatic-head-bot">Activated</span>
+            </div>
+            <div class="ca-dramatic-card-wrap">
+              ${
+                payload.cardImg
+                  ? `<img class="ca-dramatic-card-img" src="${payload.cardImg}" alt="${escapeHtml(payload.cardName || "")}" />`
+                  : `<div class="ca-dramatic-card-fallback">${escapeHtml(payload.cardName || "")}</div>`
+              }
+            </div>
+            ${buildCasterPillHtml(payload, true)}
+          </div>
+          <div class="ca-dramatic-divider" aria-hidden="true"></div>
+          <div class="ca-dramatic-right">
+            ${formatDramaticCardDescription(payload.description || payload.outcomeText || "", payload.cardName)}
+            ${
+              hasDistinctOutcome
+                ? `<div class="ca-dramatic-outcome">${escapeHtml(payload.outcomeText)}</div>`
+                : ""
+            }
+          </div>
+          <div class="ca-dramatic-hint">Klik di mana saja untuk lanjut</div>
+        </div>`;
+
+      skillPopupShownAt = Date.now();
+      overlay.classList.add("visible");
+      skillPopupTimerId = setTimeout(() => {
+        dismissSkillPopup(true);
+      }, autoMs);
+      return;
+    }
+
+    // Normal cards (Common / Uncommon / Rare / Epic): sleek side notification below Last Card Used
+    const feed = document.getElementById("card-activated-feed");
+    if (!feed) return;
+    clearTimeout(sideCardPopupTimerId);
+    sideCardPopupTimerId = null;
+
+    const rMeta = getRarityVisualMeta(rarityStr);
+    const mainDesc = String(payload.description || payload.outcomeText || payload.cardName || "").trim();
+    const hasDistinctOutcome =
+      payload.outcomeText &&
+      String(payload.outcomeText).trim() !== String(payload.description || "").trim();
+
+    feed.innerHTML = `
+      <div class="ca-side-panel rarity-${escapeHtml(rMeta.key)}"
+           style="--ca-rarity-color:${escapeHtml(rMeta.color)};--ca-rarity-rgb:${escapeHtml(rMeta.rgb)};"
+           title="Klik untuk menutup">
+        <div class="ca-side-desc-col">
+          <div class="ca-side-desc-text">${escapeHtml(mainDesc)}</div>
           ${
-            ptSrc
-              ? `<img class="skill-cutin-portrait-img" src="${ptSrc}" alt="${escapeHtml(payload.casterName)}" style="object-position:${ptPos};" />`
-              : `<div class="ph-portrait-fallback"><div class="ph-fallback-icon" style="fill:${escapeHtml(prof.accent)};">${getCharacterSvgIcon(payload.charId)}</div></div>`
+            hasDistinctOutcome
+              ? `<div class="ca-side-outcome-note">${escapeHtml(payload.outcomeText)}</div>`
+              : ""
           }
         </div>
-        <div class="skill-cutin-center">
-          <div class="skill-cutin-eyebrow">${escapeHtml(prof.tagline)}</div>
-          <div class="skill-cutin-caster">${escapeHtml(payload.casterName)}</div>
-          <div class="skill-cutin-title">${escapeHtml(payload.cardName)}</div>
-          <span class="skill-cutin-rarity-pill">${escapeHtml(payload.rarity || "Skill")}</span>
-          ${payload.outcomeText ? `<div class="skill-cutin-outcome">${escapeHtml(payload.outcomeText)}</div>` : ""}
-          <div class="skill-cutin-desc">${escapeHtml(payload.description || "")}</div>
+        <div class="ca-side-divider" aria-hidden="true"></div>
+        <div class="ca-side-card-col">
+          <div class="ca-side-heading">
+            <span class="ca-side-head-top">Cards</span>
+            <span class="ca-side-head-bot">Activated</span>
+          </div>
+          ${
+            payload.cardImg
+              ? `<img class="ca-side-card-img" src="${payload.cardImg}" alt="${escapeHtml(payload.cardName || "")}" />`
+              : `<div class="ca-side-card-fallback">${escapeHtml(payload.cardName || "")}</div>`
+          }
+          ${buildCasterPillHtml(payload, false)}
         </div>
-        <div class="skill-cutin-card-col">
-          ${payload.cardImg ? `<img class="skill-cutin-card-img" src="${payload.cardImg}" alt="${escapeHtml(payload.cardName)}" />` : ""}
-        </div>
-        <div class="skill-cutin-hint">${isPassiveOrUlt ? "Klik di mana saja untuk lanjut" : "Klik di mana saja untuk tutup"}</div>
+        <div class="ca-side-rarity-bar" title="${escapeHtml(rarityStr)}"></div>
       </div>`;
 
-    skillPopupShownAt = Date.now();
-    overlay.classList.add("visible");
-    playSfx("skill", `${payload.charId || ""}:${prof.theme}`);
-    skillPopupTimerId = setTimeout(() => {
-      dismissSkillPopup(true);
-    }, autoMs);
+    feed.classList.remove("visible");
+    void feed.offsetWidth;
+    feed.classList.add("visible");
+
+    sideCardPopupTimerId = setTimeout(() => {
+      dismissSideCardPopup();
+    }, 4800);
   }
 
   function triggerDramaticSkillEvent(payload) {
@@ -4750,6 +4898,128 @@
     }
   }
 
+  function getEmperorTaxInfo(player, card) {
+    if (!state || !player || !card) return { owners: [], perOwner: 5, totalTax: 0 };
+    if (isAdminUnlocked && adminFreeSkillUse) return { owners: [], perOwner: 5, totalTax: 0 };
+    if (card.rarity !== "Common" && card.rarity !== "Uncommon") {
+      return { owners: [], perOwner: 5, totalTax: 0 };
+    }
+    const owners = state.players.filter(
+      (other) => other.index !== player.index && hasPassive(other, "passive_emperor_tax")
+    );
+    return {
+      owners,
+      perOwner: 5,
+      totalTax: owners.length * 5
+    };
+  }
+
+  function openEmperorTaxConfirmModal(player, card, flowCard, options, taxInfo) {
+    const canAfford = player.tc >= taxInfo.totalTax;
+    const ownerNames = taxInfo.owners.map((o) => o.name).join(" & ");
+    const emperorImg = "assets/cards/characters/maomao/e.webp";
+    pendingEmperorTaxPlay = canAfford
+      ? { cardUid: card.uid, flowCard: flowCard || card, options: options || {} }
+      : null;
+
+    if (canAfford) {
+      openInfoModal(
+        `The Emperor's Favor — Bayar Pajak 💰 ${taxInfo.totalTax} TC?`,
+        `<div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:14px;align-items:center;">
+            <img src="${emperorImg}" alt="The Emperor's Favor" style="width:82px;border-radius:8px;border:1px solid rgba(16,185,129,0.5);flex-shrink:0;" />
+            <div style="font-size:0.84rem;line-height:1.5;color:#e2e8f0;">
+              <div><strong>${escapeHtml(ownerNames)}</strong> memiliki passive <strong style="color:#6ee7b7;">The Emperor's Favor</strong> yang aktif.</div>
+              <div style="margin-top:6px;">
+                Untuk mengaktifkan kartu <strong>${escapeHtml(card.rarity)}</strong> [<strong>${escapeHtml(card.name)}</strong>], kamu wajib membayar pajak sebesar <strong style="color:#fde047;">💰 ${taxInfo.totalTax} TC</strong> kepada ${escapeHtml(ownerNames)}.
+              </div>
+            </div>
+          </div>
+          <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.38);border-radius:10px;padding:10px 12px;font-size:0.8rem;color:#d1fae5;display:flex;justify-content:space-between;align-items:center;">
+            <span>Saldo TC Kamu</span>
+            <strong>💰 ${player.tc} TC → 💰 ${player.tc - taxInfo.totalTax} TC</strong>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <button class="btn btn-emerald" onclick="window.EFT_APP.resolveEmperorTaxPrompt(true)">
+              Bayar 💰 ${taxInfo.totalTax} TC &amp; Aktifkan
+            </button>
+            <button class="btn btn-rose" onclick="window.EFT_APP.resolveEmperorTaxPrompt(false)">
+              Tolak (Batal Aktifkan)
+            </button>
+          </div>
+        </div>`
+      );
+    } else {
+      openInfoModal(
+        `The Emperor's Favor — TC Tidak Cukup`,
+        `<div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:14px;align-items:center;">
+            <img src="${emperorImg}" alt="The Emperor's Favor" style="width:82px;border-radius:8px;border:1px solid rgba(244,63,94,0.5);flex-shrink:0;" />
+            <div style="font-size:0.84rem;line-height:1.5;color:#e2e8f0;">
+              <div><strong>${escapeHtml(ownerNames)}</strong> memiliki passive <strong style="color:#6ee7b7;">The Emperor's Favor</strong> yang aktif.</div>
+              <div style="margin-top:6px;">
+                Mengaktifkan kartu <strong>${escapeHtml(card.rarity)}</strong> [<strong>${escapeHtml(card.name)}</strong>] membutuhkan pajak <strong style="color:#fde047;">💰 ${taxInfo.totalTax} TC</strong>.
+              </div>
+            </div>
+          </div>
+          <div style="background:rgba(225,29,72,0.16);border:1px solid rgba(244,63,94,0.45);border-radius:10px;padding:10px 12px;font-size:0.82rem;color:#fda4af;">
+            TC kamu saat ini hanya <strong>💰 ${player.tc} TC</strong> (kurang dari ${taxInfo.totalTax} TC). Karena tidak bisa membayar pajak, skill <strong>tidak akan aktif</strong>.
+          </div>
+          <button class="btn" onclick="window.EFT_APP.resolveEmperorTaxPrompt(false)">
+            Tutup (Batal Aktifkan)
+          </button>
+        </div>`
+      );
+    }
+  }
+
+  function resolveEmperorTaxPrompt(accepted) {
+    const req = pendingEmperorTaxPlay;
+    pendingEmperorTaxPlay = null;
+    closeModal();
+    if (!accepted || !req) {
+      playSfx("click");
+      return;
+    }
+    const player = getActivePlayer();
+    const card = player ? player.hand.find((c) => c.uid === req.cardUid) : null;
+    if (!player || !card) return;
+    const taxInfo = getEmperorTaxInfo(player, card);
+    if (taxInfo.owners.length > 0 && player.tc < taxInfo.totalTax) {
+      openEmperorTaxConfirmModal(player, card, req.flowCard, req.options, taxInfo);
+      return;
+    }
+    proceedCardActivationAfterTax(req.cardUid, req.flowCard || card, {
+      ...(req.options || {}),
+      emperorTaxConfirmed: true
+    });
+  }
+
+  function proceedCardActivationAfterTax(cardUid, flowCard, options = {}) {
+    if (
+      flowCard.targetType === "normal_tile_in_radius" ||
+      flowCard.targetType === "any_tile" ||
+      flowCard.targetType === "non_event_tile"
+    ) {
+      startTileTargetSelection(
+        cardUid,
+        flowCard.radius || 4,
+        flowCard.targetType === "normal_tile_in_radius",
+        options,
+        flowCard
+      );
+      return;
+    }
+
+    const moveSpec = getSkillMoveSelectionSpec(flowCard, options);
+    if (moveSpec) {
+      startMoveTileSelection(cardUid, moveSpec, options);
+      return;
+    }
+
+    playSkillCardFromHand(cardUid, options);
+  }
+
   function playSkillCardFromHand(cardUid, options = {}) {
     if (!canLocalPlayerAct()) return;
     if (isRemoteClient()) {
@@ -4768,18 +5038,29 @@
       return;
     }
 
+    const emperorTax = getEmperorTaxInfo(player, card);
+    if (emperorTax.owners.length > 0) {
+      if (player.tc < emperorTax.totalTax) {
+        addLog(`The Emperor's Favor: ${player.name} gagal mengaktifkan [${card.name}] (butuh ${emperorTax.totalTax} TC, TC saat ini ${player.tc} TC).`);
+        if (!player.isBot && isLocalHumanTurnForPlayer(player)) {
+          openEmperorTaxConfirmModal(player, card, card, options, emperorTax);
+        }
+        renderAll();
+        broadcastMultiplayerState();
+        return;
+      }
+    }
+
     saveSnapshot();
     selectedCardUid = null;
 
-    if (card.rarity === "Common" || card.rarity === "Uncommon") {
-      state.players.forEach((other) => {
-        if (other.index !== player.index && hasPassive(other, "passive_emperor_tax")) {
-          const tax = Math.min(5, player.tc);
-          player.tc -= tax;
-          other.tc += tax;
-          addLog(`The Emperor's Favor: ${player.name} paid ${tax} TC tax to ${other.name}.`);
-        }
+    if (emperorTax.owners.length > 0) {
+      emperorTax.owners.forEach((other) => {
+        player.tc = Math.max(0, player.tc - emperorTax.perOwner);
+        other.tc += emperorTax.perOwner;
+        addLog(`The Emperor's Favor: ${player.name} paid ${emperorTax.perOwner} TC tax to ${other.name}.`);
       });
+      playSfx("coin_loss");
     }
 
     player.hand.splice(cardIdx, 1);
@@ -7685,7 +7966,7 @@
         </div>
         <div class="grid-2col" style="margin-bottom:16px;">
           <div style="background:rgba(0,0,0,0.3);padding:12px;border-radius:10px;font-size:0.8rem;line-height:1.7;">
-            <div><strong>Victory Condition:</strong> 💎 ${patch.victoryShards} Tartarus Shards (💰 ${patch.shardCost} TC each)</div>
+            <div><strong>Victory Condition:</strong> 💎 ${patch.victoryShards} Tartarus Shards (💰 ${patch.shardCost} TC each) · <strong>Starting TC:</strong> 💰 ${patch.startTC} TC</div>
             <div><strong>Movement System:</strong> ${patch.diceCount}x d${patch.diceSides} per Phase (2 Phases per Turn)</div>
             <div><strong>Active Shards on Board:</strong> ${patch.activeShardsOnBoard} Shards (Spawns every ${patch.shardSpawnInterval} ${patch.shardSpawnUnit}s)</div>
             <div><strong>Fractional Rounding:</strong> ${patch.roundingMode === "ceil" ? "Always Round Up (Ceiling Law)" : "Standard Nearest Rounding"}</div>
@@ -8647,6 +8928,16 @@
     if (card.haste) keywords.push("Haste");
     const rarityLine = card.rarity + (keywords.length ? " · " + keywords.join(" · ") : "");
 
+    const emperorTax = isMyTurn ? getEmperorTaxInfo(player, card) : { owners: [], totalTax: 0 };
+    const emperorNoticeHtml =
+      emperorTax.owners.length > 0
+        ? `<div style="background:rgba(245,158,11,0.14);border:1px solid rgba(251,191,36,0.42);padding:8px 10px;border-radius:8px;color:#fde68a;font-size:0.76rem;line-height:1.4;">
+            <strong>The Emperor's Favor (${escapeHtml(emperorTax.owners.map((o) => o.name).join(" & "))}):</strong>
+            Aktivasi kartu ${escapeHtml(card.rarity)} ini meminta pajak <strong>💰 ${emperorTax.totalTax} TC</strong>.
+            ${player.tc < emperorTax.totalTax ? `<span style="color:#fda4af;">(TC kamu 💰 ${player.tc} TC — tidak cukup!)</span>` : ""}
+          </div>`
+        : "";
+
     openCardDetailModal(
       `<div class="card-detail-layout">
         <img class="card-detail-art" src="${imgUrl}" alt="${escapeHtml(card.name)}" loading="lazy" decoding="async" />
@@ -8660,6 +8951,7 @@
           </div>
           <p class="card-detail-desc">${escapeHtml(card.description)}</p>
           ${controlsHtml}
+          ${emperorNoticeHtml}
           ${
             !check.ok
               ? `<div style="background:rgba(225,29,72,0.16);border:1px solid rgba(225,29,72,0.4);padding:8px 10px;border-radius:8px;color:#fda4af;font-size:0.78rem;">${escapeHtml(check.reason)}</div>`
@@ -8694,28 +8986,13 @@
       if (entry && entry.card) flowCard = entry.card;
     }
 
-    if (
-      flowCard.targetType === "normal_tile_in_radius" ||
-      flowCard.targetType === "any_tile" ||
-      flowCard.targetType === "non_event_tile"
-    ) {
-      startTileTargetSelection(
-        cardUid,
-        flowCard.radius || 4,
-        flowCard.targetType === "normal_tile_in_radius",
-        options,
-        flowCard
-      );
+    const emperorTax = getEmperorTaxInfo(player, card);
+    if (emperorTax.owners.length > 0) {
+      openEmperorTaxConfirmModal(player, card, flowCard, options, emperorTax);
       return;
     }
 
-    const moveSpec = getSkillMoveSelectionSpec(flowCard, options);
-    if (moveSpec) {
-      startMoveTileSelection(cardUid, moveSpec, options);
-      return;
-    }
-
-    playSkillCardFromHand(cardUid, options);
+    proceedCardActivationAfterTax(cardUid, flowCard, options);
   }
 
   function startTileTargetSelection(cardUid, radius, onlyNormal, options = {}, specCard = null) {
@@ -9700,6 +9977,10 @@
         if (player.skillsUsedThisTurn < player.maxSkillsThisTurn && player.hand.length > 0 && !player.silencedThisPhase) {
           const playable = player.hand.find((c) => {
             if (!canPlaySkillCard(player, c).ok) return false;
+            const taxCheck = getEmperorTaxInfo(player, c);
+            if (taxCheck.owners.length > 0 && player.tc < taxCheck.totalTax) {
+              return false;
+            }
             if (c.targetType === "normal_tile_in_radius" || c.targetType === "any_tile" || c.targetType === "non_event_tile") {
               return false;
             }
@@ -10310,6 +10591,8 @@
     rollDiceOfFateCurrent,
     finishDiceOfFateMinigame,
     dismissSkillPopup,
+    dismissSideCardPopup,
+    resolveEmperorTaxPrompt,
     onTileEffectOverlayClick,
     dismissTileEffectOverlay,
     toggleSoundMute,
