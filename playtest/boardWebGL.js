@@ -1,66 +1,28 @@
 // ============================================================================
-// ESCAPE FROM TARTARUS - HYBRID WEBGL BOARD VFX & PARTICLE ENGINE
-// Viewport-projected WebGL point-sprite shaders with automatic Canvas2D fallback.
+// ESCAPE FROM TARTARUS - ON-DEMAND LIGHTWEIGHT BOARD VFX ENGINE
+// Burst-only Canvas 2D at 1x DPR. Stays hidden (0% CPU/GPU) when idle.
 // ============================================================================
 (function () {
   "use strict";
 
-  const MAX_PARTICLES = 640;
-  const FLOATS_PER_VERTEX = 8; // x, y, size, r, g, b, a, shape(0=soft,1=ring)
+  const MAX_PARTICLES = 96;
 
-  const VERT_SRC = `
-    attribute vec2 a_pos;
-    attribute float a_size;
-    attribute vec4 a_color;
-    attribute float a_shape;
-    uniform vec2 u_res;
-    varying vec4 v_color;
-    varying float v_shape;
-    void main() {
-      vec2 clip = (a_pos / u_res) * 2.0 - 1.0;
-      gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-      gl_PointSize = a_size;
-      v_color = a_color;
-      v_shape = a_shape;
-    }
-  `;
-
-  const FRAG_SRC = `
-    precision mediump float;
-    varying vec4 v_color;
-    varying float v_shape;
-    void main() {
-      vec2 p = gl_PointCoord * 2.0 - 1.0;
-      float r = length(p);
-      if (r > 1.0) discard;
-      float alpha;
-      if (v_shape > 0.5) {
-        float ring = smoothstep(0.55, 0.82, r) * (1.0 - smoothstep(0.84, 1.0, r));
-        float core = exp(-r * r * 6.0) * 0.25;
-        alpha = (ring * 1.15 + core) * v_color.a;
-      } else {
-        float falloff = pow(1.0 - r, 2.1);
-        alpha = falloff * v_color.a;
-      }
-      gl_FragColor = vec4(v_color.rgb, alpha);
-    }
-  `;
-
-  function hexToRgb01(hex) {
+  function hexToRgb255(hex) {
     const clean = String(hex || "#9fd6be").replace("#", "").trim();
     if (clean.length === 3) {
-      const r = parseInt(clean[0] + clean[0], 16) / 255;
-      const g = parseInt(clean[1] + clean[1], 16) / 255;
-      const b = parseInt(clean[2] + clean[2], 16) / 255;
-      return [r, g, b];
+      return [
+        parseInt(clean[0] + clean[0], 16),
+        parseInt(clean[1] + clean[1], 16),
+        parseInt(clean[2] + clean[2], 16)
+      ];
     }
     if (clean.length === 6) {
       const n = parseInt(clean, 16);
       if (!Number.isNaN(n)) {
-        return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
       }
     }
-    return [0.62, 0.84, 0.75];
+    return [159, 214, 190];
   }
 
   function isReducedMotionPreferred() {
@@ -70,102 +32,44 @@
   const engine = {
     canvas: null,
     viewportEl: null,
-    gl: null,
     ctx2d: null,
-    program: null,
-    vbo: null,
-    attribs: null,
-    uRes: null,
-    vertexData: new Float32Array(MAX_PARTICLES * FLOATS_PER_VERTEX),
+    simViewEl: null,
     particles: [],
-    ambientAnchors: [],
     boardW: 2970,
     boardH: 1998,
     getCamera: null,
     getTileMap: null,
     rafId: null,
     lastTime: 0,
-    ambientAccum: 0,
     hitStopActive: false,
     rendererKind: "none",
-    dpr: 1,
     viewW: 1,
-    viewH: 1
+    viewH: 1,
+    isVisible: false
   };
 
-  function compileShader(gl, type, src) {
-    const sh = gl.createShader(type);
-    gl.shaderSource(sh, src);
-    gl.compileShader(sh);
-    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-      gl.deleteShader(sh);
-      return null;
+  function isArenaVisible() {
+    if (!engine.simViewEl) {
+      engine.simViewEl = document.getElementById("view-simulator");
     }
-    return sh;
+    return !engine.simViewEl || engine.simViewEl.classList.contains("active");
   }
 
-  function initWebGL(canvas) {
-    let gl = null;
-    try {
-      gl =
-        canvas.getContext("webgl", { alpha: true, antialias: false, depth: false, premultipliedAlpha: false }) ||
-        canvas.getContext("experimental-webgl", { alpha: true, antialias: false, depth: false });
-    } catch (e) {
-      gl = null;
-    }
-    if (!gl) return false;
-
-    const vs = compileShader(gl, gl.VERTEX_SHADER, VERT_SRC);
-    const fs = compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-    if (!vs || !fs) return false;
-
-    const prog = gl.createProgram();
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      gl.deleteProgram(prog);
-      return false;
-    }
-
-    const vbo = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, engine.vertexData.byteLength, gl.DYNAMIC_DRAW);
-
-    engine.gl = gl;
-    engine.program = prog;
-    engine.vbo = vbo;
-    engine.uRes = gl.getUniformLocation(prog, "u_res");
-    engine.attribs = {
-      pos: gl.getAttribLocation(prog, "a_pos"),
-      size: gl.getAttribLocation(prog, "a_size"),
-      color: gl.getAttribLocation(prog, "a_color"),
-      shape: gl.getAttribLocation(prog, "a_shape")
-    };
-
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-    engine.rendererKind = "webgl";
-    return true;
+  function setCanvasVisible(visible) {
+    if (!engine.canvas || engine.isVisible === visible) return;
+    engine.isVisible = visible;
+    engine.canvas.style.display = visible ? "block" : "none";
   }
 
   function resize() {
     if (!engine.canvas || !engine.viewportEl) return;
-    const rect = engine.viewportEl.getBoundingClientRect();
-    const w = Math.max(1, Math.round(rect.width));
-    const h = Math.max(1, Math.round(rect.height));
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(engine.viewportEl.clientWidth || window.innerWidth));
+    const h = Math.max(1, Math.round(engine.viewportEl.clientHeight || window.innerHeight));
     engine.viewW = w;
     engine.viewH = h;
-    engine.dpr = dpr;
-    const pw = Math.round(w * dpr);
-    const ph = Math.round(h * dpr);
-    if (engine.canvas.width !== pw || engine.canvas.height !== ph) {
-      engine.canvas.width = pw;
-      engine.canvas.height = ph;
-    }
-    if (engine.gl) {
-      engine.gl.viewport(0, 0, pw, ph);
+    if (engine.canvas.width !== w || engine.canvas.height !== h) {
+      engine.canvas.width = w;
+      engine.canvas.height = h;
     }
   }
 
@@ -181,6 +85,7 @@
   }
 
   function spawnParticle(p) {
+    if (!engine.ctx2d || !isArenaVisible()) return;
     if (engine.particles.length >= MAX_PARTICLES) {
       engine.particles.shift();
     }
@@ -189,72 +94,53 @@
       wy: p.wy,
       vx: p.vx || 0,
       vy: p.vy || 0,
-      drag: p.drag !== undefined ? p.drag : 0.94,
+      drag: p.drag !== undefined ? p.drag : 0.92,
       gravity: p.gravity || 0,
-      sizeStart: p.sizeStart || 18,
+      sizeStart: p.sizeStart || 14,
       sizeEnd: p.sizeEnd !== undefined ? p.sizeEnd : 2,
-      alphaStart: p.alphaStart !== undefined ? p.alphaStart : 0.95,
+      alphaStart: p.alphaStart !== undefined ? p.alphaStart : 0.9,
       alphaEnd: p.alphaEnd !== undefined ? p.alphaEnd : 0,
-      color: p.color || [0.62, 0.84, 0.75],
-      colorEnd: p.colorEnd || null,
+      color: p.color || [159, 214, 190],
       shape: p.shape || 0,
       age: 0,
-      life: Math.max(0.08, p.life || 0.7)
+      life: Math.max(0.08, p.life || 0.45)
     });
     ensureLoopRunning();
   }
 
   function burstAtTile(tileId, kind = "skill_cast", customColorHex = null) {
+    if (!engine.ctx2d || !isArenaVisible() || isReducedMotionPreferred()) return;
     const pos = getTileBoardCoords(tileId);
     if (!pos) return;
-    const reduced = isReducedMotionPreferred();
-    const scaleCount = reduced ? 0.35 : 1;
 
     if (kind === "sam_fire_impact") {
-      // Shockwave ring
       spawnParticle({
         wx: pos.wx,
         wy: pos.wy,
-        sizeStart: 38,
-        sizeEnd: 245,
-        alphaStart: 0.95,
+        sizeStart: 36,
+        sizeEnd: 220,
+        alphaStart: 0.92,
         alphaEnd: 0,
-        color: [0.99, 0.56, 0.16],
-        colorEnd: [0.88, 0.18, 0.12],
+        color: [252, 142, 42],
         shape: 1,
-        life: 0.68
+        life: 0.52
       });
-      // Core flash
-      spawnParticle({
-        wx: pos.wx,
-        wy: pos.wy,
-        sizeStart: 120,
-        sizeEnd: 20,
-        alphaStart: 0.9,
-        alphaEnd: 0,
-        color: [1.0, 0.92, 0.55],
-        colorEnd: [0.98, 0.42, 0.12],
-        shape: 0,
-        life: 0.42
-      });
-      const count = Math.max(12, Math.round(68 * scaleCount));
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < 26; i++) {
         const ang = Math.random() * Math.PI * 2;
-        const spd = 75 + Math.random() * 290;
+        const spd = 80 + Math.random() * 240;
         spawnParticle({
-          wx: pos.wx + (Math.random() - 0.5) * 26,
-          wy: pos.wy + (Math.random() - 0.5) * 26,
+          wx: pos.wx,
+          wy: pos.wy,
           vx: Math.cos(ang) * spd,
-          vy: Math.sin(ang) * spd - 45,
-          drag: 0.91,
-          gravity: -110,
-          sizeStart: 14 + Math.random() * 24,
+          vy: Math.sin(ang) * spd - 36,
+          drag: 0.9,
+          gravity: -90,
+          sizeStart: 10 + Math.random() * 14,
           sizeEnd: 2,
-          alphaStart: 0.95,
+          alphaStart: 0.92,
           alphaEnd: 0,
-          color: Math.random() < 0.35 ? [1.0, 0.9, 0.42] : [0.98, 0.45, 0.12],
-          colorEnd: [0.82, 0.12, 0.12],
-          life: 0.48 + Math.random() * 0.52
+          color: i % 3 === 0 ? [255, 228, 108] : [249, 115, 22],
+          life: 0.36 + Math.random() * 0.28
         });
       }
       return;
@@ -264,33 +150,30 @@
       spawnParticle({
         wx: pos.wx,
         wy: pos.wy,
-        sizeStart: 32,
-        sizeEnd: 260,
-        alphaStart: 0.92,
+        sizeStart: 30,
+        sizeEnd: 235,
+        alphaStart: 0.9,
         alphaEnd: 0,
-        color: [0.95, 0.78, 0.25],
-        colorEnd: [0.68, 0.36, 0.98],
+        color: [245, 204, 68],
         shape: 1,
-        life: 0.78
+        life: 0.58
       });
-      const count = Math.max(14, Math.round(78 * scaleCount));
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < 28; i++) {
         const ang = Math.random() * Math.PI * 2;
-        const spd = 60 + Math.random() * 310;
-        const isGold = i % 2 === 0;
+        const spd = 70 + Math.random() * 250;
         spawnParticle({
           wx: pos.wx,
           wy: pos.wy,
           vx: Math.cos(ang) * spd,
-          vy: Math.sin(ang) * spd - 30,
-          drag: 0.92,
-          gravity: 50,
-          sizeStart: 12 + Math.random() * 22,
+          vy: Math.sin(ang) * spd - 24,
+          drag: 0.91,
+          gravity: 45,
+          sizeStart: 10 + Math.random() * 14,
           sizeEnd: 2,
-          alphaStart: 0.95,
+          alphaStart: 0.92,
           alphaEnd: 0,
-          color: isGold ? [0.96, 0.8, 0.28] : [0.76, 0.5, 0.99],
-          life: 0.55 + Math.random() * 0.6
+          color: i % 2 === 0 ? [245, 204, 68] : [192, 132, 252],
+          life: 0.4 + Math.random() * 0.32
         });
       }
       return;
@@ -300,31 +183,29 @@
       spawnParticle({
         wx: pos.wx,
         wy: pos.wy,
-        sizeStart: 28,
-        sizeEnd: 190,
+        sizeStart: 24,
+        sizeEnd: 175,
         alphaStart: 0.85,
         alphaEnd: 0,
-        color: [0.35, 0.82, 0.98],
+        color: [88, 210, 250],
         shape: 1,
-        life: 0.56
+        life: 0.44
       });
-      const count = Math.max(10, Math.round(42 * scaleCount));
-      for (let i = 0; i < count; i++) {
-        const ang = (i / count) * Math.PI * 2 + Math.random() * 0.3;
-        const spd = 65 + Math.random() * 195;
+      for (let i = 0; i < 18; i++) {
+        const ang = (i / 18) * Math.PI * 2;
+        const spd = 75 + Math.random() * 165;
         spawnParticle({
           wx: pos.wx,
           wy: pos.wy,
           vx: Math.cos(ang) * spd,
           vy: Math.sin(ang) * spd,
           drag: 0.9,
-          sizeStart: 12 + Math.random() * 14,
+          sizeStart: 9 + Math.random() * 10,
           sizeEnd: 2,
-          alphaStart: 0.9,
+          alphaStart: 0.88,
           alphaEnd: 0,
-          color: [0.42, 0.86, 0.98],
-          colorEnd: [0.62, 0.86, 0.76],
-          life: 0.42 + Math.random() * 0.38
+          color: [106, 220, 250],
+          life: 0.34 + Math.random() * 0.24
         });
       }
       return;
@@ -334,203 +215,131 @@
       spawnParticle({
         wx: pos.wx,
         wy: pos.wy,
-        sizeStart: 26,
-        sizeEnd: 185,
-        alphaStart: 0.9,
+        sizeStart: 24,
+        sizeEnd: 165,
+        alphaStart: 0.88,
         alphaEnd: 0,
-        color: [0.96, 0.26, 0.38],
+        color: [244, 66, 98],
         shape: 1,
-        life: 0.52
+        life: 0.42
       });
-      const count = Math.max(10, Math.round(38 * scaleCount));
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < 18; i++) {
         const ang = Math.random() * Math.PI * 2;
-        const spd = 80 + Math.random() * 230;
+        const spd = 85 + Math.random() * 190;
         spawnParticle({
           wx: pos.wx,
           wy: pos.wy,
           vx: Math.cos(ang) * spd,
           vy: Math.sin(ang) * spd,
           drag: 0.89,
-          sizeStart: 11 + Math.random() * 15,
+          sizeStart: 9 + Math.random() * 10,
           sizeEnd: 2,
-          alphaStart: 0.92,
+          alphaStart: 0.9,
           alphaEnd: 0,
-          color: [0.98, 0.32, 0.44],
-          colorEnd: [1.0, 0.78, 0.32],
-          life: 0.36 + Math.random() * 0.32
+          color: [248, 86, 114],
+          life: 0.3 + Math.random() * 0.22
         });
       }
       return;
     }
 
     if (kind === "coin_gain" || kind === "coin_loss") {
-      const col = kind === "coin_gain" ? [0.96, 0.8, 0.28] : [0.95, 0.32, 0.42];
-      const count = Math.max(5, Math.round(16 * scaleCount));
-      for (let i = 0; i < count; i++) {
+      const col = kind === "coin_gain" ? [245, 204, 68] : [242, 82, 108];
+      for (let i = 0; i < 8; i++) {
         const ang = Math.random() * Math.PI * 2;
-        const spd = 40 + Math.random() * 120;
+        const spd = 45 + Math.random() * 95;
         spawnParticle({
-          wx: pos.wx + (Math.random() - 0.5) * 18,
-          wy: pos.wy + (Math.random() - 0.5) * 18,
+          wx: pos.wx,
+          wy: pos.wy,
           vx: Math.cos(ang) * spd,
-          vy: Math.sin(ang) * spd - 65,
-          drag: 0.93,
-          gravity: 120,
-          sizeStart: 10 + Math.random() * 10,
+          vy: Math.sin(ang) * spd - 50,
+          drag: 0.92,
+          gravity: 110,
+          sizeStart: 8 + Math.random() * 6,
           sizeEnd: 2,
-          alphaStart: 0.88,
+          alphaStart: 0.85,
           alphaEnd: 0,
           color: col,
-          life: 0.42 + Math.random() * 0.34
+          life: 0.32 + Math.random() * 0.2
         });
       }
       return;
     }
 
-    // Default themed skill_cast / step_land
-    const rgb = hexToRgb01(customColorHex || "#9fd6be");
-    const isStep = kind === "step_land";
-    const count = Math.max(4, Math.round((isStep ? 8 : 28) * scaleCount));
-    if (!isStep) {
-      spawnParticle({
-        wx: pos.wx,
-        wy: pos.wy,
-        sizeStart: 24,
-        sizeEnd: 155,
-        alphaStart: 0.78,
-        alphaEnd: 0,
-        color: rgb,
-        shape: 1,
-        life: 0.48
-      });
-    }
-    for (let i = 0; i < count; i++) {
+    const rgb = hexToRgb255(customColorHex || "#9fd6be");
+    spawnParticle({
+      wx: pos.wx,
+      wy: pos.wy,
+      sizeStart: 22,
+      sizeEnd: 145,
+      alphaStart: 0.78,
+      alphaEnd: 0,
+      color: rgb,
+      shape: 1,
+      life: 0.4
+    });
+    for (let i = 0; i < 14; i++) {
       const ang = Math.random() * Math.PI * 2;
-      const spd = (isStep ? 24 : 55) + Math.random() * (isStep ? 65 : 160);
+      const spd = 55 + Math.random() * 145;
       spawnParticle({
         wx: pos.wx,
         wy: pos.wy,
         vx: Math.cos(ang) * spd,
         vy: Math.sin(ang) * spd,
         drag: 0.91,
-        sizeStart: (isStep ? 7 : 11) + Math.random() * (isStep ? 6 : 12),
+        sizeStart: 8 + Math.random() * 9,
         sizeEnd: 2,
-        alphaStart: isStep ? 0.55 : 0.85,
+        alphaStart: 0.84,
         alphaEnd: 0,
         color: rgb,
-        life: (isStep ? 0.25 : 0.38) + Math.random() * 0.28
+        life: 0.3 + Math.random() * 0.22
       });
     }
   }
 
   function emitMoveTrail(fromTileId, toTileId, colorHex = "#9fd6be") {
+    if (!engine.ctx2d || !isArenaVisible() || isReducedMotionPreferred()) return;
     const a = getTileBoardCoords(fromTileId);
     const b = getTileBoardCoords(toTileId);
     if (!a || !b) return;
-    const rgb = hexToRgb01(colorHex);
-    const steps = isReducedMotionPreferred() ? 5 : 14;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const wx = a.wx + (b.wx - a.wx) * t + (Math.random() - 0.5) * 14;
-      const wy = a.wy + (b.wy - a.wy) * t + (Math.random() - 0.5) * 14;
+    const rgb = hexToRgb255(colorHex);
+    for (let i = 0; i <= 5; i++) {
+      const t = i / 5;
       spawnParticle({
-        wx,
-        wy,
-        vx: (Math.random() - 0.5) * 24,
-        vy: -18 - Math.random() * 28,
-        drag: 0.92,
-        sizeStart: 10 + Math.random() * 8,
+        wx: a.wx + (b.wx - a.wx) * t,
+        wy: a.wy + (b.wy - a.wy) * t,
+        vx: (Math.random() - 0.5) * 18,
+        vy: -16 - Math.random() * 20,
+        drag: 0.91,
+        sizeStart: 8 + Math.random() * 5,
         sizeEnd: 2,
-        alphaStart: 0.72,
+        alphaStart: 0.68,
         alphaEnd: 0,
         color: rgb,
-        life: 0.34 + t * 0.22
+        life: 0.26 + t * 0.14
       });
     }
   }
 
-  function syncAmbientAnchors(activeShards = [], boardTokens = []) {
-    const anchors = [];
-    (activeShards || []).forEach((sh) => {
-      const pos = getTileBoardCoords(sh.tileId);
-      if (pos) {
-        anchors.push({ wx: pos.wx, wy: pos.wy, kind: "shard", color: [0.76, 0.52, 0.99], alt: [0.96, 0.8, 0.3] });
-      }
-    });
-    (boardTokens || []).forEach((tok) => {
-      const pos = getTileBoardCoords(tok.tileId);
-      if (!pos) return;
-      if (tok.type === "sam_fire") {
-        anchors.push({ wx: pos.wx, wy: pos.wy, kind: "fire", color: [0.98, 0.48, 0.14], alt: [1.0, 0.84, 0.34] });
-      } else if (tok.type === "virus_trap") {
-        anchors.push({ wx: pos.wx, wy: pos.wy, kind: "virus", color: [0.74, 0.42, 0.98], alt: [0.9, 0.65, 1.0] });
-      } else if (tok.type === "herb_tile") {
-        anchors.push({ wx: pos.wx, wy: pos.wy, kind: "herb", color: [0.32, 0.86, 0.64], alt: [0.64, 0.95, 0.82] });
-      } else if (tok.type === "safe_zone") {
-        anchors.push({ wx: pos.wx, wy: pos.wy, kind: "safe", color: [0.34, 0.78, 0.98], alt: [0.72, 0.92, 1.0] });
-      }
-    });
-    engine.ambientAnchors = anchors;
-    if (anchors.length > 0 && !isReducedMotionPreferred()) {
-      ensureLoopRunning();
-    }
-  }
-
-  function emitAmbientStep(dt) {
-    if (engine.ambientAnchors.length === 0 || isReducedMotionPreferred()) return;
-    engine.ambientAccum += dt;
-    if (engine.ambientAccum < 0.14) return;
-    engine.ambientAccum = 0;
-
-    for (let i = 0; i < engine.ambientAnchors.length; i++) {
-      const a = engine.ambientAnchors[i];
-      if (Math.random() > (a.kind === "shard" || a.kind === "fire" ? 0.62 : 0.38)) continue;
-      const spread = a.kind === "shard" ? 36 : 28;
-      spawnParticle({
-        wx: a.wx + (Math.random() - 0.5) * spread,
-        wy: a.wy + (Math.random() - 0.5) * spread,
-        vx: (Math.random() - 0.5) * 18,
-        vy: -24 - Math.random() * 44,
-        drag: 0.97,
-        sizeStart: a.kind === "shard" ? 13 : 10,
-        sizeEnd: 2,
-        alphaStart: 0.55,
-        alphaEnd: 0,
-        color: Math.random() < 0.45 ? a.alt : a.color,
-        life: 0.75 + Math.random() * 0.55
-      });
-    }
-  }
-
-  function projectToScreen(wx, wy, cam) {
-    const cx = engine.viewW * 0.5;
-    const cy = engine.viewH * 0.5;
-    const dx = wx - engine.boardW * 0.5;
-    const dy = wy - engine.boardH * 0.5;
-    const zoom = cam ? cam.zoom : 1;
-    const panX = cam ? cam.panX + (cam.shakeX || 0) : 0;
-    const panY = cam ? cam.panY + (cam.shakeY || 0) : 0;
-    return {
-      sx: cx + panX + dx * zoom,
-      sy: cy + panY + dy * zoom,
-      zoom
-    };
-  }
+  // Intentionally a no-op: shards and board traps use crisp CSS markers with 0 FPS background cost.
+  function syncAmbientAnchors() {}
 
   function renderFrame(now) {
     engine.rafId = null;
-    if (!engine.canvas) return;
+    if (!engine.canvas || !engine.ctx2d) return;
+
+    if (!isArenaVisible() || engine.particles.length === 0) {
+      engine.particles.length = 0;
+      engine.ctx2d.clearRect(0, 0, engine.canvas.width, engine.canvas.height);
+      setCanvasVisible(false);
+      return;
+    }
+
     if (!engine.lastTime) engine.lastTime = now;
     const rawDt = Math.min(0.05, Math.max(0.001, (now - engine.lastTime) / 1000));
     engine.lastTime = now;
 
-    // Skip simulation if Arena view is hidden
-    const simView = document.getElementById("view-simulator");
-    const isArenaVisible = !simView || simView.classList.contains("active");
-
-    if (isArenaVisible && !engine.hitStopActive) {
-      emitAmbientStep(rawDt);
+    if (!engine.hitStopActive) {
       for (let i = engine.particles.length - 1; i >= 0; i--) {
         const p = engine.particles[i];
         p.age += rawDt;
@@ -546,94 +355,55 @@
       }
     }
 
+    const ctx = engine.ctx2d;
+    ctx.clearRect(0, 0, engine.canvas.width, engine.canvas.height);
+
+    if (engine.particles.length === 0) {
+      setCanvasVisible(false);
+      return;
+    }
+
     const cam = engine.getCamera ? engine.getCamera() : { panX: 0, panY: 0, zoom: 1, shakeX: 0, shakeY: 0 };
-    const dpr = engine.dpr;
+    const cx = engine.viewW * 0.5;
+    const cy = engine.viewH * 0.5;
+    const halfBW = engine.boardW * 0.5;
+    const halfBH = engine.boardH * 0.5;
+    const zoom = cam ? cam.zoom : 1;
+    const sizeZoom = Math.max(0.4, zoom);
+    const panX = cam ? cam.panX + (cam.shakeX || 0) : 0;
+    const panY = cam ? cam.panY + (cam.shakeY || 0) : 0;
 
-    if (engine.rendererKind === "webgl" && engine.gl) {
-      const gl = engine.gl;
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-
-      const count = engine.particles.length;
-      if (count > 0 && isArenaVisible) {
-        let ptr = 0;
-        const buf = engine.vertexData;
-        for (let i = 0; i < count; i++) {
-          const p = engine.particles[i];
-          const t = Math.min(1, p.age / p.life);
-          const pos = projectToScreen(p.wx, p.wy, cam);
-          const size = Math.max(2, (p.sizeStart + (p.sizeEnd - p.sizeStart) * t) * Math.max(0.35, pos.zoom) * dpr);
-          const alpha = Math.max(0, p.alphaStart + (p.alphaEnd - p.alphaStart) * t);
-          let r = p.color[0], g = p.color[1], b = p.color[2];
-          if (p.colorEnd) {
-            r += (p.colorEnd[0] - r) * t;
-            g += (p.colorEnd[1] - g) * t;
-            b += (p.colorEnd[2] - b) * t;
-          }
-          buf[ptr++] = pos.sx * dpr;
-          buf[ptr++] = pos.sy * dpr;
-          buf[ptr++] = size;
-          buf[ptr++] = r;
-          buf[ptr++] = g;
-          buf[ptr++] = b;
-          buf[ptr++] = alpha;
-          buf[ptr++] = p.shape;
-        }
-
-        gl.useProgram(engine.program);
-        gl.uniform2f(engine.uRes, engine.canvas.width, engine.canvas.height);
-        gl.bindBuffer(gl.ARRAY_BUFFER, engine.vbo);
-        gl.bufferSubData(gl.ARRAY_BUFFER, 0, buf.subarray(0, ptr));
-
-        const stride = FLOATS_PER_VERTEX * 4;
-        gl.enableVertexAttribArray(engine.attribs.pos);
-        gl.vertexAttribPointer(engine.attribs.pos, 2, gl.FLOAT, false, stride, 0);
-        gl.enableVertexAttribArray(engine.attribs.size);
-        gl.vertexAttribPointer(engine.attribs.size, 1, gl.FLOAT, false, stride, 8);
-        gl.enableVertexAttribArray(engine.attribs.color);
-        gl.vertexAttribPointer(engine.attribs.color, 4, gl.FLOAT, false, stride, 12);
-        gl.enableVertexAttribArray(engine.attribs.shape);
-        gl.vertexAttribPointer(engine.attribs.shape, 1, gl.FLOAT, false, stride, 28);
-
-        gl.drawArrays(gl.POINTS, 0, count);
-      }
-    } else if (engine.ctx2d) {
-      const ctx = engine.ctx2d;
-      ctx.clearRect(0, 0, engine.canvas.width, engine.canvas.height);
-      if (isArenaVisible && engine.particles.length > 0) {
-        ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        for (let i = 0; i < engine.particles.length; i++) {
-          const p = engine.particles[i];
-          const t = Math.min(1, p.age / p.life);
-          const pos = projectToScreen(p.wx, p.wy, cam);
-          const radius = Math.max(1.5, ((p.sizeStart + (p.sizeEnd - p.sizeStart) * t) * 0.5) * Math.max(0.35, pos.zoom) * dpr);
-          const alpha = Math.max(0, p.alphaStart + (p.alphaEnd - p.alphaStart) * t);
-          const r = Math.round(p.color[0] * 255);
-          const g = Math.round(p.color[1] * 255);
-          const b = Math.round(p.color[2] * 255);
-          ctx.beginPath();
-          ctx.arc(pos.sx * dpr, pos.sy * dpr, radius, 0, Math.PI * 2);
-          if (p.shape > 0.5) {
-            ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
-            ctx.lineWidth = Math.max(1.5, radius * 0.14);
-            ctx.stroke();
-          } else {
-            ctx.fillStyle = `rgba(${r},${g},${b},${(alpha * 0.8).toFixed(3)})`;
-            ctx.fill();
-          }
-        }
-        ctx.restore();
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < engine.particles.length; i++) {
+      const p = engine.particles[i];
+      const t = Math.min(1, p.age / p.life);
+      const sx = cx + panX + (p.wx - halfBW) * zoom;
+      const sy = cy + panY + (p.wy - halfBH) * zoom;
+      if (sx < -260 || sx > engine.viewW + 260 || sy < -260 || sy > engine.viewH + 260) continue;
+      const radius = Math.max(1.5, (p.sizeStart + (p.sizeEnd - p.sizeStart) * t) * 0.5 * sizeZoom);
+      const alpha = Math.max(0, p.alphaStart + (p.alphaEnd - p.alphaStart) * t);
+      const col = p.color;
+      ctx.beginPath();
+      ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+      if (p.shape > 0.5) {
+        ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${alpha.toFixed(2)})`;
+        ctx.lineWidth = Math.max(2, radius * 0.12);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${(alpha * 0.85).toFixed(2)})`;
+        ctx.fill();
       }
     }
+    ctx.restore();
 
-    if (engine.particles.length > 0 || (engine.ambientAnchors.length > 0 && !isReducedMotionPreferred())) {
-      engine.rafId = requestAnimationFrame(renderFrame);
-    }
+    engine.rafId = requestAnimationFrame(renderFrame);
   }
 
   function ensureLoopRunning() {
-    if (!engine.rafId && engine.canvas) {
+    if (!engine.canvas || !engine.ctx2d) return;
+    setCanvasVisible(true);
+    if (!engine.rafId) {
       engine.lastTime = performance.now();
       engine.rafId = requestAnimationFrame(renderFrame);
     }
@@ -646,6 +416,7 @@
     engine.boardH = boardH || 1998;
     engine.getCamera = getCameraFn;
     engine.getTileMap = getTileMapFn;
+    engine.simViewEl = document.getElementById("view-simulator");
 
     let canvas = document.getElementById("board-webgl-vfx");
     if (!canvas) {
@@ -656,14 +427,14 @@
       viewportEl.appendChild(canvas);
     }
     engine.canvas = canvas;
+    engine.canvas.style.display = "none";
+    engine.isVisible = false;
 
-    if (!initWebGL(canvas)) {
-      engine.ctx2d = canvas.getContext("2d");
-      engine.rendererKind = engine.ctx2d ? "canvas2d" : "none";
-    }
+    engine.ctx2d = canvas.getContext("2d", { alpha: true });
+    engine.rendererKind = engine.ctx2d ? "canvas2d_ondemand" : "none";
     resize();
-    window.addEventListener("resize", resize);
-    window.addEventListener("orientationchange", () => setTimeout(resize, 160));
+    window.addEventListener("resize", resize, { passive: true });
+    window.addEventListener("orientationchange", () => setTimeout(resize, 160), { passive: true });
   }
 
   window.EFT_WEBGL_VFX = {

@@ -2278,10 +2278,25 @@ body.admin-mode .admin-only-el {
   border-radius: 34px;
   flex-shrink: 0;
   will-change: transform;
+  contain: layout style;
 }
 
-.digital-board-surface.manual-dragging {
+.digital-board-surface.manual-dragging,
+.digital-board-surface.is-shaking {
   transition: none !important;
+}
+
+.map-sublayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.map-sublayer > .digital-tile,
+.map-sublayer > .board-chibi-pawn {
+  pointer-events: auto;
 }
 
 .board-connections-svg {
@@ -7506,6 +7521,7 @@ body:not(.modal-open) .tucked-card:hover,
    HYBRID WEBGL BOARD VFX CANVAS, QUICK GUIDE, RESUME CARD & MP STATUS PILL
    ============================================================================ */
 .board-webgl-vfx {
+  display: none;
   position: absolute;
   inset: 0;
   width: 100%;

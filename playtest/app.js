@@ -1384,13 +1384,13 @@
       return;
     }
 
-    gameFeel.trauma = Math.max(0, gameFeel.trauma - 1.9 * realDt);
+    gameFeel.trauma = Math.max(0, gameFeel.trauma - 2.8 * realDt);
     const shake = gameFeel.trauma * gameFeel.trauma;
-    gameFeel.t += realDt * 34;
-    // Summed sines at unrelated rates (game-feel Pattern 1: smooth, never random buzz)
-    camera.shakeX = 13 * shake * Math.sin(gameFeel.t * 1.7);
-    camera.shakeY = 9 * shake * Math.sin(gameFeel.t * 2.3);
-    camera.shakeRot = 0.65 * shake * Math.sin(gameFeel.t * 1.1);
+    gameFeel.t += realDt * 38;
+    // Summed sines at unrelated rates (smooth 2D GPU-composited shake without rotate re-rasterization)
+    camera.shakeX = 11 * shake * Math.sin(gameFeel.t * 1.7);
+    camera.shakeY = 8 * shake * Math.sin(gameFeel.t * 2.3);
+    camera.shakeRot = 0;
     applyCameraTransform();
 
     if (gameFeel.trauma > 0) {
@@ -1443,10 +1443,10 @@
   function applyCameraTransform() {
     const surface = document.getElementById("map-canvas-wrap");
     if (!surface) return;
+    surface.classList.toggle("is-shaking", gameFeel.trauma > 0);
     const tx = camera.panX + (camera.shakeX || 0);
     const ty = camera.panY + (camera.shakeY || 0);
-    const rotPart = camera.shakeRot ? ` rotate(${camera.shakeRot.toFixed(2)}deg)` : "";
-    surface.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${camera.zoom.toFixed(3)})${rotPart}`;
+    surface.style.transform = `translate3d(${tx.toFixed(1)}px, ${ty.toFixed(1)}px, 0) scale(${camera.zoom.toFixed(3)})`;
 
     const followBtn = document.getElementById("btn-cam-follow");
     if (followBtn) {
@@ -1784,7 +1784,8 @@
   const MP_SESSION_KEY = "eft_mp_session_v1";
   const LOCAL_SAVE_KEY = "eft_local_autosave_v1";
   const LOCAL_SAVE_BAK_KEY = "eft_local_autosave_v1_bak";
-  let lastLocalAutosaveAt = 0;
+  let localAutosaveTimerId = null;
+  let lastAutosaveBackupTurn = -1;
 
   function updateMpConnectionPill(statusKind = "hidden", text = "") {
     const el = document.getElementById("mp-conn-pill");
@@ -1838,27 +1839,54 @@
     } catch (e) {}
   }
 
-  function saveLocalMatchAutosave(force = false) {
+  function flushLocalMatchAutosave() {
     if (!state || state.winner || !isMatchStarted || isInitializingMatch || mp.mode !== "local") return;
-    const now = Date.now();
-    if (!force && now - lastLocalAutosaveAt < 1200) return;
-    lastLocalAutosaveAt = now;
+    if (isWalkingAnim || isTileEffectAnimating || diceAnimIntervalId) {
+      scheduleLocalMatchAutosave();
+      return;
+    }
     try {
-      const prev = localStorage.getItem(LOCAL_SAVE_KEY);
-      if (prev) {
-        localStorage.setItem(LOCAL_SAVE_BAK_KEY, prev);
+      const turnNum = state.totalTurnsCompleted || 0;
+      if (turnNum !== lastAutosaveBackupTurn) {
+        const prev = localStorage.getItem(LOCAL_SAVE_KEY);
+        if (prev) localStorage.setItem(LOCAL_SAVE_BAK_KEY, prev);
+        lastAutosaveBackupTurn = turnNum;
       }
+      const trimmedState = {
+        ...state,
+        logs: Array.isArray(state.logs) ? state.logs.slice(-20) : []
+      };
       const payload = {
         version: SAVE_SCHEMA_VERSION,
-        savedAt: now,
-        state,
+        savedAt: Date.now(),
+        state: trimmedState,
         pending: serializePendingInteraction()
       };
       localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(payload));
     } catch (e) {}
   }
 
+  function scheduleLocalMatchAutosave() {
+    if (!state || state.winner || !isMatchStarted || isInitializingMatch || mp.mode !== "local") return;
+    if (localAutosaveTimerId) {
+      clearTimeout(localAutosaveTimerId);
+    }
+    localAutosaveTimerId = setTimeout(() => {
+      localAutosaveTimerId = null;
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(flushLocalMatchAutosave, { timeout: 1500 });
+      } else {
+        flushLocalMatchAutosave();
+      }
+    }, 3000);
+  }
+
   function clearLocalMatchAutosave() {
+    if (localAutosaveTimerId) {
+      clearTimeout(localAutosaveTimerId);
+      localAutosaveTimerId = null;
+    }
+    lastAutosaveBackupTurn = -1;
     try {
       localStorage.removeItem(LOCAL_SAVE_KEY);
       localStorage.removeItem(LOCAL_SAVE_BAK_KEY);
@@ -2587,11 +2615,11 @@
     player.tc = Math.max(0, player.tc + amount);
     if (!isInitializingMatch && amount !== 0) {
       playSfx(amount > 0 ? "coin_gain" : "coin_loss");
-      if (player.tileId && window.EFT_WEBGL_VFX) {
-        window.EFT_WEBGL_VFX.burstAtTile(player.tileId, amount > 0 ? "coin_gain" : "coin_loss");
-      }
-      if (Math.abs(amount) >= 15) {
-        addCameraTrauma(amount < 0 ? 0.34 : 0.2);
+      if (Math.abs(amount) >= 25) {
+        if (player.tileId && window.EFT_WEBGL_VFX) {
+          window.EFT_WEBGL_VFX.burstAtTile(player.tileId, amount > 0 ? "coin_gain" : "coin_loss");
+        }
+        addCameraTrauma(amount < 0 ? 0.3 : 0.18);
       }
     }
     return amount;
@@ -7042,23 +7070,31 @@
       clearLocalMatchAutosave();
       clearActiveMpSession();
     } else if (mp.mode === "local" && isMatchStarted && !isInitializingMatch) {
-      saveLocalMatchAutosave();
+      scheduleLocalMatchAutosave();
     }
   }
 
-  // Dirty-checked HUD render cache (game-ui-ux Pattern 5: avoid redundant DOM rebuilds)
+  // Dirty-checked HUD & Board render cache (avoid redundant DOM rebuilds)
   const _hudCache = {
     topStatus: "",
     players: "",
     hand: "",
-    log: ""
+    log: "",
+    boardSvg: "",
+    boardTiles: "",
+    boardDynamic: ""
   };
+  let _staticBoardRoadsSvg = "";
+  let _hadBranchPreviewClasses = false;
 
   function invalidateHudCache() {
     _hudCache.topStatus = "";
     _hudCache.players = "";
     _hudCache.hand = "";
     _hudCache.log = "";
+    _hudCache.boardSvg = "";
+    _hudCache.boardTiles = "";
+    _hudCache.boardDynamic = "";
   }
 
   function renderTopStatusStrip() {
@@ -7676,9 +7712,8 @@
     return `<div class="chibi-dir-indicator ${isRev ? "is-reverse" : ""}" title="${isRev ? "Arah gerak MUNDUR (Mind Deviation)" : "Arah gerak langkah dadu berikutnya"}">${arrowsHtml}${isRev ? `<span class="chibi-dir-rev-tag">REV</span>` : ""}</div>`;
   }
 
-  function renderBoardSvgOverlay() {
-    const svg = document.getElementById("map-svg-overlay");
-    if (!svg) return;
+  function buildStaticBoardRoadsSvg() {
+    if (_staticBoardRoadsSvg) return _staticBoardRoadsSvg;
     const W = BOARD_W;
     const H = BOARD_H;
     const pathLines = [];
@@ -7704,7 +7739,6 @@
       );
     }
 
-    // Clean undirected board track roads (NO fixed directional arrows on tiles!)
     const drawnEdges = new Set();
     DATA.BOARD_TILES.forEach((t) => {
       const x1 = (t.x / 100) * W;
@@ -7724,8 +7758,35 @@
       });
     });
 
+    _staticBoardRoadsSvg = pathLines.join("");
+    return _staticBoardRoadsSvg;
+  }
+
+  function renderBoardSvgOverlay() {
+    const svg = document.getElementById("map-svg-overlay");
+    if (!svg) return;
+
+    const isBranching = Boolean(pendingInteraction && pendingInteraction.type === "choose_branch");
+    const svgSig = isBranching
+      ? [
+          "branch",
+          pendingInteraction.player ? pendingInteraction.player.tileId : "",
+          (pendingInteraction.candidates || []).join(","),
+          pendingInteraction.stepsRemaining || 0,
+          pendingInteraction.direction || 1,
+          hoveredBranchTileId || ""
+        ].join("|")
+      : "static";
+
+    if (_hudCache.boardSvg === svgSig && svg.childElementCount > 0) return;
+    _hudCache.boardSvg = svgSig;
+
+    const W = BOARD_W;
+    const H = BOARD_H;
+    const dynamicLines = [];
+
     // Highlight glowing branch turn paths & live preview polyline ONLY during active branch choice
-    if (pendingInteraction && pendingInteraction.type === "choose_branch") {
+    if (isBranching) {
       const fromTile = TILE_MAP[pendingInteraction.player.tileId];
       const viaMap = pendingInteraction.candidateViaMap || {};
       if (fromTile) {
@@ -7750,11 +7811,11 @@
           const color = isHov ? "#38bdf8" : "#fde047";
           const marker = isHov ? "url(#arrow-cyan)" : "url(#arrow-gold)";
           if (viaTile) {
-            pathLines.push(
+            dynamicLines.push(
               `<line x1="${x0}" y1="${y0}" x2="${xa}" y2="${ya}" stroke="${color}" stroke-width="${isHov ? 8 : 6.5}" stroke-linecap="round" />`
             );
           }
-          pathLines.push(
+          dynamicLines.push(
             `<line x1="${xa}" y1="${ya}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${
               isHov ? 8 : 6.5
             }" stroke-linecap="round" marker-end="${marker}" />`
@@ -7776,7 +7837,7 @@
             (pt) => `${((pt.x / 100) * W).toFixed(1)},${((pt.y / 100) * H).toFixed(1)}`
           );
           if (pts.length >= 2) {
-            pathLines.push(
+            dynamicLines.push(
               `<polyline points="${pts.join(" ")}" fill="none" stroke="rgba(56, 189, 248, 0.35)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />`,
               `<polyline points="${pts.join(" ")}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-dasharray="14,10" stroke-linecap="round" stroke-linejoin="round" />`
             );
@@ -7794,15 +7855,24 @@
           <path d="M 0 1 L 10 5 L 0 9 z" fill="#fde047" />
         </marker>
       </defs>
-      ${pathLines.join("")}
+      ${buildStaticBoardRoadsSvg()}
+      ${dynamicLines.join("")}
     `;
   }
 
   function applyBranchPreviewTileClasses() {
-    const nodesLayer = document.getElementById("map-nodes-layer");
-    if (!nodesLayer) return;
+    const hasActivePreview = Boolean(
+      pendingInteraction &&
+      pendingInteraction.type === "choose_branch" &&
+      hoveredBranchTileId &&
+      pendingInteraction.candidates.includes(hoveredBranchTileId)
+    );
+    if (!hasActivePreview && !_hadBranchPreviewClasses) return;
 
-    nodesLayer.querySelectorAll(".digital-tile").forEach((el) => {
+    const tilesLayer = document.getElementById("map-tiles-layer") || document.getElementById("map-nodes-layer");
+    if (!tilesLayer) return;
+
+    tilesLayer.querySelectorAll(".branch-hovered, .branch-preview-step, .branch-preview-landing").forEach((el) => {
       el.classList.remove("branch-hovered", "branch-preview-step", "branch-preview-landing");
       el.removeAttribute("data-preview-step");
       el.removeAttribute("data-preview-tag");
@@ -7811,17 +7881,14 @@
       }
     });
 
-    if (
-      !pendingInteraction ||
-      pendingInteraction.type !== "choose_branch" ||
-      !hoveredBranchTileId ||
-      !pendingInteraction.candidates.includes(hoveredBranchTileId)
-    ) {
+    if (!hasActivePreview) {
+      _hadBranchPreviewClasses = false;
       return;
     }
 
+    _hadBranchPreviewClasses = true;
     const touchOnly = isTouchOnlyDevice();
-    const hovEl = nodesLayer.querySelector(`[data-tile-id="${hoveredBranchTileId}"]`);
+    const hovEl = tilesLayer.querySelector(`[data-tile-id="${hoveredBranchTileId}"]`);
     if (hovEl) {
       hovEl.classList.add("branch-hovered");
       if (touchOnly) hovEl.setAttribute("data-branch-tag", "KLIK LAGI");
@@ -7845,7 +7912,7 @@
 
     for (let i = 1; i < preview.path.length; i++) {
       const tid = preview.path[i];
-      const el = nodesLayer.querySelector(`[data-tile-id="${tid}"]`);
+      const el = tilesLayer.querySelector(`[data-tile-id="${tid}"]`);
       if (!el) continue;
       if (i < preview.path.length - 1) {
         el.classList.add("branch-preview-step");
@@ -7949,89 +8016,121 @@
   function renderDigitalBoard() {
     renderBoardSvgOverlay();
 
+    const nodesLayer = document.getElementById("map-nodes-layer");
+    if (!nodesLayer) return;
+
+    let tilesLayer = document.getElementById("map-tiles-layer");
+    let dynamicLayer = document.getElementById("map-dynamic-layer");
+    if (!tilesLayer || !dynamicLayer) {
+      nodesLayer.innerHTML = `<div id="map-tiles-layer" class="map-sublayer"></div><div id="map-dynamic-layer" class="map-sublayer"></div>`;
+      tilesLayer = document.getElementById("map-tiles-layer");
+      dynamicLayer = document.getElementById("map-dynamic-layer");
+      _hudCache.boardTiles = "";
+      _hudCache.boardDynamic = "";
+    }
+
     const localCanAct = canLocalPlayerAct();
-    const candidateSet = new Set(
-      localCanAct && pendingInteraction && pendingInteraction.type === "choose_branch" ? pendingInteraction.candidates : []
-    );
-    const radiusSet = new Set(
+    const branchCandidates =
+      localCanAct && pendingInteraction && pendingInteraction.type === "choose_branch"
+        ? pendingInteraction.candidates || []
+        : [];
+    const radiusIds =
       localCanAct &&
       pendingInteraction &&
       (pendingInteraction.type === "select_tile_target" || pendingInteraction.type === "stage_is_mine")
-        ? pendingInteraction.validTileIds
-        : []
-    );
+        ? pendingInteraction.validTileIds || []
+        : [];
 
-    const tokenTileMap = {};
-    state.boardTokens.forEach((tok) => {
-      tokenTileMap[tok.tileId] = tok;
-    });
-    const shardTileSet = new Set(state.activeShards.map((s) => s.tileId));
+    const tilesSig = [
+      localCanAct ? 1 : 0,
+      state.activeShards.map((s) => `${s.roman}:${s.tileId}`).join(","),
+      state.boardTokens.map((tok) => `${tok.id}:${tok.type}:${tok.tileId}:${tok.ownerIndex}`).join(","),
+      branchCandidates.join(","),
+      branchCandidates.length > 0
+        ? `${pendingInteraction.stepsRemaining}:${pendingInteraction.direction}:${pendingInteraction.player ? pendingInteraction.player.tileId : ""}`
+        : "",
+      radiusIds.join(","),
+      radiusIds.length > 0 && pendingInteraction.tileStepLabels
+        ? Object.keys(pendingInteraction.tileStepLabels)
+            .map((k) => `${k}=${pendingInteraction.tileStepLabels[k]}`)
+            .join(",")
+        : ""
+    ].join("|");
 
-    const nodesLayer = document.getElementById("map-nodes-layer");
-    const tilesHtml = DATA.BOARD_TILES.map((t) => {
-      const classes = ["digital-tile", `dt-${t.type}`];
-      if (t.shopArrow) classes.push(`shop-arrow-${t.shopArrow}`);
-      const effectMeta = TILE_EFFECT_META[t.type] || null;
-      const hasShard = shardTileSet.has(t.id);
-      const tokOnTile = tokenTileMap[t.id] || null;
-      const hasTok = !!tokOnTile;
-      if (effectMeta || hasShard || hasTok) {
-        classes.push("has-tile-effect");
-      }
-      if (hasShard) {
-        classes.push("has-active-shard");
-      }
-      if (hasTok) {
-        const tm = getTrapTileMeta(tokOnTile);
-        classes.push("tile-has-trap", tm.tileCls);
-        if (t.type !== "normal") {
-          classes.push("tile-dual-effect");
+    if (_hudCache.boardTiles !== tilesSig || tilesLayer.childElementCount === 0) {
+      _hudCache.boardTiles = tilesSig;
+      _hadBranchPreviewClasses = false;
+
+      const candidateSet = new Set(branchCandidates);
+      const radiusSet = new Set(radiusIds);
+      const tokenTileMap = {};
+      state.boardTokens.forEach((tok) => {
+        tokenTileMap[tok.tileId] = tok;
+      });
+      const shardTileSet = new Set(state.activeShards.map((s) => s.tileId));
+
+      const tilesHtml = DATA.BOARD_TILES.map((t) => {
+        const classes = ["digital-tile", `dt-${t.type}`];
+        if (t.shopArrow) classes.push(`shop-arrow-${t.shopArrow}`);
+        const effectMeta = TILE_EFFECT_META[t.type] || null;
+        const hasShard = shardTileSet.has(t.id);
+        const tokOnTile = tokenTileMap[t.id] || null;
+        const hasTok = !!tokOnTile;
+        if (effectMeta || hasShard || hasTok) {
+          classes.push("has-tile-effect");
         }
-      }
+        if (hasShard) {
+          classes.push("has-active-shard");
+        }
+        if (hasTok) {
+          const tm = getTrapTileMeta(tokOnTile);
+          classes.push("tile-has-trap", tm.tileCls);
+          if (t.type !== "normal") {
+            classes.push("tile-dual-effect");
+          }
+        }
 
-      let branchTagAttr = "";
-      let tip = "";
-      if (effectMeta) {
-        tip = `${effectMeta.title}: ${effectMeta.effect}`;
-      }
-      if (hasTok) {
-        const tDesc = TOKEN_EFFECT_DESCRIPTIONS[tokOnTile.type] || tokOnTile.name;
-        tip = tip ? `${tip} | ${tDesc}` : tDesc;
-      }
-      if (hasShard) {
-        const sTip = "Tartarus Shard aktif di tile ini (lewati dengan >= 100 TC untuk membeli).";
-        tip = tip ? `${tip} | ${sTip}` : sTip;
-      }
+        let branchTagAttr = "";
+        let tip = "";
+        if (effectMeta) {
+          tip = `${effectMeta.title}: ${effectMeta.effect}`;
+        }
+        if (hasTok) {
+          const tDesc = TOKEN_EFFECT_DESCRIPTIONS[tokOnTile.type] || tokOnTile.name;
+          tip = tip ? `${tip} | ${tDesc}` : tDesc;
+        }
+        if (hasShard) {
+          const sTip = "Tartarus Shard aktif di tile ini (lewati dengan >= 100 TC untuk membeli).";
+          tip = tip ? `${tip} | ${sTip}` : sTip;
+        }
 
-      if (candidateSet.has(t.id)) {
-        classes.push("branch-option");
-        branchTagAttr = ` data-branch-tag="BELOK"`;
-        const viaId =
-          pendingInteraction.candidateViaMap && pendingInteraction.candidateViaMap[t.id]
-            ? pendingInteraction.candidateViaMap[t.id]
-            : null;
-        const prev = getBranchPreviewPath(
-          t.id,
-          pendingInteraction.stepsRemaining,
-          pendingInteraction.direction,
-          pendingInteraction.player ? pendingInteraction.player.tileId : null,
-          viaId
-        );
-        const landTile = TILE_MAP[prev.landingTileId];
-        tip = `Belok ke jalur ini -> Perkiraan berhenti di ${landTile ? landTile.name : prev.landingTileId}`;
-      }
-      if (radiusSet.has(t.id)) classes.push("in-radius");
-      const stepLbl =
-        localCanAct &&
-        pendingInteraction &&
-        (pendingInteraction.type === "select_tile_target" || pendingInteraction.type === "stage_is_mine") &&
-        pendingInteraction.tileStepLabels &&
-        pendingInteraction.tileStepLabels[t.id]
-          ? pendingInteraction.tileStepLabels[t.id]
-          : "";
-      const stepAttr = stepLbl ? ` data-step="${stepLbl}"` : "";
+        if (candidateSet.has(t.id)) {
+          classes.push("branch-option");
+          branchTagAttr = ` data-branch-tag="BELOK"`;
+          const viaId =
+            pendingInteraction.candidateViaMap && pendingInteraction.candidateViaMap[t.id]
+              ? pendingInteraction.candidateViaMap[t.id]
+              : null;
+          const prev = getBranchPreviewPath(
+            t.id,
+            pendingInteraction.stepsRemaining,
+            pendingInteraction.direction,
+            pendingInteraction.player ? pendingInteraction.player.tileId : null,
+            viaId
+          );
+          const landTile = TILE_MAP[prev.landingTileId];
+          tip = `Belok ke jalur ini -> Perkiraan berhenti di ${landTile ? landTile.name : prev.landingTileId}`;
+        }
+        if (radiusSet.has(t.id)) classes.push("in-radius");
+        const stepLbl =
+          radiusSet.size > 0 &&
+          pendingInteraction.tileStepLabels &&
+          pendingInteraction.tileStepLabels[t.id]
+            ? pendingInteraction.tileStepLabels[t.id]
+            : "";
+        const stepAttr = stepLbl ? ` data-step="${stepLbl}"` : "";
 
-      return `
+        return `
       <div class="${classes.join(" ")}" data-tile-id="${t.id}"${branchTagAttr}${stepAttr}
            style="left:${t.x}%;top:${t.y}%;"
            ${tip ? `title="${escapeHtml(tip)}"` : ""}
@@ -8040,12 +8139,33 @@
            onclick="window.EFT_APP.onTileClicked('${t.id}')">
         ${buildTileInnerHtml(t, tokOnTile)}
       </div>`;
-    });
+      });
 
-    const shardHtml = state.activeShards.map((sh, idx) => {
-      const tile = TILE_MAP[sh.tileId];
-      if (!tile) return "";
-      return `
+      tilesLayer.innerHTML = tilesHtml.join("");
+    }
+
+    const dynamicSig = [
+      state.activePlayerIndex,
+      isWalkingAnim ? 1 : 0,
+      isAdminUnlocked ? 1 : 0,
+      state.activeShards.map((s) => `${s.roman}:${s.tileId}`).join(","),
+      fadingShards.map((s) => s.fadeId).join(","),
+      activeBoardVfxList.map((v) => v.id).join(","),
+      state.players
+        .map((p, idx) => {
+          const rTid = skillMoveAnimOverrides[idx] || p.tileId;
+          return `${p.charId}:${rTid}:${p.isSamMode ? 1 : 0}:${p.reverseNextRoll ? 1 : 0}:${p.lastDirection || 1}:${p.prevTileId || ""}:${skillMoveAnimOverrides[idx] ? 1 : 0}`;
+        })
+        .join(";")
+    ].join("|");
+
+    if (_hudCache.boardDynamic !== dynamicSig || dynamicLayer.childElementCount === 0) {
+      _hudCache.boardDynamic = dynamicSig;
+
+      const shardHtml = state.activeShards.map((sh, idx) => {
+        const tile = TILE_MAP[sh.tileId];
+        if (!tile) return "";
+        return `
       <div class="shard-crystal-marker" style="left:${tile.x}%;top:${tile.y}%;">
         <div class="shard-crystal-float-wrap">
           ${buildShardCrystalSvg("act_" + sh.tileId + "_" + idx)}
@@ -8053,12 +8173,12 @@
         </div>
         <div class="shard-crystal-label">Shard ${escapeHtml(sh.roman)}</div>
       </div>`;
-    });
+      });
 
-    const fadingShardHtml = fadingShards.map((sh) => {
-      const tile = TILE_MAP[sh.tileId];
-      if (!tile) return "";
-      return `
+      const fadingShardHtml = fadingShards.map((sh) => {
+        const tile = TILE_MAP[sh.tileId];
+        if (!tile) return "";
+        return `
       <div class="shard-crystal-marker is-fading-out" style="left:${tile.x}%;top:${tile.y}%;">
         <div class="shard-crystal-float-wrap">
           ${buildShardCrystalSvg("fade_" + sh.fadeId)}
@@ -8066,34 +8186,33 @@
         </div>
         <div class="shard-crystal-label">Shard ${escapeHtml(sh.roman)}</div>
       </div>`;
-    });
+      });
 
-    // Group players by tile and position floating pins around the upper rim so they NEVER cover the tile block!
-    const tileOccupants = {};
-    state.players.forEach((p, idx) => {
-      const renderTid = skillMoveAnimOverrides[idx] || p.tileId;
-      if (!tileOccupants[renderTid]) tileOccupants[renderTid] = [];
-      tileOccupants[renderTid].push(p);
-    });
+      const tileOccupants = {};
+      state.players.forEach((p, idx) => {
+        const renderTid = skillMoveAnimOverrides[idx] || p.tileId;
+        if (!tileOccupants[renderTid]) tileOccupants[renderTid] = [];
+        tileOccupants[renderTid].push(p);
+      });
 
-    const pawnsHtml = state.players.map((p, idx) => {
-      const renderTid = skillMoveAnimOverrides[idx] || p.tileId;
-      const tile = TILE_MAP[renderTid] || TILE_MAP.T0;
-      const group = tileOccupants[renderTid] || [p];
-      const posInGroup = group.indexOf(p);
-      const spreadX = (posInGroup - (group.length - 1) / 2) * 1.45;
-      const px = tile.x + spreadX;
-      const py = tile.y;
-      const isAct = idx === state.activePlayerIndex;
-      const isSkillAnim = Boolean(skillMoveAnimOverrides[idx]);
-      const walkCls = (isAct && isWalkingAnim) || isSkillAnim ? "walking-step" : "";
-      const chData = DATA.CHARACTERS[p.charId] || {};
-      const chibiSrc = p.isSamMode && chData.samChibi ? chData.samChibi : chData.chibi || "";
-      const pawnVisual = chibiSrc
-        ? `<img class="board-chibi-img" src="${chibiSrc}" alt="${escapeHtml(p.name)}" decoding="async" />`
-        : `<div class="board-pawn-fallback">${getCharacterSvgIcon(p.charId)}</div>`;
-      const dirIndicator = buildChibiDirectionIndicatorHtml(p);
-      return `
+      const pawnsHtml = state.players.map((p, idx) => {
+        const renderTid = skillMoveAnimOverrides[idx] || p.tileId;
+        const tile = TILE_MAP[renderTid] || TILE_MAP.T0;
+        const group = tileOccupants[renderTid] || [p];
+        const posInGroup = group.indexOf(p);
+        const spreadX = (posInGroup - (group.length - 1) / 2) * 1.45;
+        const px = tile.x + spreadX;
+        const py = tile.y;
+        const isAct = idx === state.activePlayerIndex;
+        const isSkillAnim = Boolean(skillMoveAnimOverrides[idx]);
+        const walkCls = (isAct && isWalkingAnim) || isSkillAnim ? "walking-step" : "";
+        const chData = DATA.CHARACTERS[p.charId] || {};
+        const chibiSrc = p.isSamMode && chData.samChibi ? chData.samChibi : chData.chibi || "";
+        const pawnVisual = chibiSrc
+          ? `<img class="board-chibi-img" src="${chibiSrc}" alt="${escapeHtml(p.name)}" decoding="async" />`
+          : `<div class="board-pawn-fallback">${getCharacterSvgIcon(p.charId)}</div>`;
+        const dirIndicator = buildChibiDirectionIndicatorHtml(p);
+        return `
       <div class="board-chibi-pawn ${isAct ? "active-pawn" : ""} ${walkCls}"
            style="left:${px}%;top:${py}%;--pawn-color:${p.color};"
            title="${escapeHtml(p.name)} @ ${p.tileId}"
@@ -8102,24 +8221,23 @@
         ${pawnVisual}
         <span class="chibi-base-ring"></span>
       </div>`;
-    });
+      });
 
-    const boardVfxHtml = activeBoardVfxList.map((v) => {
-      const tile = TILE_MAP[v.tileId];
-      if (!tile) return "";
-      return `
+      const boardVfxHtml = activeBoardVfxList.map((v) => {
+        const tile = TILE_MAP[v.tileId];
+        if (!tile) return "";
+        return `
       <div class="board-tile-vfx vfx-${escapeHtml(v.kind)}" style="left:${tile.x}%;top:${tile.y}%;">
         <div class="btv-ring"></div>
         <div class="btv-core"></div>
         <div class="btv-sparks"><span></span><span></span><span></span><span></span><span></span><span></span></div>
       </div>`;
-    });
+      });
 
-    nodesLayer.innerHTML = tilesHtml.join("") + shardHtml.join("") + fadingShardHtml.join("") + boardVfxHtml.join("") + pawnsHtml.join("");
-    applyBranchPreviewTileClasses();
-    if (window.EFT_WEBGL_VFX) {
-      window.EFT_WEBGL_VFX.syncAmbientAnchors(state.activeShards, state.boardTokens);
+      dynamicLayer.innerHTML = shardHtml.join("") + fadingShardHtml.join("") + boardVfxHtml.join("") + pawnsHtml.join("");
     }
+
+    applyBranchPreviewTileClasses();
   }
 
   function onTileHover(tileId, entering) {
