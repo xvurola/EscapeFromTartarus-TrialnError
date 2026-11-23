@@ -35,6 +35,7 @@ tools/
 server.py
 build_hosting.py
 sync_web_assets.py
+convert_assets_to_webp.py
 __pycache__/
 *.pyc
 .DS_Store

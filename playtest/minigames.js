@@ -16,6 +16,7 @@
   const WHEEL_SETTLE_MS = 550;
   const INTRO_DURATION_MS = 2600;
   const RESULT_AUTO_CLOSE_MS = 5200;
+  const FFA_MAX_TC_REWARD = 45;
 
   let hostApi = null;
   const registry = Object.create(null);
@@ -474,13 +475,15 @@
     }
 
     const deltas = resultSpec.deltas || {};
+    const applyMaxCap = mg.mode === "ffa" && mg.gameId !== "dice_of_fate";
     const logParts = [];
     mg.entries.forEach((entry) => {
       const p = state.players[entry.playerIndex];
       const raw = Number(deltas[entry.playerIndex] || 0);
       if (p) {
         if (raw > 0) {
-          const gained = hostApi.modifyPlayerTC(p, raw, "minigame");
+          const cappedRaw = applyMaxCap ? Math.min(FFA_MAX_TC_REWARD, raw) : raw;
+          const gained = hostApi.modifyPlayerTC(p, cappedRaw, "minigame");
           entry.rewardDelta = gained;
         } else if (raw < 0) {
           const loss = Math.min(p.tc, Math.abs(raw));
@@ -1815,27 +1818,27 @@
   function sobGenerateChests(roundNum, playerCount) {
     if (roundNum === 1) {
       return [
-        { id: 0, tier: "Rendah", value: randInt(12, 16), icon: "🧳" },
-        { id: 1, tier: "Sedang", value: randInt(22, 28), icon: "💼" },
-        { id: 2, tier: "Tinggi", value: randInt(34, 42), icon: "👑" }
+        { id: 0, tier: "Rendah", value: randInt(4, 6), icon: "🧳" },
+        { id: 1, tier: "Sedang", value: randInt(7, 9), icon: "💼" },
+        { id: 2, tier: "Tinggi", value: randInt(11, 13), icon: "👑" }
       ];
     }
     if (roundNum === 2) {
       return [
-        { id: 0, tier: "Rendah", value: randInt(10, 14), icon: "🧳" },
-        { id: 1, tier: "Sedang", value: randInt(18, 24), icon: "💼" },
-        { id: 2, tier: "Tinggi", value: randInt(30, 36), icon: "💰" },
-        { id: 3, tier: "Jackpot", value: randInt(44, 52), icon: "👑" }
+        { id: 0, tier: "Rendah", value: randInt(4, 5), icon: "🧳" },
+        { id: 1, tier: "Sedang", value: randInt(6, 8), icon: "💼" },
+        { id: 2, tier: "Tinggi", value: randInt(10, 12), icon: "💰" },
+        { id: 3, tier: "Jackpot", value: randInt(13, 15), icon: "👑" }
       ];
     }
-    // Round 3: high stakes (3 chests for maximum mind-game collision!)
+    // Round 3: high stakes (3 chests for maximum mind-game collision! Max 3-round total = 13 + 15 + 17 = 45 TC)
     const base = [
-      { id: 0, tier: "Sedang", value: randInt(18, 24), icon: "💼" },
-      { id: 1, tier: "Tinggi", value: randInt(32, 40), icon: "💰" },
-      { id: 2, tier: "Jackpot", value: randInt(48, 60), icon: "👑" }
+      { id: 0, tier: "Sedang", value: randInt(7, 9), icon: "💼" },
+      { id: 1, tier: "Tinggi", value: randInt(11, 13), icon: "💰" },
+      { id: 2, tier: "Jackpot", value: randInt(15, 17), icon: "👑" }
     ];
     if (playerCount <= 2) {
-      base.push({ id: 3, tier: "Rendah", value: randInt(12, 16), icon: "🧳" });
+      base.push({ id: 3, tier: "Rendah", value: randInt(4, 6), icon: "🧳" });
     }
     return base;
   }
@@ -1897,8 +1900,10 @@
       }
       d.outcomes[chest.id] = { kind, pickers, perPlayer };
       pickers.forEach((seatIdx) => {
-        d.roundGains[seatIdx] = perPlayer;
-        d.totals[seatIdx] = (d.totals[seatIdx] || 0) + perPlayer;
+        const prevTotal = d.totals[seatIdx] || 0;
+        const nextTotal = Math.min(FFA_MAX_TC_REWARD, prevTotal + perPlayer);
+        d.roundGains[seatIdx] = Math.max(0, nextTotal - prevTotal);
+        d.totals[seatIdx] = nextTotal;
       });
     });
 
@@ -1916,7 +1921,7 @@
     accent: "#38bdf8",
     accentRgb: "56, 189, 248",
     modes: ["ffa"],
-    ruleText: "3 ronde cepat — pilih 1 peti diam-diam! 1 pemain = penuh, 2 pemain = bagi dua, 3+ pemain = HANGUS (0 TC)!",
+    ruleText: "3 ronde cepat (Maks. 45 TC) — pilih 1 peti diam-diam! 1 pemain = penuh, 2 pemain = bagi dua, 3+ pemain = HANGUS (0 TC)!",
     initData(mg) {
       const totals = {};
       mg.entries.forEach((e) => {
@@ -1981,10 +1986,14 @@
           sobStartRound(mg);
           syncAndBroadcast(mg, true);
         } else {
-          const maxEarn = Math.max(...mg.entries.map((e) => d.totals[e.playerIndex] || 0));
-          const winners = mg.entries.filter((e) => (d.totals[e.playerIndex] || 0) === maxEarn && maxEarn > 0);
+          const cappedTotals = {};
           mg.entries.forEach((e) => {
-            const earned = d.totals[e.playerIndex] || 0;
+            cappedTotals[e.playerIndex] = Math.min(FFA_MAX_TC_REWARD, d.totals[e.playerIndex] || 0);
+          });
+          const maxEarn = Math.max(...mg.entries.map((e) => cappedTotals[e.playerIndex] || 0));
+          const winners = mg.entries.filter((e) => (cappedTotals[e.playerIndex] || 0) === maxEarn && maxEarn > 0);
+          mg.entries.forEach((e) => {
+            const earned = cappedTotals[e.playerIndex] || 0;
             e.isWinner = winners.some((w) => w.playerIndex === e.playerIndex);
             e.scoreText = `Total Peti: ${earned} TC`;
             e.rewardNote = earned > 0 ? "Rampasan Peti" : "Nihil";
@@ -1992,8 +2001,8 @@
           transitionToResult(mg, {
             winnerIndices: winners.map((w) => w.playerIndex),
             headline: winners.length > 0 ? `Perampas Terbesar: ${winners.map((w) => w.name).join(" & ")}!` : "Semua Peti Hangus!",
-            sub: "Total hadiah dari 3 ronde Rebutan Peti langsung ditambahkan ke saldo TC.",
-            deltas: { ...d.totals }
+            sub: `Total hadiah dari 3 ronde Rebutan Peti (maks. ${FFA_MAX_TC_REWARD} TC) langsung ditambahkan ke saldo TC.`,
+            deltas: cappedTotals
           });
         }
       }
@@ -2110,6 +2119,7 @@
   // MINIGAME 6 (FFA): BLACKJACK (TARUHAN 10s + PARALEL VS DEALER)
   // ============================================================================
   const BJ_MIN_BET = 5;
+  const BJ_MAX_BET = FFA_MAX_TC_REWARD;
   const BJ_BET_TIME_MS = 10000;
   const BJ_PLAY_TIME_MS = 32000;
   const BJ_SUITS = ["♠", "♥", "♦", "♣"];
@@ -2273,6 +2283,10 @@
         delta = s.isFreeStake ? 0 : -s.bet;
       }
 
+      if (delta > 0) {
+        delta = Math.min(FFA_MAX_TC_REWARD, delta);
+      }
+
       s.outcome = outcome;
       s.netDelta = delta;
       deltas[e.playerIndex] = delta;
@@ -2317,9 +2331,9 @@
       s.status = "stand";
       playSfx("click");
     } else if (act === "double") {
-      const canDouble = s.hand.length === 2 && !s.isFreeStake && s.wallet >= s.bet * 2;
+      const canDouble = s.hand.length === 2 && !s.isFreeStake && s.wallet >= s.bet * 2 && s.bet * 2 <= BJ_MAX_BET;
       if (!canDouble) return;
-      s.bet *= 2;
+      s.bet = Math.min(BJ_MAX_BET, s.bet * 2);
       s.doubled = true;
       s.hand.push(bjDrawCard(d));
       const ev = bjEvalHand(s.hand);
@@ -2343,7 +2357,7 @@
     accent: "#a855f7",
     accentRgb: "168, 85, 247",
     modes: ["ffa"],
-    ruleText: "Pasang taruhan dalam 10 detik, lalu main paralel melawan Dealer (mendekati 21 tanpa Bust; Blackjack bayar 1.5x)!",
+    ruleText: `Pasang taruhan dalam 10 detik (maks. pendapatan +${FFA_MAX_TC_REWARD} TC), lalu main paralel melawan Dealer (mendekati 21 tanpa Bust; Blackjack bayar 1.5x)!`,
     initData(mg) {
       const state = getState();
       const seats = {};
@@ -2351,7 +2365,8 @@
         const p = state && state.players[e.playerIndex];
         const wallet = p ? Math.max(0, p.tc) : 0;
         const isFreeStake = wallet < BJ_MIN_BET;
-        const defaultBet = isFreeStake ? BJ_MIN_BET : Math.min(wallet, Math.max(BJ_MIN_BET, Math.floor(wallet * 0.25)));
+        const maxBet = Math.min(wallet, BJ_MAX_BET);
+        const defaultBet = isFreeStake ? BJ_MIN_BET : Math.min(maxBet, Math.max(BJ_MIN_BET, Math.floor(maxBet * 0.25)));
         seats[e.playerIndex] = {
           wallet,
           isFreeStake,
@@ -2398,7 +2413,8 @@
       if (d.subPhase === "betting") {
         if (s.betLocked) return;
         if (actionType === "bj_set_bet") {
-          const val = Math.max(BJ_MIN_BET, Math.min(s.wallet, Math.floor(Number(payload && payload.amount) || BJ_MIN_BET)));
+          const maxBet = Math.min(s.wallet, BJ_MAX_BET);
+          const val = Math.max(BJ_MIN_BET, Math.min(maxBet, Math.floor(Number(payload && payload.amount) || BJ_MIN_BET)));
           s.bet = val;
           playSfx("click");
           syncAndBroadcast(mg, true);
@@ -2429,7 +2445,8 @@
           if (e.isBot && !s.betLocked && now >= (s.botNextAt || 0)) {
             const pcts = [0.2, 0.3, 0.45];
             const pick = pickRandom(pcts);
-            s.bet = Math.max(BJ_MIN_BET, Math.min(s.wallet, Math.floor(s.wallet * pick)));
+            const maxBet = Math.min(s.wallet, BJ_MAX_BET);
+            s.bet = Math.max(BJ_MIN_BET, Math.min(maxBet, Math.floor(maxBet * pick)));
             s.betLocked = true;
             changed = true;
           }
@@ -2445,7 +2462,7 @@
           if (e.isBot && s.status === "playing" && now >= (s.botNextAt || 0)) {
             const ev = bjEvalHand(s.hand);
             const dealerUp = d.dealerHand[0] ? (d.dealerHand[0].rank === "A" ? 11 : ["K", "Q", "J"].includes(d.dealerHand[0].rank) ? 10 : Number(d.dealerHand[0].rank)) : 7;
-            const canDouble = s.hand.length === 2 && !s.isFreeStake && s.wallet >= s.bet * 2;
+            const canDouble = s.hand.length === 2 && !s.isFreeStake && s.wallet >= s.bet * 2 && s.bet * 2 <= BJ_MAX_BET;
             s.botNextAt = now + randInt(750, 1200);
             if (canDouble && (ev.total === 10 || ev.total === 11) && dealerUp <= 9 && Math.random() < 0.65) {
               bjApplyPlayerAction(mg, e.playerIndex, "double");
@@ -2553,9 +2570,10 @@
 
           let bodyHtml = "";
           if (d.subPhase === "betting") {
-            const q25 = Math.max(BJ_MIN_BET, Math.floor(s.wallet * 0.25));
-            const q50 = Math.max(BJ_MIN_BET, Math.floor(s.wallet * 0.5));
-            const qMax = Math.max(BJ_MIN_BET, s.wallet);
+            const maxBet = Math.max(BJ_MIN_BET, Math.min(s.wallet, BJ_MAX_BET));
+            const q25 = Math.max(BJ_MIN_BET, Math.floor(maxBet * 0.25));
+            const q50 = Math.max(BJ_MIN_BET, Math.floor(maxBet * 0.5));
+            const qMax = maxBet;
             if (s.isFreeStake) {
               bodyHtml = `
                 <div style="font-size:0.78rem;color:#fde68a;background:rgba(245,158,11,0.14);border:1px solid rgba(251,191,36,0.4);border-radius:9px;padding:8px;text-align:center;">
@@ -2581,7 +2599,7 @@
                 </div>`;
             }
           } else {
-            const canDouble = s.hand.length === 2 && !s.isFreeStake && s.wallet >= s.bet * 2;
+            const canDouble = s.hand.length === 2 && !s.isFreeStake && s.wallet >= s.bet * 2 && s.bet * 2 <= BJ_MAX_BET;
             const statusLabels = {
               playing: "Sedang Bermain",
               stand: "Stand",

@@ -1,0 +1,14 @@
+# Cloudflare Pages Edge Caching Headers
+# Aset gambar WebP di-cache panjang di browser & CDN agar kunjungan berikutnya instan
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# File kode JS/CSS selalu cek update terbaru agar perubahan commit langsung tampil
+/playtest/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
