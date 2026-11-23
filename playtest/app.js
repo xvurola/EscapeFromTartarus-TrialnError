@@ -1278,10 +1278,8 @@
     surface.style.transform = `translate(${camera.panX.toFixed(1)}px, ${camera.panY.toFixed(1)}px) scale(${camera.zoom.toFixed(3)})`;
 
     const followBtn = document.getElementById("btn-cam-follow");
-    const wideBtn = document.getElementById("btn-cam-wide");
-    if (followBtn && wideBtn) {
+    if (followBtn) {
       followBtn.classList.toggle("active-cam", camera.mode === "follow");
-      wideBtn.classList.toggle("active-cam", camera.mode === "wide");
     }
   }
 
@@ -1426,33 +1424,16 @@
   }
 
   function setCameraMode(mode) {
-    camera.mode = mode;
+    camera.mode = mode === "free" ? "free" : "follow";
     const mobileLand = isMobileLandscape();
     const mobilePort = isMobilePortrait();
-    if (mode === "wide") {
-      if (mobileLand) {
-        const availW = Math.max(240, window.innerWidth - 350);
-        const availH = Math.max(180, window.innerHeight - 102);
-        camera.zoom = Math.max(0.13, Math.min(0.30, Math.min(availW / BOARD_W, availH / BOARD_H)));
-        camera.panX = 0;
-        camera.panY = -12;
-      } else if (mobilePort) {
-        camera.zoom = Math.max(0.12, Math.min(0.35, (window.innerWidth - 14) / BOARD_W));
-        camera.panX = 0;
-        camera.panY = 4;
-      } else {
-        const availW = Math.max(480, window.innerWidth - 360);
-        const availH = Math.max(360, window.innerHeight - 170);
-        camera.zoom = Math.max(0.24, Math.min(0.36, Math.min(availW / BOARD_W, availH / BOARD_H)));
-        camera.panX = 0;
-        camera.panY = -26;
-      }
-      applyCameraTransform();
-    } else if (mode === "follow" && state) {
+    if (camera.mode === "follow" && state) {
       const p = getActivePlayer();
       const followZoom = mobileLand ? 0.58 : mobilePort ? 0.72 : 0.96;
       camera.zoom = followZoom;
       focusCameraOnTile(p.tileId, followZoom);
+    } else {
+      applyCameraTransform();
     }
   }
 
@@ -1577,8 +1558,7 @@
         camera.panX *= ratio;
         camera.panY *= ratio;
         camera.zoom = newZoom;
-        if (camera.zoom <= 0.40) camera.mode = "wide";
-        else if (camera.mode === "wide") camera.mode = "free";
+        camera.mode = "free";
         applyCameraTransform();
       },
       { passive: false }
@@ -9127,11 +9107,7 @@
       tileStepLabels: {},
       canChangeTarget: card.effectKey === "copy_last_skill"
     };
-    if (effectiveCard.targetType === "non_event_tile" || effectiveCard.targetType === "any_tile") {
-      setCameraMode("wide");
-    } else {
-      focusCameraOnTileGroup(validTileIds, player.tileId);
-    }
+    focusCameraOnTileGroup(validTileIds, player.tileId);
     renderAll();
   }
 
@@ -10873,8 +10849,7 @@
       if (!state) return;
       renderTuckedHandAndDice();
       if (document.getElementById("comp-strip-track")) updateCompendiumScrollControls();
-      if (camera.mode === "wide") setCameraMode("wide");
-      else if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
+      if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
     };
 
     window.addEventListener("resize", handleViewportReflow);

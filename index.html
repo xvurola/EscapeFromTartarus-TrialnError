@@ -79,7 +79,13 @@
 
   <!-- TOP BAR -->
   <header class="studio-topbar">
-    <div class="brand-title">Escape From Tartarus</div>
+    <div class="topbar-brand-group">
+      <div class="brand-title">Escape From Tartarus</div>
+      <button id="btn-admin-mode" class="util-pill-btn topbar-admin-btn" onclick="window.EFT_APP.openAdminModal()">Admin</button>
+      <button class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1, true)">Shop</button>
+      <button class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
+      <button class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.undoLastAction()">Undo</button>
+    </div>
 
     <nav class="center-nav-pills">
       <button class="nav-oval-pill active" data-tab="simulator" onclick="window.EFT_APP.switchTab('simulator')">
@@ -258,14 +264,7 @@
         <button id="btn-cam-follow" class="util-pill-btn active-cam" onclick="window.EFT_APP.setCameraMode('follow')">
           Focus Player
         </button>
-        <button id="btn-cam-wide" class="util-pill-btn" onclick="window.EFT_APP.setCameraMode('wide')">
-          Wide Map
-        </button>
         <button class="util-pill-btn" onclick="window.EFT_APP.toggleDrawer('drawer-log')">Log</button>
-        <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1, true)">Shop</button>
-        <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
-        <button class="util-pill-btn admin-only-el" onclick="window.EFT_APP.undoLastAction()">Undo</button>
-        <button id="btn-admin-mode" class="util-pill-btn" onclick="window.EFT_APP.openAdminModal()">Admin</button>
       </div>
 
       <!-- COLLAPSIBLE DRAWER 1: EVENT LOG -->

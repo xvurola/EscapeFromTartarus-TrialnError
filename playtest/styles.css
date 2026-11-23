@@ -53,12 +53,29 @@ body {
   flex-shrink: 0;
 }
 
+.topbar-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
 .brand-title {
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.08rem;
   font-weight: 700;
   color: #e2e8f0;
   letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.topbar-admin-btn {
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  border-radius: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .center-nav-pills {
@@ -5603,10 +5620,14 @@ body:not(.modal-open) .tucked-card:hover,
     gap: 6px;
   }
 
-  .brand-title {
-    font-size: 0.92rem;
+  .topbar-brand-group {
     grid-column: 1 / 2;
     grid-row: 1 / 2;
+    gap: 5px;
+  }
+
+  .brand-title {
+    font-size: 0.92rem;
   }
 
   .topbar-right {
@@ -6710,14 +6731,24 @@ body:not(.modal-open) .tucked-card:hover,
 
   /* 2. Ultra-Slim Single-Row Topbar with Safe-Area Notch Insets */
   .studio-topbar {
-    height: 36px;
-    padding: 0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
-    gap: 8px;
+    height: 34px;
+    padding: 0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+    gap: 6px;
+  }
+
+  .topbar-brand-group {
+    gap: 5px;
   }
 
   .brand-title {
-    font-size: 0.84rem;
+    font-size: 0.78rem;
     white-space: nowrap;
+  }
+
+  .topbar-admin-btn {
+    padding: 2px 6px;
+    font-size: 0.56rem;
+    border-radius: 6px;
   }
 
   .center-nav-pills {
@@ -6725,8 +6756,8 @@ body:not(.modal-open) .tucked-card:hover,
   }
 
   .nav-oval-pill {
-    padding: 3px 10px;
-    font-size: 0.66rem;
+    padding: 2px 9px;
+    font-size: 0.62rem;
     white-space: nowrap;
   }
 
@@ -6741,8 +6772,8 @@ body:not(.modal-open) .tucked-card:hover,
 
   .sound-mute-btn,
   .sound-voice-btn {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
   }
 
   .sound-volume-slider,
@@ -6752,10 +6783,10 @@ body:not(.modal-open) .tucked-card:hover,
 
   .audio-mixer-popover {
     top: calc(100% + 6px);
-    max-height: calc(100dvh - 52px);
+    max-height: calc(100dvh - 50px);
     overflow-y: auto;
-    width: 236px;
-    padding: 10px;
+    width: 230px;
+    padding: 9px;
   }
 
   .mobile-fs-btn {
@@ -6765,171 +6796,176 @@ body:not(.modal-open) .tucked-card:hover,
   }
 
   .top-btn {
-    padding: 4px 8px;
-    font-size: 0.64rem;
-    border-radius: 7px;
+    padding: 3px 7px;
+    font-size: 0.6rem;
+    border-radius: 6px;
     white-space: nowrap;
   }
 
   .view-container {
-    height: calc(100vh - 36px);
-    height: calc(100dvh - 36px);
+    height: calc(100vh - 34px);
+    height: calc(100dvh - 34px);
   }
 
-  /* 3. Left Player Strip: 4 Compact Stacked Cards Leaving Bottom-Left Open */
+  /* 3. Left Player Strip: Extra-Compact Slim Cards Leaving Maximum Board View */
   .hud-players-list {
-    top: 6px;
-    left: max(6px, env(safe-area-inset-left));
-    gap: 4px;
+    top: 5px;
+    left: max(5px, env(safe-area-inset-left));
+    gap: 3px;
   }
 
   .player-hud-card {
-    width: 152px;
-    min-height: 44px;
-    border-radius: 9px;
+    width: 118px;
+    min-height: 32px;
+    border-radius: 7px;
   }
 
   .player-hud-card.is-active {
-    width: 168px;
-    min-height: 48px;
+    width: 128px;
+    min-height: 36px;
   }
 
   .ph-portrait-col {
-    width: 36px;
+    width: 27px;
   }
 
   .player-hud-card.is-active .ph-portrait-col {
-    width: 40px;
+    width: 30px;
   }
 
   .ph-info-col,
   .player-hud-card.is-active .ph-info-col {
-    padding: 3px 6px 3px 5px;
-    gap: 2px;
+    padding: 2px 4px;
+    gap: 1px;
   }
 
   .ph-name,
   .ph-name.long-name,
   .player-hud-card.is-active .ph-name,
   .player-hud-card.is-active .ph-name.long-name {
-    font-size: 0.68rem;
+    font-size: 0.58rem;
   }
 
   .ph-icon-badge,
   .player-hud-card.is-active .ph-icon-badge {
-    width: 13px;
-    height: 13px;
-    border-radius: 4px;
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
   }
 
   .ph-icon-badge svg,
   .player-hud-card.is-active .ph-icon-badge svg {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
   }
 
   .ph-currency-bar,
   .player-hud-card.is-active .ph-currency-bar {
-    padding: 1px 5px;
-    font-size: 0.58rem;
-    border-radius: 5px;
-    gap: 5px;
+    padding: 1px 4px;
+    font-size: 0.5rem;
+    border-radius: 4px;
+    gap: 4px;
   }
 
   .ph-meta-row,
   .player-hud-card.is-active .ph-meta-row {
-    font-size: 0.52rem;
-    gap: 5px;
+    display: none;
   }
 
   .ph-effects-row {
-    gap: 3px;
+    gap: 2px;
   }
 
   .ph-effect-pill {
-    font-size: 0.48rem;
-    padding: 0 4px;
+    font-size: 0.44rem;
+    padding: 0 3px;
   }
 
-  /* 4. Top-Right Status Stack + Compact Last Card Used + Side Card Activation */
+  /* 4. Top-Right Board Info: Extra-Compact Cycle, Shard, Event, Last Card Used & Activation */
   .hud-top-right-status {
-    top: 6px;
-    right: max(6px, env(safe-area-inset-right));
-    width: 184px;
-    gap: 4px;
+    top: 5px;
+    right: max(5px, env(safe-area-inset-right));
+    width: 142px;
+    gap: 3px;
   }
 
   .status-info-card {
-    padding: 5px 8px 6px;
-    border-radius: 11px;
+    padding: 3px 6px 4px;
+    border-radius: 9px;
   }
 
   .status-cycle-main {
-    font-size: 0.94rem;
+    font-size: 0.74rem;
   }
 
   .status-cycle-sub {
-    font-size: 0.64rem;
+    font-size: 0.52rem;
   }
 
   .status-divider {
-    margin: 3px auto 4px;
+    margin: 2px auto 3px;
     height: 1px;
   }
 
   .status-meta-grid {
-    font-size: 0.56rem;
-    gap: 4px;
-    margin-bottom: 2px;
+    font-size: 0.48rem;
+    gap: 3px;
+    margin-bottom: 1px;
   }
 
   .status-card-use-row {
-    font-size: 0.56rem;
-  }
-
-  .status-turn-timer-row {
-    font-size: 0.56rem;
-    margin-top: 2px;
-    padding-top: 2px;
-  }
-
-  .shard-zones-pill {
-    padding: 3px 7px;
-    font-size: 0.58rem;
-    border-radius: 8px;
-  }
-
-  .world-event-pill-slot {
-    font-size: 0.56rem;
-  }
-
-  .last-card-used-card {
-    padding: 4px 6px;
-    gap: 6px;
-    border-radius: 9px;
-  }
-
-  .last-card-used-thumb {
-    width: 24px;
-    height: 34px;
-    border-radius: 4px;
-  }
-
-  .last-card-used-label {
     font-size: 0.48rem;
   }
 
-  .last-card-used-name {
-    font-size: 0.62rem;
+  .status-turn-timer-row {
+    font-size: 0.48rem;
+    margin-top: 1px;
+    padding-top: 1px;
   }
 
-  .last-card-used-caster {
+  .shard-zones-pill {
+    padding: 2px 5px;
+    font-size: 0.49rem;
+    border-radius: 6px;
+  }
+
+  .world-event-pill-slot {
+    font-size: 0.48rem;
+  }
+
+  .world-event-active-chip {
+    padding: 2px 5px;
+    font-size: 0.48rem;
+    border-radius: 6px;
+  }
+
+  .last-card-used-card {
+    padding: 3px 5px;
+    gap: 5px;
+    border-radius: 7px;
+  }
+
+  .last-card-used-thumb {
+    width: 19px;
+    height: 26px;
+    border-radius: 3px;
+  }
+
+  .last-card-used-label {
+    font-size: 0.42rem;
+  }
+
+  .last-card-used-name {
     font-size: 0.54rem;
   }
 
+  .last-card-used-caster {
+    font-size: 0.46rem;
+  }
+
   .last-card-used-empty {
-    padding: 4px 7px;
-    font-size: 0.56rem;
+    padding: 3px 5px;
+    font-size: 0.48rem;
   }
 
   .recent-activity-feed {
@@ -6938,91 +6974,91 @@ body:not(.modal-open) .tucked-card:hover,
 
   /* Compact Side Card Activation Notification under Last Card Used */
   .card-activated-feed {
-    max-width: min(360px, calc(100vw - 210px));
+    max-width: min(296px, calc(100vw - 160px));
     margin-top: 1px;
   }
 
   .ca-side-panel {
-    padding: 7px 8px 7px 12px;
-    gap: 10px;
-    border-radius: 12px;
+    padding: 5px 6px 5px 9px;
+    gap: 8px;
+    border-radius: 10px;
   }
 
   .ca-side-desc-col {
-    min-width: 108px;
-    max-width: 178px;
-    gap: 3px;
+    min-width: 90px;
+    max-width: 148px;
+    gap: 2px;
   }
 
   .ca-side-desc-text {
-    font-size: 0.72rem;
-    line-height: 1.28;
+    font-size: 0.64rem;
+    line-height: 1.25;
   }
 
   .ca-side-outcome-note {
-    font-size: 0.58rem;
+    font-size: 0.52rem;
   }
 
   .ca-side-divider {
-    margin: 6px 0;
+    margin: 5px 0;
   }
 
   .ca-side-card-col {
-    width: 100px;
-    gap: 4px;
+    width: 84px;
+    gap: 3px;
   }
 
   .ca-side-head-top,
   .ca-side-head-bot {
-    font-size: 0.84rem;
+    font-size: 0.72rem;
   }
 
   .ca-side-card-img {
-    width: 52px;
-    border-radius: 5px;
+    width: 44px;
+    border-radius: 4px;
   }
 
   .ca-player-pill {
-    height: 20px;
-    min-width: 88px;
-    max-width: 100px;
+    height: 18px;
+    min-width: 74px;
+    max-width: 84px;
   }
 
   .ca-player-pill-art {
-    width: 32px;
+    width: 26px;
   }
 
   .ca-player-pill-name {
-    font-size: 0.6rem;
-    padding: 0 6px 0 3px;
+    font-size: 0.52rem;
+    padding: 0 5px 0 3px;
   }
 
   .ca-side-rarity-bar {
-    width: 6px;
+    width: 5px;
   }
 
   /* 5. Top-Center Live Status & Spotlight Banner */
   .hud-top-center-float {
-    top: 6px;
-    max-width: calc(100vw - 384px);
+    top: 5px;
+    max-width: calc(100vw - 294px);
     gap: 4px;
   }
 
   .turn-reminder-banner,
   .step-status-banner,
   .effect-spotlight-banner {
-    padding: 4px 10px;
-    font-size: 0.66rem;
-    border-radius: 9px;
+    padding: 3px 9px;
+    font-size: 0.62rem;
+    border-radius: 8px;
   }
 
-  /* 6. Bottom-Left Utilities & Draw Pile */
+  /* 6. Bottom-Left Utilities (Focus Player & Log Only) + Draw Pile */
   .hud-bottom-left-utils {
     bottom: 6px;
     left: max(6px, env(safe-area-inset-left));
     gap: 4px;
-    max-width: 220px;
-    flex-wrap: wrap;
+    max-width: 170px;
+    flex-wrap: nowrap;
   }
 
   .util-pill-btn {
@@ -7036,17 +7072,17 @@ body:not(.modal-open) .tucked-card:hover,
   }
 
   .eft-draw-pile-btn {
-    padding: 5px 8px;
+    padding: 4px 7px;
     gap: 5px;
-    border-radius: 9px;
+    border-radius: 8px;
   }
 
   .draw-pile-title {
-    font-size: 0.62rem;
+    font-size: 0.58rem;
   }
 
   .draw-pile-count {
-    font-size: 0.56rem;
+    font-size: 0.52rem;
   }
 
   /* 7. Bottom-Center Compact Hand Cards + Bottom-Right Roll Dock */
@@ -7056,12 +7092,12 @@ body:not(.modal-open) .tucked-card:hover,
     transform: translateX(-50%);
     gap: 8px;
     padding-bottom: 0;
-    max-width: calc(100vw - 320px);
+    max-width: calc(100vw - 266px);
   }
 
   .tucked-cards-fan {
     padding: 12px 10px 0 22px;
-    max-width: calc(100vw - 340px);
+    max-width: calc(100vw - 280px);
     overflow-x: auto;
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
@@ -7402,14 +7438,16 @@ body:not(.modal-open) .tucked-card:hover,
 
 /* Extra-Short Landscape Phones (<= 385px height, e.g. Android w/ browser bar) */
 @media (orientation: landscape) and (max-height: 385px) {
-  .player-hud-card,
-  .player-hud-card.is-active {
-    min-height: 38px;
+  .player-hud-card {
+    min-height: 28px;
   }
 
-  .ph-meta-row,
-  .player-hud-card.is-active .ph-meta-row {
-    display: none;
+  .player-hud-card.is-active {
+    min-height: 32px;
+  }
+
+  .hud-top-right-status {
+    width: 132px;
   }
 
   .tucked-card {
