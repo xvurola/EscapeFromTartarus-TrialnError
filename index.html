@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -32,16 +32,16 @@
           <path d="M32 34 L32 58" stroke-opacity="0.85" />
         </svg>
       </div>
-      <div class="mlg-eyebrow">Mode Layar Horizontal Direkomendasikan</div>
-      <h2 id="mlg-title" class="mlg-title">Putar HP ke Mode Landscape</h2>
+      <div class="mlg-eyebrow">Landscape Mode Recommended</div>
+      <h2 id="mlg-title" class="mlg-title">Rotate Your Device to Landscape</h2>
       <p class="mlg-desc">
-        <strong>Escape From Tartarus</strong> dioptimalkan untuk mode <strong>Landscape (miring)</strong> agar papan permainan, kartu skill, dan seluruh HUD terlihat lega serta nyaman dimainkan.
+        <strong>Escape From Tartarus</strong> is optimized for <strong>Landscape mode</strong> so the game board, skill cards, and HUD stay spacious and comfortable to play.
       </p>
       <button type="button" class="mlg-action-btn" onclick="window.EFT_APP.requestMobileLandscapeFullscreen()">
-        Aktifkan Layar Penuh &amp; Landscape
+        Enable Fullscreen &amp; Landscape
       </button>
       <div id="mlg-status-hint" class="mlg-hint">
-        Putar perangkat secara horizontal &amp; pastikan <strong>Auto-Rotate</strong> HP aktif.
+        Rotate your device horizontally &amp; make sure <strong>Auto-Rotate</strong> is enabled.
       </div>
     </div>
   </div>
@@ -73,14 +73,14 @@
         </div>
         <div class="mts-secondary-actions">
           <button type="button" class="mts-guide-btn" onclick="window.EFT_APP.openQuickGuideModal(0)">
-            Panduan Cepat (45 Detik)
+            Quick Guide (45 Seconds)
           </button>
         </div>
         <div id="mts-resume-slot" class="mts-resume-slot"></div>
       </div>
     </div>
 
-    <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.3</div>
+    <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.4</div>
   </div>
 
   <!-- ========================================================================
@@ -92,7 +92,7 @@
       <div id="hud-floating-menu-anchor" class="hud-floating-menu-anchor">
         <div id="mp-conn-pill" class="mp-conn-pill" aria-live="polite"></div>
 
-        <nav id="floating-menu-popover" class="floating-menu-popover" aria-label="Menu Utama">
+        <nav id="floating-menu-popover" class="floating-menu-popover" aria-label="Main Menu">
           <div class="fm-pill-stack">
             <button type="button" class="fm-pill is-jade" style="--fm-i:0" onclick="window.EFT_APP.openMenuPopup('room')">
               Room
@@ -114,7 +114,7 @@
             <button id="btn-admin-mode" type="button" class="fm-admin-link" onclick="window.EFT_APP.openMenuPopup('admin')">
               Admin Mode
             </button>
-            <button id="btn-mobile-fullscreen" type="button" class="fm-fs-link mobile-fs-btn" onclick="window.EFT_APP.toggleMobileFullscreen()" title="Layar Penuh">
+            <button id="btn-mobile-fullscreen" type="button" class="fm-fs-link mobile-fs-btn" onclick="window.EFT_APP.toggleMobileFullscreen()" title="Fullscreen">
               Fullscreen
             </button>
           </div>
@@ -132,8 +132,8 @@
           onclick="window.EFT_APP.toggleFloatingMenu()"
           aria-expanded="false"
           aria-controls="floating-menu-popover"
-          aria-label="Buka atau tutup menu navigasi"
-          title="Menu Utama"
+          aria-label="Open or close navigation menu"
+          title="Main Menu"
         >
           <span class="fm-bar fm-bar-top" aria-hidden="true"></span>
           <span class="fm-bar fm-bar-mid" aria-hidden="true"></span>
@@ -151,7 +151,7 @@
           <div class="status-turn-pill">
             <span>Turn: <strong id="turn-player-label">Bocchi</strong></span>
           </div>
-          <div id="status-turn-timer-row" class="status-turn-timer-row" title="Batas waktu 180 detik (3 menit) per giliran">
+          <div id="status-turn-timer-row" class="status-turn-timer-row" title="180-second (3-minute) time limit per turn">
             <span>Turn Timer :</span>
             <strong id="metric-turn-timer" class="status-timer-val">03:00</strong>
           </div>
@@ -326,7 +326,7 @@
       <!-- BOTTOM TUCKED CARD HAND + DRAW PILE + ROLL / END TURN DOCK -->
       <div class="bottom-hand-stage">
         <div class="draw-pile-dock">
-          <button id="btn-draw-pile" class="eft-draw-pile-btn" type="button" onclick="window.EFT_APP.openDrawPileModal()" title="Lihat kartu yang belum ter-draw di Draw Pile">
+          <button id="btn-draw-pile" class="eft-draw-pile-btn" type="button" onclick="window.EFT_APP.openDrawPileModal()" title="View remaining cards in your Draw Pile">
             <span class="draw-pile-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="7" y="4" width="12" height="16" rx="2"></rect>
@@ -335,7 +335,7 @@
             </span>
             <span class="draw-pile-meta">
               <span class="draw-pile-title">Draw Pile</span>
-              <span id="draw-pile-count" class="draw-pile-count">6 Kartu</span>
+              <span id="draw-pile-count" class="draw-pile-count">6 Cards</span>
             </span>
           </button>
         </div>

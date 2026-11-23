@@ -424,13 +424,13 @@
 
   function getActiveCycleDurationLabel(copiedTurns = null) {
     if (copiedTurns) {
-      return copiedTurns === 1 ? "1 Turn" : "1 Ronde";
+      return copiedTurns === 1 ? "1 Turn" : "1 Round";
     }
     if (!state) return "1 Cycle";
     const totalRounds = state.rules && state.rules.turnsPerCycle ? state.rules.turnsPerCycle : 4;
     const curRound = state.roundInCycle || 1;
     const roundsLeft = Math.max(1, totalRounds - curRound + 1);
-    return `Cycle ${state.cycle} (${curRound}/${totalRounds} · Sisa ${roundsLeft} Ronde)`;
+    return `Cycle ${state.cycle} (${curRound}/${totalRounds} · ${roundsLeft} ${roundsLeft === 1 ? "Round" : "Rounds"} Left)`;
   }
 
   function addOrRefreshPassive(player, passiveObj) {
@@ -1050,7 +1050,7 @@
     if (label) label.textContent = isEffectivelyMuted ? "Mute" : `${pct}%`;
     if (btn) {
       btn.classList.toggle("is-muted", isEffectivelyMuted);
-      btn.title = isEffectivelyMuted ? "Aktifkan Sound Effect" : "Matikan Sound Effect";
+      btn.title = isEffectivelyMuted ? "Unmute Sound Effects" : "Mute Sound Effects";
       btn.innerHTML = isEffectivelyMuted
         ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -1188,7 +1188,7 @@
     const raw = String(rawText || "").trim();
     if (!raw) return null;
 
-    if (/^(Match initialized|Undo:|Urutan Giliran|Admin Mode|Admin Free Skill|Connected|Firebase Lobby|Lobby|PeerJS|Room )/i.test(raw)) {
+    if (/^(Match initialized|Undo:|Turn Order|Urutan Giliran|Admin Mode|Admin Free Skill|Connected|Firebase Lobby|Lobby|PeerJS|Room )/i.test(raw)) {
       return null;
     }
     if (/left Spawn Point/i.test(raw) || /^CYCLE \d+ STARTED/i.test(raw)) {
@@ -1200,68 +1200,68 @@
 
     let m = null;
     if ((m = raw.match(/^(.+?) gained \+?(-?\d+) TC/i))) {
-      return { text: `... ${m[1]} mendapat +${m[2]} coin`, kind: "gain" };
+      return { text: `... ${m[1]} gained +${m[2]} TC`, kind: "gain" };
     }
     if ((m = raw.match(/^(.+?) lost (-?\d+) TC/i))) {
-      return { text: `... ${m[1]} kehilangan ${Math.abs(Number(m[2]))} coin`, kind: "loss" };
+      return { text: `... ${m[1]} lost ${Math.abs(Number(m[2]))} TC`, kind: "loss" };
     }
-    if ((m = raw.match(/^IPC Gems \([^)]+\): (.+?) memperoleh \+(\d+) TC/i))) {
-      return { text: `... ${m[1]} +${m[2]} coin (IPC Gems)`, kind: "gain" };
+    if ((m = raw.match(/^IPC Gems \([^)]+\): (.+?) (?:gained|memperoleh) \+(\d+) TC/i))) {
+      return { text: `... ${m[1]} +${m[2]} TC (IPC Gems)`, kind: "gain" };
     }
     if ((m = raw.match(/^The Emperor's Favor: (.+?) paid (\d+) TC tax to (.+?)\.?$/i))) {
-      return { text: `... ${m[1]} bayar pajak ${m[2]} coin ke ${m[3]}`, kind: "loss" };
+      return { text: `... ${m[1]} paid ${m[2]} TC tax to ${m[3]}`, kind: "loss" };
     }
     if ((m = raw.match(/^Board Card \[(.+?)\]: (.+?) ([+\-]?\d+) TC/i))) {
       const val = Number(m[3]);
       return val >= 0
-        ? { text: `... ${m[2]} mendapat +${val} coin (${m[1]})`, kind: "gain" }
-        : { text: `... ${m[2]} kehilangan ${Math.abs(val)} coin (${m[1]})`, kind: "loss" };
+        ? { text: `... ${m[2]} gained +${val} TC (${m[1]})`, kind: "gain" }
+        : { text: `... ${m[2]} lost ${Math.abs(val)} TC (${m[1]})`, kind: "loss" };
     }
     if ((m = raw.match(/^Board Card \[(.+?)\]: (.+?) drew (\d+) card/i))) {
-      return { text: `... ${m[2]} ambil +${m[3]} kartu (${m[1]})`, kind: "gain" };
+      return { text: `... ${m[2]} drew +${m[3]} card${Number(m[3]) === 1 ? "" : "s"} (${m[1]})`, kind: "gain" };
     }
     if ((m = raw.match(/^Board Card \[(.+?)\]: (.+?) discarded (\d+) card/i))) {
-      return { text: `... ${m[2]} buang ${m[3]} kartu (${m[1]})`, kind: "loss" };
+      return { text: `... ${m[2]} discarded ${m[3]} card${Number(m[3]) === 1 ? "" : "s"} (${m[1]})`, kind: "loss" };
     }
     if ((m = raw.match(/^Board Card \[(.+?)\]: (.+?) ([+\-]?\d+) die/i))) {
-      return { text: `... ${m[2]} ${m[3]} dadu giliran depan (${m[1]})`, kind: Number(m[3]) >= 0 ? "gain" : "loss" };
+      return { text: `... ${m[2]} ${m[3]} dice next turn (${m[1]})`, kind: Number(m[3]) >= 0 ? "gain" : "loss" };
     }
     if ((m = raw.match(/^(.+?) rolled \[(.+?)\] -> Moving (backward )?(\d+) steps/i))) {
-      return { text: `... ${m[1]} roll ${m[4]} langkah${m[3] ? " (mundur)" : ""}`, kind: "move" };
+      return { text: `... ${m[1]} rolled ${m[4]} steps${m[3] ? " (backward)" : ""}`, kind: "move" };
     }
-    if ((m = raw.match(/^\[The Stage Is Mine\]: (.+?) pindah ([+-]\d+ tile) ke \[([^:\]]+)/i))) {
-      return { text: `... ${m[1]} pindah ${m[2]} (${m[3]})`, kind: "move" };
+    if ((m = raw.match(/^\[The Stage Is Mine\]: (.+?) (?:moved|pindah) ([+-]\d+ tiles?) (?:to|ke) \[([^:\]]+)/i))) {
+      return { text: `... ${m[1]} moved ${m[2]} (${m[3]})`, kind: "move" };
     }
-    if ((m = raw.match(/^\[The Stage Is Mine\]: (.+?) berpindah ke \[([^:\]]+)/i))) {
-      return { text: `... ${m[1]} pindah ke ${m[2]} (Stage)`, kind: "move" };
+    if ((m = raw.match(/^\[The Stage Is Mine\]: (.+?) (?:moved to|berpindah ke) \[([^:\]]+)/i))) {
+      return { text: `... ${m[1]} moved to ${m[2]} (Stage)`, kind: "move" };
     }
     if ((m = raw.match(/^(.+?) purchased Tartarus Shard at Zone ([IVX]+)/i))) {
-      return { text: `... ${m[1]} beli Shard Zone ${m[2]}`, kind: "shard" };
+      return { text: `... ${m[1]} bought Shard Zone ${m[2]}`, kind: "shard" };
     }
     if ((m = raw.match(/^Shard d6 rolled \[\d+\] -> Tartarus Shard spawned at Zone ([IVX]+) \((T\d+)\)/i))) {
-      return { text: `... Shard baru di Zone ${m[1]} (${m[2]})`, kind: "shard" };
+      return { text: `... New Shard at Zone ${m[1]} (${m[2]})`, kind: "shard" };
     }
     if ((m = raw.match(/^(.+?) drew \+(\d+) card/i))) {
-      return { text: `... ${m[1]} ambil +${m[2]} kartu`, kind: "gain" };
+      return { text: `... ${m[1]} drew +${m[2]} card${Number(m[2]) === 1 ? "" : "s"}`, kind: "gain" };
     }
     if ((m = raw.match(/^(.+?) discarded (\d+) card/i))) {
-      return { text: `... ${m[1]} buang ${m[2]} kartu`, kind: "loss" };
+      return { text: `... ${m[1]} discarded ${m[2]} card${Number(m[2]) === 1 ? "" : "s"}`, kind: "loss" };
     }
     if ((m = raw.match(/^GLOBAL EVENT: \[(.+?)\]/i))) {
       return { text: `... Event: ${m[1]}`, kind: "skill" };
     }
     if ((m = raw.match(/^Versus: (.+?) defeated (.+?) \(\+(\d+) TC\)/i))) {
-      return { text: `... ${m[1]} menang Duel (+${m[3]} coin)`, kind: "gain" };
+      return { text: `... ${m[1]} won Duel (+${m[3]} TC)`, kind: "gain" };
     }
-    if ((m = raw.match(/^Versus \(([^)]+)\): (.+?) mengalahkan (.+?) & merebut .*?(\d+) TC/i))) {
-      return { text: `... ${m[2]} menang ${m[1]} (+${m[4]} coin)`, kind: "gain" };
+    if ((m = raw.match(/^Versus \(([^)]+)\): (.+?) (?:defeated|mengalahkan) (.+?) & (?:claimed|merebut) .*?(\d+) TC/i))) {
+      return { text: `... ${m[2]} won ${m[1]} (+${m[4]} TC)`, kind: "gain" };
     }
     if ((m = raw.match(/^Minigame ([^(:]+)(?:\([^)]+\))?: (.+)$/i))) {
       const shortRes = m[2].length > 52 ? m[2].slice(0, 49) + "..." : m[2];
       return { text: `... ${m[1].trim()}: ${shortRes}`, kind: "skill" };
     }
-    if ((m = raw.match(/^Awaken, Arsene!: (.+?) mendapat \+1/i))) {
-      return { text: `... ${m[1]} +1 ekstra dadu (Arsene)`, kind: "skill" };
+    if ((m = raw.match(/^Awaken, Arsene!: (.+?) (?:landed|gained|mendapat).*?\+1/i))) {
+      return { text: `... ${m[1]} +1 extra die (Arsene)`, kind: "skill" };
     }
     if ((m = raw.match(/^\[([^\]]+)\]: (.+)$/))) {
       const cleaned = m[2]
@@ -1271,9 +1271,9 @@
       const line = `${cleaned} (${m[1]})`;
       const trimmed = line.length > 68 ? line.slice(0, 65) + "..." : line;
       let kind = "skill";
-      if (/kehilangan|membayar|membuang|hancur|mundur|-\d+/i.test(line)) kind = "loss";
-      else if (/pindah|bergerak|melompat|bertukar/i.test(line)) kind = "move";
-      else if (/mencuri|\+\d+/i.test(line)) kind = "gain";
+      if (/lost|paid|discard|destroy|backward|kehilangan|membayar|membuang|hancur|mundur|-\d+/i.test(line)) kind = "loss";
+      else if (/moved|jumped|swapped|pushed|pulled|pindah|bergerak|melompat|bertukar/i.test(line)) kind = "move";
+      else if (/stole|gained|mencuri|\+\d+/i.test(line)) kind = "gain";
       return { text: `... ${trimmed}`, kind };
     }
 
@@ -1284,9 +1284,9 @@
 
     let kind = "neutral";
     if (/Shard|VICTORY/i.test(cleaned)) kind = "shard";
-    else if (/kehilangan|lost|buang|discard|trap|virus|Fire|-15|-5|-\d+/i.test(cleaned)) kind = "loss";
-    else if (/\+\d+|gained|memperoleh|Herbs|Minigame/i.test(cleaned)) kind = "gain";
-    else if (/pindah|moved|teleport|River|Warp/i.test(cleaned)) kind = "move";
+    else if (/lost|discard|trap|virus|Fire|kehilangan|buang|-15|-5|-\d+/i.test(cleaned)) kind = "loss";
+    else if (/\+\d+|gained|Herbs|Minigame/i.test(cleaned)) kind = "gain";
+    else if (/moved|teleport|River|Warp|pindah/i.test(cleaned)) kind = "move";
     else if (/Passive|ULTIMATE|Event/i.test(cleaned)) kind = "skill";
 
     return { text: `... ${cleaned}`, kind };
@@ -1499,17 +1499,17 @@
           screen.orientation.lock("landscape").catch(() => {
             if (hint) {
               hint.innerHTML =
-                "Browser ini memerlukan rotasi manual. <strong>Miringkan HP Anda</strong> ke posisi horizontal sekarang.";
+                "This browser requires manual rotation. <strong>Rotate your phone</strong> to landscape mode now.";
             }
           });
         } else if (hint) {
           hint.innerHTML =
-            "Miringkan HP Anda secara horizontal &amp; pastikan <strong>Auto-Rotate</strong> aktif.";
+            "Rotate your phone horizontally &amp; make sure <strong>Auto-Rotate</strong> is enabled.";
         }
       } catch (e) {
         if (hint) {
           hint.innerHTML =
-            "Miringkan HP Anda secara horizontal &amp; pastikan <strong>Auto-Rotate</strong> aktif.";
+            "Rotate your phone horizontally &amp; make sure <strong>Auto-Rotate</strong> is enabled.";
         }
       }
     };
@@ -1970,7 +1970,7 @@
         mySeatRef.onDisconnect().remove().catch(() => {});
         updateMpConnectionPill("online", `Online · ${mp.roomCode}`);
       } else {
-        updateMpConnectionPill("reconnecting", `Menyambung ulang (${mp.roomCode})...`);
+        updateMpConnectionPill("reconnecting", `Reconnecting (${mp.roomCode})...`);
       }
     });
   }
@@ -1982,19 +1982,19 @@
     const localSave = loadLocalMatchAutosave();
 
     if (mpSess && window.EFT_IS_FIREBASE_READY && window.EFT_IS_FIREBASE_READY()) {
-      const roleLabel = mpSess.role === "host" ? "Host" : "Pemain";
+      const roleLabel = mpSess.role === "host" ? "Host" : "Player";
       slot.innerHTML = `
         <div class="mts-resume-card">
           <div class="mts-resume-info">
-            <span class="mts-resume-tag">Sesi Multiplayer Aktif</span>
+            <span class="mts-resume-tag">Active Multiplayer Session</span>
             <strong class="mts-resume-title">Room ${escapeHtml(mpSess.roomCode)} (${roleLabel})</strong>
           </div>
           <div class="mts-resume-actions">
             <button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.reconnectSavedMultiplayerSession()">
-              Sambung Ulang
+              Reconnect
             </button>
             <button type="button" class="btn btn-sm" onclick="window.EFT_APP.dismissSavedSessions('mp')">
-              Hapus
+              Delete
             </button>
           </div>
         </div>`;
@@ -2007,15 +2007,15 @@
       slot.innerHTML = `
         <div class="mts-resume-card">
           <div class="mts-resume-info">
-            <span class="mts-resume-tag">Match Lokal Tersimpan</span>
-            <strong class="mts-resume-title">Cycle ${st.cycle} (${st.roundInCycle}/${st.rules ? st.rules.turnsPerCycle : 4}) · Giliran ${escapeHtml(activeName)}</strong>
+            <span class="mts-resume-tag">Saved Local Match</span>
+            <strong class="mts-resume-title">Cycle ${st.cycle} (${st.roundInCycle}/${st.rules ? st.rules.turnsPerCycle : 4}) · ${escapeHtml(activeName)}'s Turn</strong>
           </div>
           <div class="mts-resume-actions">
             <button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.resumeSavedLocalMatch()">
-              Lanjutkan
+              Resume
             </button>
             <button type="button" class="btn btn-sm" onclick="window.EFT_APP.dismissSavedSessions('local')">
-              Hapus
+              Delete
             </button>
           </div>
         </div>`;
@@ -2073,7 +2073,7 @@
 
   function rejoinFirebaseHostRoom(code) {
     if (!window.EFT_IS_FIREBASE_READY()) {
-      alert("Firebase belum dikonfigurasi di playtest/firebaseConfig.js.");
+      alert("Firebase is not configured in playtest/firebaseConfig.js.");
       return;
     }
     const cleanCode = String(code || "").trim().toUpperCase();
@@ -2089,7 +2089,7 @@
           if (!data || (!data.stateJson && !data.lobbyJson)) {
             clearActiveMpSession();
             renderTitleResumeSlot();
-            alert(`Room [${cleanCode}] sudah tidak aktif.`);
+            alert(`Room [${cleanCode}] is no longer active.`);
             return;
           }
           mp.mode = "firebase_host";
@@ -2135,10 +2135,10 @@
           }
         })
         .catch((err) => {
-          alert("Gagal menyambung ulang sebagai Host: " + err.message);
+          alert("Failed to reconnect as Host: " + err.message);
         });
     } catch (e) {
-      alert("Gagal menyambung ulang Host: " + e.message);
+      alert("Failed to reconnect Host: " + e.message);
     }
   }
 
@@ -2148,42 +2148,42 @@
   const QUICK_GUIDE_SLIDES = [
     {
       step: "1 / 4",
-      title: "Tujuan Utama & Ekonomi Awal",
-      lead: "Kumpulkan 💎 3 Tartarus Shard untuk memenangkan pertandingan.",
+      title: "Main Objective & Starting Economy",
+      lead: "Collect 💎 3 Tartarus Shards to win the match.",
       points: [
-        "Semua pemain mulai di Spawn dengan modal awal 💰 20 TC dan 6 Skill Card.",
-        "Tartarus Shard muncul di Zona I sampai VI yang bercahaya di papan. Lewati atau injak tile Shard dan bayar 💰 100 TC untuk membelinya.",
-        "Di akhir setiap ronde penuh, seluruh pemain masuk ke Minigame FFA (hadiah maksimal 💰 45 TC)."
+        "All players start at Spawn with 💰 20 TC and 6 Skill Cards.",
+        "Tartarus Shards appear on glowing Zones I through VI on the board. Pass or land on a Shard tile and pay 💰 100 TC to buy it.",
+        "At the end of every full round, all players enter a Free-For-All Minigame (up to 💰 45 TC reward)."
       ]
     },
     {
       step: "2 / 4",
-      title: "Alur 1 Giliran (Turn)",
-      lead: "Setiap giliran terdiri dari 2 fase gerak dengan batas waktu 3 menit.",
+      title: "Turn Flow",
+      lead: "Each turn consists of 2 movement phases with a 3-minute timer.",
       points: [
-        "Main Phase 1: Aktifkan Skill Card sebelum melempar dadu pertama.",
-        "Roll Dadu 1 (2x d6): Karakter berjalan otomatis dan berhenti jika menemui persimpangan, Shop, atau Shard.",
-        "Main Phase 2 & Roll Dadu 2: Kamu bisa memakai Skill Card lagi (maksimal 2 Skill Card per giliran) lalu lempar dadu kedua sebelum End Turn."
+        "Main Phase 1: Play Skill Cards before your first dice roll.",
+        "Dice Roll 1 (2x d6): Your character moves automatically and pauses at junctions, Shops, or Shards.",
+        "Main Phase 2 & Dice Roll 2: You may play another Skill Card (max 2 Skill Cards per turn) then roll your second dice before ending your turn."
       ]
     },
     {
       step: "3 / 4",
-      title: "Kartu Skill, Block Effect & Ultimate",
-      lead: "Perhatikan keyword pada deskripsi kartu sebelum menggunakannya.",
+      title: "Skill Cards, Block Effects & Ultimates",
+      lead: "Check the keywords on each card description before activating it.",
       points: [
-        "Kartu yang memindahkan posisi hanya memicu efek tile tujuan jika tertulis [Activate Block Effect].",
-        "Kartu dengan tag [Haste] bersifat reaktif dan dapat dipakai sesuai kondisi pemicunya.",
-        "Kartu Ultimate ([Retain]) tidak hilang saat pergantian Cycle dan dapat dibeli di Merchant Shop (💰 70 TC standar, 💰 50 TC untuk Firefly/SAM)."
+        "Movement cards only trigger the destination tile effect if they explicitly state [Activate Block Effect].",
+        "Cards tagged [Haste] are reactive and can be triggered out of turn when their condition is met.",
+        "Ultimate Cards ([Retain]) stay in your hand across Cycle resets and can be bought at the Merchant Shop (💰 70 TC standard, 💰 50 TC for Firefly/SAM)."
       ]
     },
     {
       step: "4 / 4",
-      title: "Global Event, Kontrol Peta & Mode HP",
-      lead: "Gunakan kontrol papan dan info HUD agar tidak ketinggalan aksi lawan.",
+      title: "Global Events, Map Controls & Mobile Mode",
+      lead: "Use the board controls and HUD indicators to track every opponent action.",
       points: [
-        "Seluruh Global Event yang berdurasi berlaku selama 2 Turn dan tampil di kanan atas.",
-        "Klik panel Last Card Used di kanan atas kapan saja untuk membaca efek kartu terakhir dan kejadian yang terjadi.",
-        "Untuk pengguna HP, putar perangkat ke mode Landscape. Geser peta dengan 1 jari, zoom dengan 2 jari, dan klik Focus Player untuk kembali ke pemain aktif."
+        "Duration-based Global Events last for 2 Turns and are displayed in the top-right corner.",
+        "Click the Last Card Used panel in the top-right at any time to review the most recent card effect and outcome.",
+        "On mobile, rotate your device to Landscape mode. Pan the map with 1 finger, pinch to zoom with 2 fingers, and tap Focus Player to center on the active player."
       ]
     }
   ];
@@ -2195,15 +2195,15 @@
     const slide = QUICK_GUIDE_SLIDES[idx];
     const dotsHtml = QUICK_GUIDE_SLIDES.map(
       (_, i) =>
-        `<button type="button" class="qg-dot ${i === idx ? "active" : ""}" onclick="window.EFT_APP.openQuickGuideModal(${i})" aria-label="Langkah ${i + 1}"></button>`
+        `<button type="button" class="qg-dot ${i === idx ? "active" : ""}" onclick="window.EFT_APP.openQuickGuideModal(${i})" aria-label="Step ${i + 1}"></button>`
     ).join("");
     const pointsHtml = slide.points.map((pt) => `<li>${escapeHtml(pt)}</li>`).join("");
 
     openInfoModal(
-      `Panduan Cepat (${slide.step})`,
+      `Quick Guide (${slide.step})`,
       `<div class="qg-modal-wrap">
         <div class="qg-step-head">
-          <span class="qg-step-badge">Langkah ${slide.step}</span>
+          <span class="qg-step-badge">Step ${slide.step}</span>
           <h3 class="qg-step-title">${escapeHtml(slide.title)}</h3>
           <p class="qg-step-lead">${escapeHtml(slide.lead)}</p>
         </div>
@@ -2213,13 +2213,13 @@
           <div class="qg-nav-btns">
             ${
               idx > 0
-                ? `<button type="button" class="btn btn-sm" onclick="window.EFT_APP.openQuickGuideModal(${idx - 1})">Sebelumnya</button>`
+                ? `<button type="button" class="btn btn-sm" onclick="window.EFT_APP.openQuickGuideModal(${idx - 1})">Previous</button>`
                 : ""
             }
             ${
               idx < total - 1
-                ? `<button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openQuickGuideModal(${idx + 1})">Lanjut</button>`
-                : `<button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.closeModal()">Siap Bermain</button>`
+                ? `<button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openQuickGuideModal(${idx + 1})">Next</button>`
+                : `<button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.closeModal()">Ready to Play</button>`
             }
           </div>
         </div>
@@ -2257,11 +2257,11 @@
 
   function ensureFirebaseDb() {
     if (typeof firebase === "undefined" || typeof firebase.database !== "function") {
-      throw new Error("Firebase SDK belum termuat. Periksa koneksi internet Anda.");
+      throw new Error("Firebase SDK failed to load. Please check your internet connection.");
     }
     const cfg = typeof window.EFT_GET_FIREBASE_CONFIG === "function" ? window.EFT_GET_FIREBASE_CONFIG() : null;
     if (!cfg) {
-      throw new Error("Konfigurasi Firebase belum diisi di playtest/firebaseConfig.js.");
+      throw new Error("Firebase config has not been set in playtest/firebaseConfig.js.");
     }
     if (firebase.apps.length === 0) {
       firebase.initializeApp(cfg);
@@ -2525,8 +2525,8 @@
     addLog(`Match initialized: [${rules.name}] with [${compDef.name}]. Cycle 1 started.`);
     if (options.randomizeOrder) {
       const orderStr = players.map((p, i) => `${i + 1}. ${p.name}`).join(" -> ");
-      addLog(`Urutan Giliran (Acak): ${orderStr}`);
-      showEffectSpotlight("Urutan Pemain Diacak", "Turn Order Randomized", orderStr, null);
+      addLog(`Turn Order (Randomized): ${orderStr}`);
+      showEffectSpotlight("Turn Order Randomized", "Player Order Shuffled", orderStr, null);
     }
 
     const patchSel = document.getElementById("rules-patch-select");
@@ -2644,7 +2644,7 @@
       }
       amount = applyRounding(amount, state.rules);
       if (ipcApplied && rawAmount > 0) {
-        addLog(`IPC Gems (${ipcPassive.multiplier || 1.3}x): ${player.name} memperoleh +${amount} TC (dari dasar ${rawAmount} TC).`);
+        addLog(`IPC Gems (${ipcPassive.multiplier || 1.3}x): ${player.name} gained +${amount} TC (from base ${rawAmount} TC).`);
       }
     } else if (amount < 0) {
       amount = -applyRounding(Math.abs(amount), state.rules);
@@ -2811,8 +2811,8 @@
         <div class="victory-hero-row">
           <div class="victory-portrait-frame">${portraitHtml}</div>
           <div class="victory-hero-info">
-            <div class="victory-winner-name">${escapeHtml(w.name)} Menang!</div>
-            <div class="victory-subtitle">Berhasil mengumpulkan ${totalShards} Shard pada Cycle ${w.cycle || state.cycle}.</div>
+            <div class="victory-winner-name">${escapeHtml(w.name)} Wins!</div>
+            <div class="victory-subtitle">Collected ${totalShards} Tartarus Shards in Cycle ${w.cycle || state.cycle}.</div>
             <div class="victory-stats-pills">
               <span class="victory-stat-pill">💎 ${w.shards} Shard${w.metaShard ? ` + ${w.metaShard} Meta` : ""}</span>
               <span class="victory-stat-pill">💰 ${w.tc} TC</span>
@@ -2824,7 +2824,7 @@
           ${standingsHtml}
         </div>
         <div class="victory-actions">
-          <button class="victory-menu-btn" type="button" onclick="window.EFT_APP.resetGameToMainMenu()">Kembali ke Main Menu</button>
+          <button class="victory-menu-btn" type="button" onclick="window.EFT_APP.resetGameToMainMenu()">Back to Main Menu</button>
         </div>
       </div>`;
     overlay.classList.add("visible");
@@ -3109,7 +3109,7 @@
   function handleRollButton() {
     if (isWalkingAnim || isTileEffectAnimating || pendingInteraction || (state && state.activeMinigame)) return;
     if (!canLocalPlayerAct()) {
-      alert(`Sekarang giliran ${getActivePlayer().name}.`);
+      alert(`It is currently ${getActivePlayer().name}'s turn.`);
       return;
     }
     if (state.phaseIndex === 1 || state.phaseIndex === 3) {
@@ -3120,12 +3120,12 @@
   function handleEndTurnButton() {
     if (isWalkingAnim || isTileEffectAnimating || pendingInteraction || (state && state.activeMinigame)) return;
     if (!canLocalPlayerAct()) {
-      alert(`Sekarang giliran ${getActivePlayer().name}.`);
+      alert(`It is currently ${getActivePlayer().name}'s turn.`);
       return;
     }
     const player = getActivePlayer();
     if ((player.rollsUsedThisTurn || 0) < 1 && state.phaseIndex !== 5) {
-      alert("Minimal 1x Roll harus dilakukan sebelum End Turn.");
+      alert("You must roll the dice at least once before ending your turn.");
       return;
     }
     endCurrentTurn();
@@ -3202,8 +3202,8 @@
 
     const sides = info.sides || 6;
     const stepNoteParts = [];
-    if (info.totalSteps !== info.rawTotal) stepNoteParts.push(`Awal: ${info.rawTotal}`);
-    if (info.direction < 0) stepNoteParts.push("Mundur");
+    if (info.totalSteps !== info.rawTotal) stepNoteParts.push(`Base: ${info.rawTotal}`);
+    if (info.direction < 0) stepNoteParts.push("Backward");
     const subNote = stepNoteParts.length > 0 ? ` (${stepNoteParts.join(" · ")})` : "";
 
     if (info.isForced) {
@@ -3211,7 +3211,7 @@
         <div class="dice-anim-card landed">
           <div class="dice-anim-sub">${escapeHtml(info.player.name)}</div>
           <div class="dice-anim-cubes">${renderCubesHtml(info.rolls, "landed")}</div>
-          <div class="dice-anim-total">${info.totalSteps} Langkah${escapeHtml(subNote)}</div>
+          <div class="dice-anim-total">${info.totalSteps} ${info.totalSteps === 1 ? "Step" : "Steps"}${escapeHtml(subNote)}</div>
         </div>`;
       overlay.classList.add("visible");
       playSfx("dice_land");
@@ -3227,7 +3227,7 @@
     const initialVals = info.rolls.map(() => Math.floor(Math.random() * sides) + 1);
     overlay.innerHTML = `
       <div class="dice-anim-card">
-        <div class="dice-anim-sub">${escapeHtml(info.player.name)} mengocok dadu...</div>
+        <div class="dice-anim-sub">${escapeHtml(info.player.name)} is rolling dice...</div>
         <div class="dice-anim-cubes" id="dice-anim-cubes-slot">${renderCubesHtml(initialVals, "rolling")}</div>
         <div class="dice-anim-total" style="opacity:0.45;">...</div>
       </div>`;
@@ -3251,9 +3251,9 @@
 
       overlay.innerHTML = `
         <div class="dice-anim-card landed">
-          <div class="dice-anim-sub">${escapeHtml(info.player.name)} mendapat</div>
+          <div class="dice-anim-sub">${escapeHtml(info.player.name)} rolled</div>
           <div class="dice-anim-cubes">${renderCubesHtml(info.rolls, "landed")}</div>
-          <div class="dice-anim-total">${info.totalSteps} Langkah${escapeHtml(subNote)}</div>
+          <div class="dice-anim-total">${info.totalSteps} ${info.totalSteps === 1 ? "Step" : "Steps"}${escapeHtml(subNote)}</div>
         </div>`;
       playSfx("dice_land");
 
@@ -3441,7 +3441,7 @@
         const stolen = Math.min(5, other.tc);
         other.tc -= stolen;
         mover.tc += stolen;
-        addLog(`Unpredictable Tricks: ${mover.name} melewati ${other.name} -> ${other.name} kehilangan ${disc.length} kartu & membayar ${stolen} TC.`);
+        addLog(`Unpredictable Tricks: ${mover.name} passed ${other.name} -> ${other.name} lost ${disc.length} card(s) & paid ${stolen} TC.`);
         triggerDramaticSkillEvent({
           charId: mover.charId,
           cardId: "lilith_uq",
@@ -3450,7 +3450,7 @@
           rarity: "Passive",
           cardImg: "assets/cards/characters/lilith/uq.webp",
           description: "Pass opponent: opponent loses 1 random card and gives 5 TC.",
-          outcomeText: `${mover.name} melewati ${other.name}: -${disc.length} Kartu & -${stolen} TC!`,
+          outcomeText: `${mover.name} passed ${other.name}: -${disc.length} Card(s) & -${stolen} TC!`,
           profile: { theme: "passive", tagline: "PASSIVE TRIGGERED · UNPREDICTABLE TRICKS", accent: "#ef4444", accentRgb: "239, 68, 68" }
         });
         procs++;
@@ -3461,7 +3461,7 @@
         const stolen = Math.min(5, mover.tc);
         mover.tc -= stolen;
         other.tc += stolen;
-        addLog(`Unpredictable Tricks (${other.name}): ${mover.name} melewati ${other.name} -> ${mover.name} kehilangan ${disc.length} kartu & membayar ${stolen} TC.`);
+        addLog(`Unpredictable Tricks (${other.name}): ${mover.name} passed ${other.name} -> ${mover.name} lost ${disc.length} card(s) & paid ${stolen} TC.`);
         triggerDramaticSkillEvent({
           charId: other.charId,
           cardId: "lilith_uq",
@@ -3470,7 +3470,7 @@
           rarity: "Passive",
           cardImg: "assets/cards/characters/lilith/uq.webp",
           description: "Opponent passed you: they lose 1 random card and give 5 TC.",
-          outcomeText: `${mover.name} melewati ${other.name}: ${mover.name} kehilangan ${disc.length} Kartu & ${stolen} TC!`,
+          outcomeText: `${mover.name} passed ${other.name}: ${mover.name} lost ${disc.length} Card(s) & ${stolen} TC!`,
           profile: { theme: "passive", tagline: "PASSIVE TRIGGERED · UNPREDICTABLE TRICKS", accent: "#ef4444", accentRgb: "239, 68, 68" }
         });
         procs++;
@@ -3515,7 +3515,7 @@
       validTileIds,
       tileStepLabels
     };
-    addLog(`Passive [The Stage Is Mine]: ${player.name} mendarat di Normal Tile (${normalTile.id}), pilih pindah +1 / +2 / -1 atau tetap.`);
+    addLog(`Passive [The Stage Is Mine]: ${player.name} landed on Normal Tile (${normalTile.id}), choose to move +1 / +2 / -1 or stay.`);
     triggerDramaticSkillEvent({
       charId: player.charId,
       cardId: "bocchi_uq",
@@ -3524,7 +3524,7 @@
       rarity: "Passive",
       cardImg: "assets/cards/characters/bocchi/uq.webp",
       description: "[Activate Block Effect] When land on Normal Tiles, choose to move (+1/+2/-1).",
-      outcomeText: `${player.name} mendarat di Normal Tile: Pilih pindah +1 / +2 / -1 di peta!`,
+      outcomeText: `${player.name} landed on a Normal Tile: Choose to move +1 / +2 / -1 on the map!`,
       profile: { theme: "passive", tagline: "UNIQUE PASSIVE TRIGGERED · BOCCHI", accent: "#ec4899", accentRgb: "236, 72, 153" }
     });
     if (camera.mode !== "wide") {
@@ -3545,7 +3545,7 @@
     pendingInteraction = null;
 
     if (!tileId || !validTileIds.includes(tileId) || !TILE_MAP[tileId]) {
-      addLog(`[The Stage Is Mine]: ${player.name} memilih tetap di [${fromTileId}].`);
+      addLog(`[The Stage Is Mine]: ${player.name} chose to stay on [${fromTileId}].`);
       renderAll();
       broadcastMultiplayerState();
       return;
@@ -3565,9 +3565,9 @@
     if (player.inSpawn && tileId !== "T0") player.inSpawn = false;
     const destTile = TILE_MAP[tileId];
     if (stepDelta) {
-      addLog(`[The Stage Is Mine]: ${player.name} pindah ${stepDelta} tile ke [${tileId}: ${destTile.name}] dan mengaktifkan efek block!`);
+      addLog(`[The Stage Is Mine]: ${player.name} moved ${stepDelta} tile to [${tileId}: ${destTile.name}] and activated the block effect!`);
     } else {
-      addLog(`[The Stage Is Mine]: ${player.name} berpindah ke [${tileId}: ${destTile.name}] dan mengaktifkan efek block!`);
+      addLog(`[The Stage Is Mine]: ${player.name} moved to [${tileId}: ${destTile.name}] and activated the block effect!`);
     }
     resolveExactLandingTile(player, destTile, { fromStagePassive: true });
     if (camera.mode === "follow") focusCameraOnTile(tileId);
@@ -3591,13 +3591,13 @@
       if (choice === "shard" && targetPlayer.shards > 0) {
         targetPlayer.shards--;
         player.shards++;
-        addLog(`ULTIMATE [Forced All-In]: ${player.name} menang (${myRoll} vs ${oppRoll}) dan memilih mengambil 1 Tartarus Shard dari ${targetPlayer.name}!`);
+        addLog(`ULTIMATE [Forced All-In]: ${player.name} won (${myRoll} vs ${oppRoll}) and chose to steal 1 Tartarus Shard from ${targetPlayer.name}!`);
         checkVictory(player);
       } else {
         const allTc = targetPlayer.tc;
         targetPlayer.tc = 0;
         player.tc += allTc;
-        addLog(`ULTIMATE [Forced All-In]: ${player.name} menang (${myRoll} vs ${oppRoll}) dan mengambil seluruh ${allTc} TC milik ${targetPlayer.name}!`);
+        addLog(`ULTIMATE [Forced All-In]: ${player.name} won (${myRoll} vs ${oppRoll}) and seized all ${allTc} TC from ${targetPlayer.name}!`);
       }
     }
     renderAll();
@@ -3708,16 +3708,16 @@
         consumed = true;
         showEffectSpotlight(
           "Punishing Virus!",
-          `${hitNames.join(", ")} terkena Trap`,
-          "Giliran berikutnya berkurang -1 dadu (maks. 1 per pemain).",
+          `${hitNames.join(", ")} triggered Trap`,
+          "Next turn dice reduced by -1 die (max 1 per player).",
           "assets/cards/characters/lilith/uc.webp"
         );
       }
       return {
         summary:
           hitNames.length > 0
-            ? `${hitNames.join(", ")} terkena Punishing Virus (-1 dadu giliran berikutnya)!`
-            : "Punishing Virus aktif di tile baru (tidak ada pemain di atasnya).",
+            ? `${hitNames.join(", ")} hit by Punishing Virus (-1 die next turn)!`
+            : "Punishing Virus is active on the new tile (no players currently on it).",
         consumed
       };
     }
@@ -3732,18 +3732,18 @@
           const recv = targets[k] || beneficiary;
           if (recv.hand.length < state.rules.maxHandSize && recv.tc >= 60 && recv.deck.length > 0) {
             const d = drawCards(recv, 1);
-            notes.push(`${recv.name} +${d.length} kartu`);
+            notes.push(`${recv.name} +${d.length} card(s)`);
           } else {
             const g = modifyPlayerTC(recv, 10, "tile");
             notes.push(`${recv.name} +${g} TC`);
           }
         }
         return {
-          summary: `Medicinal Herbs langsung aktif: ${notes.join(", ")}!`,
+          summary: `Medicinal Herbs triggered immediately: ${notes.join(", ")}!`,
           consumed
         };
       }
-      return { summary: "Medicinal Herbs dipindahkan.", consumed: false };
+      return { summary: "Medicinal Herbs relocated.", consumed: false };
     }
 
     if (tok.type === "safe_zone") {
@@ -3755,8 +3755,8 @@
       return {
         summary:
           hitNames.length > 0
-            ? `Safe Zone (Oak Cake Break) langsung aktif: ${hitNames.join(", ")} kebal target kartu hingga Phase berikutnya!`
-            : "Safe Zone (radius 3) dipindahkan dan siap aktif di area baru.",
+            ? `Safe Zone (Oak Cake Break) activated immediately: ${hitNames.join(", ")} cannot be targeted by cards until next Phase!`
+            : "Safe Zone (3-tile radius) relocated and active in the new area.",
         consumed
       };
     }
@@ -3774,7 +3774,7 @@
           if (giveIdx !== -1) {
             const surrendered = p.hand.splice(giveIdx, 1)[0];
             if (owner && owner.hand.length < state.rules.maxHandSize) owner.hand.push(surrendered);
-            hitNames.push(`${p.name} (-1 kartu)`);
+            hitNames.push(`${p.name} (-1 card)`);
           } else {
             const fee = Math.min(20, p.tc);
             p.tc -= fee;
@@ -3786,8 +3786,8 @@
       return {
         summary:
           hitNames.length > 0
-            ? `Restricted Zone langsung memungut biaya medis dari ${hitNames.join(", ")}!`
-            : "Restricted Zone dipindahkan ke tile baru.",
+            ? `Restricted Zone immediately collected medical fees from ${hitNames.join(", ")}!`
+            : "Restricted Zone relocated to the new tile.",
         consumed: false
       };
     }
@@ -3802,13 +3802,13 @@
       return {
         summary:
           hitNames.length > 0
-            ? `Deathstar Fire meledak: ${hitNames.join(", ")} kehilangan 15 TC & roll berikutnya maks. 6!`
-            : "Deathstar Fire dipindahkan dan menyala di tile baru.",
+            ? `Deathstar Fire erupted: ${hitNames.join(", ")} lost 15 TC & next roll capped at 6!`
+            : "Deathstar Fire relocated and ignited on the new tile.",
         consumed
       };
     }
 
-    return { summary: `${tok.name} dipindahkan.`, consumed: false };
+    return { summary: `${tok.name} relocated.`, consumed: false };
   }
 
   function checkTokensOnStep(player, tileId, isExactLanding) {
@@ -3822,39 +3822,39 @@
       if (tok.type === "virus_trap" && tok.ownerIndex !== player.index) {
         player.nextTurnDiceMod = Math.max(-1, (player.nextTurnDiceMod || 0) - 1);
         state.boardTokens.splice(i, 1);
-        addLog(`${player.name} terkena trap Punishing Virus (-1 dadu pada giliran berikutnya, maks. 1 per pemain).`);
-        showEffectSpotlight("Punishing Virus!", `${player.name} terkena Trap`, "Giliran berikutnya berkurang -1 dadu (maks. 1 per pemain).", "assets/cards/characters/lilith/uc.webp");
+        addLog(`${player.name} stepped on Punishing Virus (-1 die on next turn, max 1 per player).`);
+        showEffectSpotlight("Punishing Virus!", `${player.name} triggered Trap`, "Next turn dice reduced by -1 die (max 1 per player).", "assets/cards/characters/lilith/uc.webp");
       } else if (tok.type === "herb_tile") {
         const owner = state.players[tok.ownerIndex] || player;
         state.boardTokens.splice(i, 1);
         if (owner.hand.length < state.rules.maxHandSize && owner.tc >= 60 && owner.deck.length > 0) {
           const d = drawCards(owner, 1);
-          addLog(`Medicinal Herbs (${player.name} melewati [${tileId}]): ${owner.name} menarik +${d.length} kartu!`);
+          addLog(`Medicinal Herbs (${player.name} passed [${tileId}]): ${owner.name} drew +${d.length} card(s)!`);
         } else {
           const g = modifyPlayerTC(owner, 10, "tile");
-          addLog(`Medicinal Herbs (${player.name} melewati [${tileId}]): ${owner.name} mendapat +${g} TC!`);
+          addLog(`Medicinal Herbs (${player.name} passed [${tileId}]): ${owner.name} gained +${g} TC!`);
         }
       } else if (tok.type === "safe_zone" && isExactLanding) {
         player.safeZoneImmune = true;
         state.boardTokens.splice(i, 1);
-        addLog(`${player.name} mengaktifkan Safe Zone (Oak Cake Break) di [${tileId}]: kebal target kartu hingga Phase berikutnya!`);
+        addLog(`${player.name} activated Safe Zone (Oak Cake Break) at [${tileId}]: immune to card targeting until next Phase!`);
       } else if (tok.type === "restricted_zone" && isExactLanding && tok.ownerIndex !== player.index) {
         const owner = state.players[tok.ownerIndex];
         if (player.tc >= 20) {
           player.tc -= 20;
           if (owner) owner.tc += 20;
-          addLog(`${player.name} mendarat di Restricted Zone, membayar 20 TC medical fee ke ${owner ? owner.name : "Mao-Mao"}.`);
+          addLog(`${player.name} landed on Restricted Zone and paid a 20 TC medical fee to ${owner ? owner.name : "Mao-Mao"}.`);
         } else {
           const giveIdx = player.hand.findIndex((c) => c && c.rarity !== "Ultimate");
           if (giveIdx !== -1) {
             const surrendered = player.hand.splice(giveIdx, 1)[0];
             if (owner && owner.hand.length < state.rules.maxHandSize) owner.hand.push(surrendered);
-            addLog(`${player.name} tidak mampu bayar 20 TC di Restricted Zone -> menyerahkan [${surrendered.name}] ke ${owner ? owner.name : "Mao-Mao"}!`);
+            addLog(`${player.name} could not pay 20 TC on Restricted Zone -> surrendered [${surrendered.name}] to ${owner ? owner.name : "Mao-Mao"}!`);
           } else {
             const fee = Math.min(20, player.tc);
             player.tc -= fee;
             if (owner) owner.tc += fee;
-            addLog(`${player.name} mendarat di Restricted Zone, membayar sisa ${fee} TC ke ${owner ? owner.name : "Mao-Mao"}.`);
+            addLog(`${player.name} landed on Restricted Zone and paid the remaining ${fee} TC to ${owner ? owner.name : "Mao-Mao"}.`);
           }
         }
       } else if (tok.type === "fire_tile" && isExactLanding) {
@@ -3891,7 +3891,7 @@
         eyebrow: "NEGATIVE EFFECT DECK",
         crestLabel: "CURSE",
         crestSub: "TARTARUS TRAP",
-        shufflingText: "Mengocok kartu Negative Effect"
+        shufflingText: "Shuffling Negative Effect Card"
       };
     }
     if (deckKind === "event") {
@@ -3900,7 +3900,7 @@
         eyebrow: "GLOBAL EVENT DECK",
         crestLabel: "EVENT",
         crestSub: "WORLD FATE",
-        shufflingText: "Mengocok kartu Global Event"
+        shufflingText: "Shuffling Global Event Card"
       };
     }
     return {
@@ -3908,7 +3908,7 @@
       eyebrow: "POSITIVE EFFECT DECK",
       crestLabel: "BONUS",
       crestSub: "TARTARUS BLESSING",
-      shufflingText: "Mengocok kartu Positive Effect"
+      shufflingText: "Shuffling Positive Effect Card"
     };
   }
 
@@ -4174,7 +4174,7 @@
               <div class="tef-card-title">${escapeHtml(card.name)}</div>
               <div class="tef-card-desc">${escapeHtml(card.description || "")}</div>
               <div id="tef-outcome-pill-slot">${outcomeText ? `<div class="tef-outcome-pill">${escapeHtml(outcomeText)}</div>` : ""}</div>
-              <div class="tef-continue-hint">${needsMinigame ? "Klik di mana saja untuk memulai Dice of Fate" : "Klik di mana saja untuk lanjut"}</div>
+              <div class="tef-continue-hint">${needsMinigame ? "Click anywhere to start Dice of Fate" : "Click anywhere to continue"}</div>
             </div>`;
         }
 
@@ -4272,8 +4272,8 @@
         if (hasPassive(player, "passive_awaken_arsene") && !player.awakenArseneUsedThisTurn) {
           player.awakenArseneUsedThisTurn = true;
           player.nextPhaseDiceMod += 1;
-          addLog(`Awaken, Arsene!: ${player.name} mendarat di Positive Effect -> +1 ekstra dadu (maks. 1/turn)!`);
-          jokerPassiveNote = `Awaken, Arsene!: ${player.name} +1 Ekstra Dadu (maks. 1/turn)`;
+          addLog(`Awaken, Arsene!: ${player.name} landed on Positive Effect -> +1 extra die (max 1/turn)!`);
+          jokerPassiveNote = `Awaken, Arsene!: ${player.name} +1 Extra Die (max 1/turn)`;
         }
         const deck = DATA.BOARD_CARDS.positive;
         const card = deck[Math.floor(Math.random() * deck.length)];
@@ -4292,8 +4292,8 @@
         if (hasPassive(player, "passive_awaken_arsene") && !player.awakenArseneUsedThisTurn) {
           player.awakenArseneUsedThisTurn = true;
           player.nextPhaseDiceMod += 1;
-          addLog(`Awaken, Arsene!: ${player.name} mendarat di Negative Effect -> +1 ekstra dadu (maks. 1/turn)!`);
-          jokerPassiveNote = `Awaken, Arsene!: ${player.name} +1 Ekstra Dadu (maks. 1/turn)`;
+          addLog(`Awaken, Arsene!: ${player.name} landed on Negative Effect -> +1 extra die (max 1/turn)!`);
+          jokerPassiveNote = `Awaken, Arsene!: ${player.name} +1 Extra Die (max 1/turn)`;
         }
         const deck = DATA.BOARD_CARDS.negative;
         const card = deck[Math.floor(Math.random() * deck.length)];
@@ -4358,16 +4358,16 @@
     } else if (card.effectType === "draw") {
       const drawn = drawCards(player, card.value);
       addLog(`Board Card [${card.name}]: ${player.name} drew ${drawn.length} card(s).`);
-      outcomeText = `${player.name} menarik +${drawn.length} kartu`;
+      outcomeText = `${player.name} drew +${drawn.length} card(s)`;
     } else if (card.effectType === "discard") {
       const disc = discardRandomCards(player, card.value);
       addLog(`Board Card [${card.name}]: ${player.name} discarded ${disc.length} card(s).`);
-      outcomeText = `${player.name} membuang ${disc.length} kartu`;
+      outcomeText = `${player.name} discarded ${disc.length} card(s)`;
     } else if (card.effectType === "dice_next_turn") {
       player.nextTurnDiceMod += card.value;
       const sign = card.value > 0 ? "+" : "";
       addLog(`Board Card [${card.name}]: ${player.name} ${sign}${card.value} die next turn.`);
-      outcomeText = `${player.name} ${sign}${card.value} dadu di giliran berikutnya`;
+      outcomeText = `${player.name} gets ${sign}${card.value} die next turn`;
     }
     if (showToast) {
       showEffectSpotlight(card.category, card.name, card.description, card.image);
@@ -4383,7 +4383,7 @@
       showEffectSpotlight("Global Event", card.name, card.description, card.image);
     }
 
-    let outcomeText = card.description || "Efek Global aktif!";
+    let outcomeText = card.description || "Global Event active!";
     let needsMinigame = false;
 
     if (card.effectType === "global_buff") {
@@ -4392,22 +4392,22 @@
         card,
         remainingTurns: eventTurns
       };
-      outcomeText = `Global Event aktif selama ${eventTurns} Turn!`;
+      outcomeText = `Global Event active for ${eventTurns} Turns!`;
     } else if (card.effectType === "instant_all_tc") {
       state.players.forEach((p) => modifyPlayerTC(p, card.value, "tile"));
       const sign = card.value >= 0 ? "+" : "";
-      outcomeText = `Seluruh pemain langsung ${sign}${card.value} TC!`;
+      outcomeText = `All players immediately receive ${sign}${card.value} TC!`;
     } else if (card.effectType === "instant_minigame") {
       if (deferMinigame) {
         needsMinigame = true;
-        outcomeText = "Minigame Acak segera dimulai untuk semua pemain!";
+        outcomeText = "A Random Minigame is starting for all players!";
       } else {
         runClashOfFateMinigame("Global Event: Sudden Minigame");
       }
     } else if (card.effectType === "instant_shuffle_all") {
       returnAllForeignCardsBeforeReshuffle();
       state.players.forEach((p) => reshufflePlayerCycleDeck(p));
-      outcomeText = "Seluruh deck pemain dikocok ulang & menarik kartu baru!";
+      outcomeText = "All player decks reshuffled & new hands dealt!";
     }
     if (!deferMinigame) {
       renderAll();
@@ -4457,10 +4457,10 @@
     clearTimeout(turnReminderTimeoutId);
     clearTimeout(turnReminderFadeTimeoutId);
 
-    const badgeText = isMyMultiplayerTurn ? "GILIRAN KAMU" : `CYCLE ${state.cycle} · ROUND ${state.roundInCycle}`;
+    const badgeText = isMyMultiplayerTurn ? "YOUR TURN" : `CYCLE ${state.cycle} · ROUND ${state.roundInCycle}`;
     const mainText = isMyMultiplayerTurn
-      ? `Giliranmu dimulai, ${player.name}! (Batas waktu: 180 detik)`
-      : `Giliran ${player.name} dimulai (Waktu: 03:00)`;
+      ? `Your turn has started, ${player.name}! (Time limit: 180s)`
+      : `${player.name}'s turn has started (Timer: 03:00)`;
 
     banner.style.setProperty("--turn-accent", player.color || "#34d399");
     banner.classList.remove("fading-out");
@@ -4604,8 +4604,8 @@
 
     player.rollsUsedThisTurn = Math.max(1, player.rollsUsedThisTurn || 1);
     state.phaseIndex = 5;
-    addLog(`Waktu giliran habis (180 detik), giliran ${player.name} otomatis berakhir!`);
-    showEffectSpotlight("Waktu Habis (180 Detik)", `${player.name}: Auto End Turn`, "Batas waktu 3 menit terlampaui, giliran otomatis diakhiri.", null);
+    addLog(`Turn timer expired (180s), ${player.name}'s turn ended automatically!`);
+    showEffectSpotlight("Time Up (180s)", `${player.name}: Auto End Turn`, "The 3-minute turn limit expired; turn ended automatically.", null);
     endCurrentTurn({ forceTimeout: true });
   }
 
@@ -4666,7 +4666,7 @@
         if (typeof pas.remainingTurns === "number") {
           pas.remainingTurns--;
           if (pas.remainingTurns <= 0) {
-            addLog(`Passive [${pas.name}] milik ${p.name} telah berakhir.`);
+            addLog(`${p.name}'s Passive [${pas.name}] has expired.`);
             return false;
           }
           return true;
@@ -4697,7 +4697,7 @@
       startPlayerTurn(getActivePlayer());
     } else {
       startRandomMinigame("ffa", {
-        reasonTitle: `Akhir Ronde ${state.roundInCycle} · Cycle ${state.cycle}`,
+        reasonTitle: `End of Round ${state.roundInCycle} · Cycle ${state.cycle}`,
         afterAction: "advance_round"
       });
       return;
@@ -4749,7 +4749,7 @@
     state.players.forEach((p) => {
       if (Array.isArray(p.passives) && p.passives.length > 0) {
         p.passives.forEach((pas) => {
-          addLog(`Passive [${pas.name}] milik ${p.name} hangus karena pergantian Cycle (${finishedCycle} -> ${state.cycle}).`);
+          addLog(`${p.name}'s Passive [${pas.name}] expired due to Cycle reset (${finishedCycle} -> ${state.cycle}).`);
         });
         p.passives = [];
       }
@@ -4771,7 +4771,7 @@
       spawnRandomShard(false);
     }
 
-    addLog(`CYCLE ${state.cycle} STARTED: Semua Passive Cycle ${finishedCycle} hangus, Deck dikocok ulang (6 kartu), Merchant Shop di-refresh.`);
+    addLog(`CYCLE ${state.cycle} STARTED: All Cycle ${finishedCycle} Passives expired, decks reshuffled (6 cards), Merchant Shops refreshed.`);
   }
 
   function clearDiceOfFateTimers() {
@@ -5057,7 +5057,7 @@
       tiedIndices.forEach((i) => {
         mg.entries[i].isTied = true;
       });
-      addLog(`Dice of Fate SERI (${maxTotal})! Adu ulang Tie-Breaker #${mg.tieRound}: ${mg.tiedNames.join(" vs ")}.`);
+      addLog(`Dice of Fate TIE (${maxTotal})! Tie-Breaker #${mg.tieRound}: ${mg.tiedNames.join(" vs ")}.`);
       playSfx("branch");
       renderAll();
       broadcastMultiplayerState();
@@ -5182,10 +5182,10 @@
     if (mg.status === "finished") {
       statusText = `Pemenang: ${mg.winnerName} (Roll ${mg.winnerTotal})!`;
     } else if (mg.status === "tie_pause") {
-      statusText = `SERI! Adu Ulang Tie-Breaker #${mg.tieRound}: ${(mg.tiedNames || []).join(" vs ")}`;
+      statusText = `TIE! Tie-Breaker #${mg.tieRound}: ${(mg.tiedNames || []).join(" vs ")}`;
     } else if (curEntry) {
       const tieTag = mg.tieRound > 0 ? `Tie-Breaker #${mg.tieRound} · ` : "";
-      statusText = `${tieTag}Giliran Roll: ${curEntry.name}`;
+      statusText = `${tieTag}Rolling Now: ${curEntry.name}`;
     }
 
     const rowsHtml = mg.entries
@@ -5225,20 +5225,20 @@
             <span class="dof-reward-pill">💰 +${entry.reward} TC</span>`;
         } else if (mg.status === "tie_pause") {
           rightHtml = entry.isTied
-            ? `<span class="dof-tie-badge">Adu Ulang</span>`
+            ? `<span class="dof-tie-badge">Tie-Breaker</span>`
             : `<span class="dof-wait-tag">Gugur</span>`;
         } else if (entry.eliminated) {
           rightHtml = `<span class="dof-wait-tag">Gugur</span>`;
         } else if (isCurrent) {
           if (mg.isAnimatingRoll) {
-            rightHtml = `<span class="dof-wait-tag">Mengocok dadu...</span>`;
+            rightHtml = `<span class="dof-wait-tag">Rolling dice...</span>`;
           } else if (canLocalPlayerRollDiceOfFate(entry)) {
             rightHtml = `${mg.tieRound > 0 ? `<span class="dof-tie-badge">Tie-Breaker</span>` : ""}<button class="dof-roll-btn" onclick="window.EFT_APP.rollDiceOfFateCurrent()">Roll Dice</button>`;
           } else {
-            rightHtml = `<span class="dof-wait-tag">Menunggu ${escapeHtml(entry.name)}...</span>`;
+            rightHtml = `<span class="dof-wait-tag">Waiting for ${escapeHtml(entry.name)}...</span>`;
           }
         } else if (hasRolled) {
-          rightHtml = `<span class="dof-wait-tag">Selesai</span>`;
+          rightHtml = `<span class="dof-wait-tag">Done</span>`;
         } else if (isInActivePool) {
           const posInOrder = mg.activeOrder.indexOf(idx);
           rightHtml = `${mg.tieRound > 0 ? `<span class="dof-tie-badge">Tie-Breaker</span>` : ""}<span class="dof-wait-tag">Antrean #${posInOrder + 1}</span>`;
@@ -5283,7 +5283,7 @@
           <span class="dof-payout-hint">1st: 💰 +${mg.payouts[0] || 30} TC · 2nd/3rd: +${mg.payouts[1] || 15} TC · 4th: +${mg.payouts[3] || 10} TC</span>
           ${
             mg.status === "finished"
-              ? `<button class="dof-finish-btn" onclick="window.EFT_APP.finishDiceOfFateMinigame()">Selesai</button>`
+              ? `<button class="dof-finish-btn" onclick="window.EFT_APP.finishDiceOfFateMinigame()">Done</button>`
               : ""
           }
         </div>
@@ -5300,7 +5300,7 @@
     }
   }
 
-  function runClashOfFateMinigame(reasonTitle = "Minigame Acak") {
+  function runClashOfFateMinigame(reasonTitle = "Random Minigame") {
     startRandomMinigame("ffa", { reasonTitle, afterAction: "none" });
   }
 
@@ -5309,7 +5309,7 @@
   // ============================================================================
   function canPlaySkillCard(player, card) {
     if (state.winner) return { ok: false, reason: "Match has already ended." };
-    if (isWalkingAnim || isTileEffectAnimating) return { ok: false, reason: "Tunggu animasi selesai terlebih dahulu." };
+    if (isWalkingAnim || isTileEffectAnimating) return { ok: false, reason: "Wait for the current animation to finish." };
     if (isAdminUnlocked && adminFreeSkillUse) {
       return { ok: true, freeAdmin: true };
     }
@@ -5325,7 +5325,7 @@
       return {
         ok: false,
         reason:
-          "Kartu [Haste] ini aktif secara reaktif di luar giliranmu! Pop-up reaksi otomatis muncul saat kondisi pemicunya terpenuhi."
+          "This [Haste] card triggers reactively out of turn! A reaction prompt will appear automatically when its trigger condition occurs."
       };
     }
     const hasteAllowed = state.rules.allowHaste && card.haste;
@@ -5627,7 +5627,7 @@
                 : ""
             }
           </div>
-          <div class="ca-dramatic-hint">Klik di mana saja untuk lanjut</div>
+          <div class="ca-dramatic-hint">Click anywhere to continue</div>
         </div>`;
 
       skillPopupShownAt = Date.now();
@@ -5659,7 +5659,7 @@
     feed.innerHTML = `
       <div class="ca-side-panel rarity-${escapeHtml(rMeta.key)}"
            style="--ca-rarity-color:${escapeHtml(rMeta.color)};--ca-rarity-rgb:${escapeHtml(rMeta.rgb)};"
-           title="Klik untuk menutup">
+           title="Click to close">
         <div class="ca-side-desc-col">
           <div class="ca-side-desc-text">${escapeHtml(mainDesc)}</div>
           ${
@@ -5706,18 +5706,18 @@
 
   function openForcedAllInChoiceModal(player, targetPlayer, myRoll, oppRoll) {
     openInfoModal(
-      `Forced All-In: ${escapeHtml(player.name)} Menang (${myRoll} vs ${oppRoll})!`,
+      `Forced All-In: ${escapeHtml(player.name)} Wins (${myRoll} vs ${oppRoll})!`,
       `<div style="display:flex;flex-direction:column;gap:14px;">
         <div style="background:rgba(234,179,8,0.12);border:1px solid rgba(250,204,21,0.45);border-radius:10px;padding:12px;font-size:0.86rem;color:#fef08a;">
-          <strong>${escapeHtml(player.name)}</strong> memenangkan Duel 1v1 melawan <strong>${escapeHtml(targetPlayer.name)}</strong>!
-          Pilih hadiahmu:
+          <strong>${escapeHtml(player.name)}</strong> won the 1v1 Duel against <strong>${escapeHtml(targetPlayer.name)}</strong>!
+          Choose your reward:
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <button class="btn btn-gold" onclick="window.EFT_APP.resolveForcedAllInChoice('tc')">
-            Curi Semua TC Lawan (💰 ${targetPlayer.tc} TC)
+            Steal All Opponent TC (💰 ${targetPlayer.tc} TC)
           </button>
           <button class="btn btn-emerald" onclick="window.EFT_APP.resolveForcedAllInChoice('shard')">
-            Curi 1 Tartarus Shard (💎 ${targetPlayer.shards} -> 1)
+            Steal 1 Tartarus Shard (💎 ${targetPlayer.shards} -> -1)
           </button>
         </div>
       </div>`
@@ -5797,49 +5797,49 @@
 
     if (canAfford) {
       openInfoModal(
-        `The Emperor's Favor: Bayar Pajak 💰 ${taxInfo.totalTax} TC?`,
+        `The Emperor's Favor: Pay 💰 ${taxInfo.totalTax} TC Tax?`,
         `<div style="display:flex;flex-direction:column;gap:14px;">
           <div style="display:flex;gap:14px;align-items:center;">
             <img src="${emperorImg}" alt="The Emperor's Favor" style="width:82px;border-radius:8px;border:1px solid rgba(16,185,129,0.5);flex-shrink:0;" />
             <div style="font-size:0.84rem;line-height:1.5;color:#e2e8f0;">
-              <div><strong>${escapeHtml(ownerNames)}</strong> memiliki passive <strong style="color:#6ee7b7;">The Emperor's Favor</strong> yang aktif.</div>
+              <div><strong>${escapeHtml(ownerNames)}</strong> has the active passive <strong style="color:#6ee7b7;">The Emperor's Favor</strong>.</div>
               <div style="margin-top:6px;">
-                Untuk mengaktifkan kartu <strong>${escapeHtml(card.rarity)}</strong> [<strong>${escapeHtml(card.name)}</strong>], kamu wajib membayar pajak sebesar <strong style="color:#fde047;">💰 ${taxInfo.totalTax} TC</strong> kepada ${escapeHtml(ownerNames)}.
+                To activate this <strong>${escapeHtml(card.rarity)}</strong> card [<strong>${escapeHtml(card.name)}</strong>], you must pay a tax of <strong style="color:#fde047;">💰 ${taxInfo.totalTax} TC</strong> to ${escapeHtml(ownerNames)}.
               </div>
             </div>
           </div>
           <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.38);border-radius:10px;padding:10px 12px;font-size:0.8rem;color:#d1fae5;display:flex;justify-content:space-between;align-items:center;">
-            <span>Saldo TC Kamu</span>
+            <span>Your TC Balance</span>
             <strong>💰 ${player.tc} TC → 💰 ${player.tc - taxInfo.totalTax} TC</strong>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <button class="btn btn-emerald" onclick="window.EFT_APP.resolveEmperorTaxPrompt(true)">
-              Bayar 💰 ${taxInfo.totalTax} TC &amp; Aktifkan
+              Pay 💰 ${taxInfo.totalTax} TC &amp; Activate
             </button>
             <button class="btn btn-rose" onclick="window.EFT_APP.resolveEmperorTaxPrompt(false)">
-              Tolak (Batal Aktifkan)
+              Decline (Cancel)
             </button>
           </div>
         </div>`
       );
     } else {
       openInfoModal(
-        `The Emperor's Favor: TC Tidak Cukup`,
+        `The Emperor's Favor: Insufficient TC`,
         `<div style="display:flex;flex-direction:column;gap:14px;">
           <div style="display:flex;gap:14px;align-items:center;">
             <img src="${emperorImg}" alt="The Emperor's Favor" style="width:82px;border-radius:8px;border:1px solid rgba(244,63,94,0.5);flex-shrink:0;" />
             <div style="font-size:0.84rem;line-height:1.5;color:#e2e8f0;">
-              <div><strong>${escapeHtml(ownerNames)}</strong> memiliki passive <strong style="color:#6ee7b7;">The Emperor's Favor</strong> yang aktif.</div>
+              <div><strong>${escapeHtml(ownerNames)}</strong> has the active passive <strong style="color:#6ee7b7;">The Emperor's Favor</strong>.</div>
               <div style="margin-top:6px;">
-                Mengaktifkan kartu <strong>${escapeHtml(card.rarity)}</strong> [<strong>${escapeHtml(card.name)}</strong>] membutuhkan pajak <strong style="color:#fde047;">💰 ${taxInfo.totalTax} TC</strong>.
+                Activating this <strong>${escapeHtml(card.rarity)}</strong> card [<strong>${escapeHtml(card.name)}</strong>] requires a tax of <strong style="color:#fde047;">💰 ${taxInfo.totalTax} TC</strong>.
               </div>
             </div>
           </div>
           <div style="background:rgba(225,29,72,0.16);border:1px solid rgba(244,63,94,0.45);border-radius:10px;padding:10px 12px;font-size:0.82rem;color:#fda4af;">
-            TC kamu saat ini hanya <strong>💰 ${player.tc} TC</strong> (kurang dari ${taxInfo.totalTax} TC). Karena tidak bisa membayar pajak, skill <strong>tidak akan aktif</strong>.
+            Your current balance is only <strong>💰 ${player.tc} TC</strong> (less than ${taxInfo.totalTax} TC). Because you cannot pay the tax, this skill <strong>cannot be activated</strong>.
           </div>
           <button class="btn" onclick="window.EFT_APP.resolveEmperorTaxPrompt(false)">
-            Tutup (Batal Aktifkan)
+            Close (Cancel)
           </button>
         </div>`
       );
@@ -6000,7 +6000,7 @@
     isSkillActivationInFlight = true;
     let outcomeText = executeCardEffect(player, card, options) || card.description;
     if (pendingInteraction && pendingInteraction.type === "stage_is_mine") {
-      outcomeText += " -> Passive [The Stage Is Mine] Aktif! Pilih pindah +1 / +2 / -1 di peta.";
+      outcomeText += " -> Passive [The Stage Is Mine] Active! Choose to move +1 / +2 / -1 on the map.";
     }
 
     const usedCardImg = getCardImage(card, card.ownerCharId || card.charId || player.charId);
@@ -6059,7 +6059,7 @@
     const emperorTax = getEmperorTaxInfo(player, card);
     if (emperorTax.owners.length > 0) {
       if (player.tc < emperorTax.totalTax) {
-        addLog(`The Emperor's Favor: ${player.name} gagal mengaktifkan [${card.name}] (butuh ${emperorTax.totalTax} TC, TC saat ini ${player.tc} TC).`);
+        addLog(`The Emperor's Favor: ${player.name} failed to activate [${card.name}] (needs ${emperorTax.totalTax} TC, currently has ${player.tc} TC).`);
         if (!player.isBot && isLocalHumanTurnForPlayer(player)) {
           openEmperorTaxConfirmModal(player, card, card, options, emperorTax);
         }
@@ -6128,7 +6128,7 @@
           reactionQueue: hasteQueue,
           negatedTargetIndices: []
         };
-        addLog(`[Haste Window]: ${player.name} memainkan [${card.name}] -> ${firstDefender.name} dapat merespons dengan kartu [Haste]!`);
+        addLog(`[Haste Window]: ${player.name} played [${card.name}] -> ${firstDefender.name} can respond with a [Haste] card!`);
         playSfx("branch");
         renderAll();
         broadcastMultiplayerState();
@@ -6159,7 +6159,7 @@
               <div class="haste-option-name">${escapeHtml(hc.name)} <span class="tag-badge">HASTE · ${escapeHtml(hc.rarity)}</span></div>
               <div class="haste-option-desc">${escapeHtml(hc.description)}</div>
               <button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.resolveHasteReaction('${escapeHtml(hc.uid)}')">
-                Aktifkan ${escapeHtml(hc.name)}
+                Activate ${escapeHtml(hc.name)}
               </button>
             </div>
           </div>`;
@@ -6172,14 +6172,14 @@
         <div class="haste-incoming-box">
           <img class="haste-incoming-img" src="${incomingImg}" alt="${escapeHtml(card.name)}" />
           <div style="font-size:0.82rem;line-height:1.45;color:#e2e8f0;">
-            <div><strong style="color:#fde047;">${escapeHtml(caster.name)}</strong> mengaktifkan <strong>[${escapeHtml(card.name)}]</strong> (${escapeHtml(card.rarity)}).</div>
+            <div><strong style="color:#fde047;">${escapeHtml(caster.name)}</strong> activated <strong>[${escapeHtml(card.name)}]</strong> (${escapeHtml(card.rarity)}).</div>
             <div style="margin-top:4px;color:var(--text-muted);">${escapeHtml(card.description)}</div>
           </div>
         </div>
-        <div style="font-size:0.78rem;color:var(--mint-light);font-weight:700;">Pilih kartu [Haste] di tanganmu untuk merespons di luar giliran:</div>
+        <div style="font-size:0.78rem;color:var(--mint-light);font-weight:700;">Choose a [Haste] card from your hand to react out of turn:</div>
         <div style="display:flex;flex-direction:column;gap:8px;">${hasteCardsHtml}</div>
         <button type="button" class="btn" onclick="window.EFT_APP.resolveHasteReaction(null)">
-          Lewati (Biarkan Efek Berjalan)
+          Pass (Let Effect Resolve)
         </button>
       </div>`,
       "haste_reaction"
@@ -6237,23 +6237,23 @@
           negatedTargets.push(defender.index);
           if (targetedIndices.length <= 1) {
             fullyNegated = true;
-            reactionOutcome = `${defender.name} mundur 2 blok dengan [Orderly Retreat] dan meniadakan efek [${incomingCard.name}] milik ${caster.name}!`;
+            reactionOutcome = `${defender.name} stepped back 2 blocks with [Orderly Retreat] and negated ${caster.name}'s [${incomingCard.name}]!`;
           } else {
-            reactionOutcome = `${defender.name} mundur 2 blok dengan [Orderly Retreat] dan kebal dari efek [${incomingCard.name}]!`;
+            reactionOutcome = `${defender.name} stepped back 2 blocks with [Orderly Retreat] and dodged [${incomingCard.name}]!`;
           }
           addLog(`[HASTE - ${hCard.name}]: ${reactionOutcome}`);
         } else if (hCard.effectKey === "reactive_negate_target") {
           negatedTargets.push(defender.index);
           if (targetedIndices.length <= 1) {
             fullyNegated = true;
-            reactionOutcome = `${defender.name} mengaktifkan [Poison Testing] dan meniadakan efek [${incomingCard.name}] milik ${caster.name}!`;
+            reactionOutcome = `${defender.name} activated [Poison Testing] and negated ${caster.name}'s [${incomingCard.name}]!`;
           } else {
-            reactionOutcome = `${defender.name} mengaktifkan [Poison Testing] dan kebal dari [${incomingCard.name}]!`;
+            reactionOutcome = `${defender.name} activated [Poison Testing] and resisted [${incomingCard.name}]!`;
           }
           addLog(`[HASTE - ${hCard.name}]: ${reactionOutcome}`);
         } else if (hCard.effectKey === "haste_negate_skill") {
           fullyNegated = true;
-          reactionOutcome = `${defender.name} mengaktifkan [No Please] dan membatalkan aktivasi [${incomingCard.name}] milik ${caster.name}!`;
+          reactionOutcome = `${defender.name} activated [No Please] and canceled ${caster.name}'s [${incomingCard.name}]!`;
           addLog(`[HASTE - ${hCard.name}]: ${reactionOutcome}`);
         }
 
@@ -6347,18 +6347,18 @@
 
     if (isRadiusPlayerCard) {
       if (!targetPlayer) {
-        const msg = `Tidak ada target valid dalam radius ${cardRadius} blok.`;
+        const msg = `No valid targets within ${cardRadius} blocks.`;
         addLog(`[${card.name}]: ${msg}`);
         return msg;
       }
       if (card.targetType === "opponent_in_radius" && targetPlayer.index === player.index) {
-        const msg = `Kartu [${card.name}] hanya bisa menarget pemain lain dalam radius ${cardRadius} blok.`;
+        const msg = `[${card.name}] can only target another player within ${cardRadius} blocks.`;
         addLog(msg);
         return msg;
       }
       const distToTarget = getTileDistance(player.tileId, targetPlayer.tileId);
       if (distToTarget > cardRadius) {
-        const msg = `${targetPlayer.name} berada di luar radius ${cardRadius} blok (${distToTarget} blok).`;
+        const msg = `${targetPlayer.name} is outside the ${cardRadius}-block radius (${distToTarget} blocks away).`;
         addLog(`[${card.name}]: ${msg}`);
         return msg;
       }
@@ -6374,7 +6374,7 @@
 
     if (isSinglePlayerTargetCard && targetPlayer && targetPlayer.index !== player.index) {
       if (negatedTargetSet.has(targetPlayer.index)) {
-        const msg = `Efek [${card.name}] pada ${targetPlayer.name} ditiadakan oleh kartu [Haste]!`;
+        const msg = `[${card.name}]'s effect on ${targetPlayer.name} was negated by a [Haste] card!`;
         addLog(msg);
         return msg;
       }
@@ -6384,12 +6384,12 @@
         return msg;
       }
       if (targetPlayer.safeZoneImmune) {
-        const msg = `${targetPlayer.name} dilindungi Safe Zone (Oak Cake Break), tidak dapat ditarget kartu!`;
+        const msg = `${targetPlayer.name} is protected by Safe Zone (Oak Cake Break) and cannot be targeted!`;
         addLog(msg);
         return msg;
       }
       if (card.rarity === "Common" && hasPassive(targetPlayer, "passive_sam_armor")) {
-        const msg = `Firefly Type-IV Armor memblokir kartu Common [${card.name}].`;
+        const msg = `Firefly Type-IV Armor blocked the Common card [${card.name}].`;
         addLog(msg);
         return msg;
       }
@@ -6427,7 +6427,7 @@
             { soundTheme: casterMoveTheme, stepMs: 185 }
           );
           const destTile = TILE_MAP[options.targetTileId];
-          const msg = `${tgt.name} bergerak ke [${options.targetTileId}: ${destTile.name}]!`;
+          const msg = `${tgt.name} moved to [${options.targetTileId}: ${destTile.name}]!`;
           addLog(`[${card.name}]: ${msg}`);
           if (shouldActivateBlock) {
             resolveExactLandingTile(tgt, destTile);
@@ -6438,7 +6438,7 @@
           movePlayerInstantAlongPath(tgt, Math.abs(steps), steps >= 0 ? 1 : -1, shouldActivateBlock, {
             soundTheme: casterMoveTheme
           });
-          const msg = `${tgt.name} bergerak ${steps > 0 ? "+" : ""}${steps} langkah!`;
+          const msg = `${tgt.name} moved ${steps > 0 ? "+" : ""}${steps} step(s)!`;
           addLog(`[${card.name}]: ${msg}`);
           return msg;
         }
@@ -6449,7 +6449,7 @@
         if (destTileId && TILE_MAP[destTileId]) {
           const dist = getTileDistance(player.tileId, destTileId);
           if (dist > rad || TILE_MAP[destTileId].type !== "normal") {
-            const msg = `Tile tujuan di luar radius ${rad} blok atau bukan Normal Tile.`;
+            const msg = `Target tile is outside the ${rad}-block radius or is not a Normal Tile.`;
             addLog(`[${card.name}]: ${msg}`);
             return msg;
           }
@@ -6462,7 +6462,7 @@
             { soundTheme: casterMoveTheme, stepMs: 170, landVfx: "warp_burst" }
           );
           const destTile = TILE_MAP[destTileId];
-          const msg = `${player.name} melompat ke Normal Tile [${destTileId}]!`;
+          const msg = `${player.name} jumped to Normal Tile [${destTileId}]!`;
           addLog(`[${card.name}]: ${msg}`);
           checkTokensOnStep(player, destTileId, true);
           if (shouldActivateBlock) {
@@ -6470,7 +6470,7 @@
           }
           return msg;
         }
-        return "Tidak ada tujuan dipilih.";
+        return "No destination selected.";
       }
       case "move_self_range": {
         if (options.targetTileId && TILE_MAP[options.targetTileId]) {
@@ -6491,7 +6491,7 @@
             { soundTheme: casterMoveTheme, stepMs: 165 }
           );
           const destTile = TILE_MAP[options.targetTileId];
-          const msg = `${player.name} berpindah ke [${options.targetTileId}: ${destTile.name}]!`;
+          const msg = `${player.name} moved to [${options.targetTileId}: ${destTile.name}]!`;
           addLog(`[${card.name}]: ${msg}`);
           if (shouldActivateBlock) {
             resolveExactLandingTile(player, destTile);
@@ -6502,7 +6502,7 @@
           movePlayerInstantAlongPath(player, Math.abs(steps), steps >= 0 ? 1 : -1, shouldActivateBlock, {
             soundTheme: casterMoveTheme
           });
-          const msg = `${player.name} bergerak ${steps > 0 ? "+" : ""}${steps} blok!`;
+          const msg = `${player.name} moved ${steps > 0 ? "+" : ""}${steps} block(s)!`;
           addLog(`[${card.name}]: ${msg}`);
           return msg;
         }
@@ -6525,14 +6525,14 @@
             ],
             { soundTheme: casterMoveTheme, stepMs: 210, landVfx: "warp_burst" }
           );
-          const msg = `${player.name} (${player.tileId}) bertukar posisi dengan ${targetPlayer.name} (${targetPlayer.tileId})!`;
+          const msg = `${player.name} (${player.tileId}) swapped positions with ${targetPlayer.name} (${targetPlayer.tileId})!`;
           addLog(`[${card.name}]: ${msg}`);
           if (shouldActivateBlock) {
             resolveExactLandingTile(player, TILE_MAP[player.tileId]);
           }
           return msg;
         }
-        return "Tidak ada target bertukar posisi.";
+        return "No valid target to swap positions with.";
       }
       case "passive_stage_is_mine": {
         const isCopied = Boolean(options.copiedUniqueDurationTurns);
@@ -6544,7 +6544,7 @@
           expiresOnCycleEnd: !isCopied
         });
         const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
-        const msg = `Passive The Stage Is Mine aktif (${durLabel}, hangus saat ganti Cycle)! Mendarat di Normal Tile memberi opsi pindah +1/+2/-1.`;
+        const msg = `Passive The Stage Is Mine active (${durLabel}, expires on Cycle reset)! Landing on a Normal Tile lets you move +1/+2/-1.`;
         addLog(`Passive Active: [The Stage Is Mine] (${durLabel}).`);
         return msg;
       }
@@ -6555,7 +6555,7 @@
             : player.tileId;
         const destTile = TILE_MAP[destTileId];
         if (!destTile || destTile.type === "event") {
-          const msg = "Global Event Tile tidak dapat dipilih untuk Bocchi The Rock!.";
+          const msg = "Global Event Tiles cannot be selected for Bocchi The Rock!.";
           addLog(msg);
           return msg;
         }
@@ -6580,8 +6580,8 @@
         }
         const msg =
           pulledNames.length > 0
-            ? `Menarik ${pulledNames.join(", ")} ke [${destTileId}: ${destTile.name}] & mengaktifkan efek tile!`
-            : `Tidak ada lawan di luar Spawn untuk ditarik ke [${destTileId}].`;
+            ? `Pulled ${pulledNames.join(", ")} to [${destTileId}: ${destTile.name}] & triggered the tile effect!`
+            : `No opponents outside Spawn to pull to [${destTileId}].`;
         addLog(`ULTIMATE [${card.name}]: ${msg}`);
         return msg;
       }
@@ -6590,7 +6590,7 @@
         const taken = Math.min(rollAmt, targetPlayer.tc);
         targetPlayer.tc -= taken;
         const gained = modifyPlayerTC(player, taken, "own_skill");
-        const msg = `${player.name} mencuri ${gained} TC dari ${targetPlayer.name}!`;
+        const msg = `${player.name} stole ${gained} TC from ${targetPlayer.name}!`;
         addLog(`[That's Mine]: ${msg}`);
         return msg;
       }
@@ -6598,7 +6598,7 @@
         const mults = card.multipliers || [1.25, 1.5, 2.0];
         const chosen = mults[Math.floor(Math.random() * mults.length)];
         player.turnTcMultiplier = chosen;
-        const msg = `${player.name} mendapat x${chosen} TC Multiplier untuk giliran ini!`;
+        const msg = `${player.name} gained a x${chosen} TC Multiplier for this turn!`;
         addLog(`[The Red or The Black]: ${msg}`);
         return msg;
       }
@@ -6609,7 +6609,7 @@
         const m = mults[Math.floor(Math.random() * mults.length)];
         const rawTotal = applyRounding(b * m, state.rules);
         const gained = modifyPlayerTC(player, rawTotal, "own_skill");
-        const msg = `${b} TC x ${m} = +${gained} TC untuk ${player.name}!`;
+        const msg = `${b} TC x ${m} = +${gained} TC for ${player.name}!`;
         addLog(`[Hand of Midas]: ${msg}`);
         return msg;
       }
@@ -6627,12 +6627,12 @@
                 player.hand.push(surrendered[0]);
               }
               cardLootedCount += surrendered.length;
-              addLog(`${other.name} tidak sanggup membayar 15 TC -> menyerahkan 1 kartu acak ke ${player.name}.`);
+              addLog(`${other.name} could not pay 15 TC -> surrendered 1 random card to ${player.name}.`);
             }
           }
         });
         const credited = totalCollected > 0 ? modifyPlayerTC(player, totalCollected, "own_skill") : 0;
-        const msg = `Terkumpul +${credited} TC${cardLootedCount > 0 ? ` & ${cardLootedCount} kartu lawan` : ""}!`;
+        const msg = `Collected +${credited} TC${cardLootedCount > 0 ? ` & ${cardLootedCount} opponent card(s)` : ""}!`;
         addLog(`[The House Always Wins]: ${player.name} memperoleh ${msg}`);
         return msg;
       }
@@ -6648,7 +6648,7 @@
           expiresOnCycleEnd: !isCopied
         });
         const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
-        const msg = `IPC Gems aktif (${durLabel}, hangus saat ganti Cycle): semua perolehan TC di luar skill card x${mult}!`;
+        const msg = `IPC Gems active (${durLabel}, expires on Cycle reset): all non-skill TC gains multiplied by x${mult}!`;
         addLog(`Passive Active: [IPC Gems] (${mult}x TC · ${durLabel}).`);
         return msg;
       }
@@ -6665,14 +6665,14 @@
               oppRoll
             };
             openForcedAllInChoiceModal(player, targetPlayer, myRoll, oppRoll);
-            const msg = `${player.name} menang Duel (${myRoll} vs ${oppRoll}), pilih curi semua TC atau 1 Shard!`;
+            const msg = `${player.name} won the Duel (${myRoll} vs ${oppRoll}), choose to steal all TC or 1 Shard!`;
             addLog(`ULTIMATE [Forced All-In]: ${msg}`);
             return msg;
           } else {
             const allTc = targetPlayer.tc;
             targetPlayer.tc = 0;
             player.tc += allTc;
-            const msg = `${player.name} menang (${myRoll} vs ${oppRoll}) & menyita seluruh ${allTc} TC ${targetPlayer.name}!`;
+            const msg = `${player.name} won (${myRoll} vs ${oppRoll}) & seized all ${allTc} TC from ${targetPlayer.name}!`;
             addLog(`ULTIMATE [Forced All-In]: ${msg}`);
             return msg;
           }
@@ -6681,7 +6681,7 @@
           const loss = Math.min(bet, player.tc);
           player.tc -= loss;
           targetPlayer.tc += loss;
-          const msg = `${player.name} kalah (${myRoll} vs ${oppRoll}) & membayar ${loss} TC!`;
+          const msg = `${player.name} lost (${myRoll} vs ${oppRoll}) & paid ${loss} TC!`;
           addLog(`ULTIMATE [Forced All-In]: ${msg}`);
           return msg;
         }
@@ -6690,12 +6690,12 @@
         const hasDiscardable = targetPlayer.hand.some((c) => c && c.rarity !== "Ultimate");
         if (hasDiscardable) {
           const disc = discardRandomCards(targetPlayer, 1);
-          const msg = `${targetPlayer.name} membuang 1 kartu [${disc[0]?.name || "Kartu"}]!`;
+          const msg = `${targetPlayer.name} discarded 1 card [${disc[0]?.name || "Card"}]!`;
           addLog(`[Marionette String]: ${msg}`);
           return msg;
         } else {
           targetPlayer.nextRollStepMod -= 3;
-          const msg = `Tangan ${targetPlayer.name} tidak memiliki kartu non-Ultimate -> -3 langkah pada roll berikutnya!`;
+          const msg = `${targetPlayer.name} has no non-Ultimate cards -> -3 steps on their next roll!`;
           addLog(`[Marionette String]: ${msg}`);
           return msg;
         }
@@ -6704,7 +6704,7 @@
         const tileId = options.targetTileId || player.tileId;
         const rad = card.radius || 4;
         if (getTileDistance(player.tileId, tileId) > rad) {
-          const msg = `Tile [${tileId}] berada di luar radius ${rad} blok.`;
+          const msg = `Tile [${tileId}] is outside the ${rad}-block radius.`;
           addLog(`[Punishing Virus]: ${msg}`);
           return msg;
         }
@@ -6718,13 +6718,13 @@
           remainingTurns: getFullCycleTurns(),
           placedOnTurn: state.totalTurnsCompleted
         });
-        const msg = `Trap Punishing Virus dipasang di [${tileId}] selama 1 Full Cycle!`;
+        const msg = `Punishing Virus Trap placed on [${tileId}] for 1 Full Cycle!`;
         addLog(`[Punishing Virus]: ${msg}`);
         return msg;
       }
       case "debuff_reverse_move": {
         targetPlayer.reverseNextRoll = true;
-        const msg = `${targetPlayer.name} harus bergerak MUNDUR pada roll pertama giliran berikutnya!`;
+        const msg = `${targetPlayer.name} must move BACKWARD on their first roll next turn!`;
         addLog(`[Mind Deviation]: ${msg}`);
         return msg;
       }
@@ -6746,8 +6746,8 @@
         });
         const msg =
           totalDestroyed > 0
-            ? `Menghancurkan ${totalDestroyed} kartu (${victims.join(", ")})!`
-            : "Tidak ada lawan ber-kartu non-Ultimate di dalam radius 8 blok.";
+            ? `Destroyed ${totalDestroyed} card(s) (${victims.join(", ")})!`
+            : "No opponents with non-Ultimate cards within 8 blocks.";
         addLog(`[Soul Extraction]: ${msg}`);
         return msg;
       }
@@ -6763,7 +6763,7 @@
             expiresOnCycleEnd: !isCopied
           });
           addLog(`Passive Active: [Daemonissa's Domain] (${durLabel}).`);
-          return `Passive Daemonissa's Domain aktif (${durLabel}, hangus saat ganti Cycle)!`;
+          return `Passive Daemonissa's Domain active (${durLabel}, expires on Cycle reset)!`;
         } else {
           addOrRefreshPassive(player, {
             key: "passive_unpredictable_tricks",
@@ -6771,7 +6771,7 @@
             remainingTurns: turns,
             expiresOnCycleEnd: !isCopied
           });
-          const msg = `Unpredictable Tricks aktif (${durLabel}, hangus saat ganti Cycle): melewati/dilewati lawan -> lawan buang 1 kartu & beri 5 TC!`;
+          const msg = `Unpredictable Tricks active (${durLabel}, expires on Cycle reset): passing or being passed -> opponent discards 1 card & pays 5 TC!`;
           addLog(`Passive Active: [Unpredictable Tricks] (${durLabel}).`);
           return msg;
         }
@@ -6783,7 +6783,7 @@
         const bonusSkills =
           state.compendiumId === "comp_v0_1" ? 0 : state.compendiumId === "comp_alpha1_1" ? 1 : 2;
         player.maxSkillsThisTurn += bonusSkills;
-        const msg = `${targetPlayer.name} melewatkan giliran depan! ${player.name} mendapat +1 Extra Dice Roll & +${bonusSkills} Skill Use!`;
+        const msg = `${targetPlayer.name} skips their next turn! ${player.name} gains +1 Extra Dice Roll & +${bonusSkills} Skill Use!`;
         addLog(`ULTIMATE [${card.name}]: ${msg}`);
         return msg;
       }
@@ -6791,7 +6791,7 @@
         const gainVal = card.tcGain || (state.compendiumId === "comp_v0_1" ? 5 : 10);
         if (options.choiceValue === "draw") {
           const d = drawCards(player, 1);
-          const msg = `${player.name} mengambil +${d.length} Kartu dari deck!`;
+          const msg = `${player.name} drew +${d.length} Card(s) from the deck!`;
           addLog(`[Showtime!]: ${msg}`);
           return msg;
         } else {
@@ -6838,7 +6838,7 @@
             const pickIdx = stealableIndices[Math.floor(Math.random() * stealableIndices.length)];
             const stolenCard = victim.hand.splice(pickIdx, 1)[0];
             if (player.hand.length < state.rules.maxHandSize) player.hand.push(stolenCard);
-            stealMsg = ` & mencuri [${stolenCard.name}] (${stolenCard.rarity}) dari ${victim.name}!`;
+            stealMsg = ` & stole [${stolenCard.name}] (${stolenCard.rarity}) from ${victim.name}!`;
             addLog(`[Phantom Thief]: ${player.name} stole [${stolenCard.name}] (${stolenCard.rarity}) from ${victim.name}.`);
           }
         }
@@ -6850,7 +6850,7 @@
       case "aoa_15tc_silence": {
         modifyPlayerTC(targetPlayer, -15, "own_skill");
         targetPlayer.silencedThisPhase = true;
-        const msg = `${targetPlayer.name} kehilangan 15 TC & Silenced 1 Phase!`;
+        const msg = `${targetPlayer.name} lost 15 TC & is Silenced for 1 Phase!`;
         addLog(`[All-Out Attack]: ${msg}`);
         return msg;
       }
@@ -6878,16 +6878,16 @@
           : null;
 
         if (copiedCard) {
-          addLog(`[Will of Rebellion]: Menyalin efek [${copiedCard.name}].`);
+          addLog(`[Will of Rebellion]: Copying effect of [${copiedCard.name}].`);
           const copyOpts = { ...options };
           if (copiedCard.rarity === "Unique") {
             copyOpts.copiedUniqueDurationTurns = Math.max(1, state.players.length);
           }
           const innerOutcome = executeCardEffect(player, copiedCard, copyOpts);
-          return `Menyalin [${copiedCard.name}]: ${innerOutcome || copiedCard.description}`;
+          return `Copied [${copiedCard.name}]: ${innerOutcome || copiedCard.description}`;
         } else {
           const g = modifyPlayerTC(player, 15, "own_skill");
-          const msg = `Tidak ada skill lawan baru-baru ini -> ${player.name} mendapat +${g} TC.`;
+          const msg = `No recent opponent skills -> ${player.name} gained +${g} TC.`;
           addLog(`[Will of Rebellion]: ${msg}`);
           return msg;
         }
@@ -6902,7 +6902,7 @@
           expiresOnCycleEnd: !isCopied
         });
         const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
-        const msg = `Awaken, Arsene! aktif (${durLabel}, hangus saat ganti Cycle): mendarat di Positive/Negative Effect tile beri +1 ekstra dadu (maks. 1/turn)!`;
+        const msg = `Awaken, Arsene! active (${durLabel}, expires on Cycle reset): landing on Positive/Negative Effect tiles grants +1 extra die (max 1/turn)!`;
         addLog(`Passive Active: [Awaken, Arsene!] (${durLabel}).`);
         return msg;
       }
@@ -6910,12 +6910,12 @@
         player.metaShardBought = true;
         if (player.metaShard < 1) {
           player.metaShard = 1;
-          const msg = `${player.name} memperoleh 1 Permanent Meta-Shard yang tidak bisa dicuri!`;
+          const msg = `${player.name} gained 1 Permanent Meta-Shard that cannot be stolen!`;
           addLog(`ULTIMATE [Meta-Shard]: ${msg}`);
           checkVictory(player);
           return msg;
         }
-        return "Meta-Shard sudah dimiliki.";
+        return "Meta-Shard already owned.";
       }
       case "choice_move1_2_or_10tc": {
         if (options.choiceValue === "move" && options.targetTileId && TILE_MAP[options.targetTileId]) {
@@ -6954,7 +6954,7 @@
           expiresOnCycleEnd: false
         });
         addLog(`[${card.name}]: Counter Shield active.`);
-        return "Counter Shield aktif!";
+        return "Counter Shield active!";
       }
       case "place_herb_tile": {
         const tileId = options.targetTileId || player.tileId;
@@ -7034,7 +7034,7 @@
       }
       case "scry_2_keep_1": {
         if (!Array.isArray(player.deck) || player.deck.length === 0) {
-          const msg = "Deck kosong, tidak ada kartu teratas untuk diperiksa.";
+          const msg = "Deck is empty, no top cards to inspect.";
           addLog(`[${card.name}]: ${msg}`);
           return msg;
         }
@@ -7047,13 +7047,13 @@
           const lim = getEffectiveHandLimit(player);
           if (player.hand.length < lim) {
             player.hand.push(onlyCard);
-            const msg = `Hanya tersisa 1 kartu di deck: [${onlyCard.name}] diambil ke tangan!`;
+            const msg = `Only 1 card left in deck: [${onlyCard.name}] added to hand!`;
             addLog(`[${card.name}]: ${msg}`);
             return msg;
           } else {
             if (isCardForeignToPlayer(onlyCard, player)) returnForeignCardToOwner(onlyCard, player);
             else player.discard.push(onlyCard);
-            const msg = `Tangan penuh, [${onlyCard.name}] dibuang ke discard.`;
+            const msg = `Hand is full, [${onlyCard.name}] was sent to discard.`;
             addLog(`[${card.name}]: ${msg}`);
             return msg;
           }
@@ -7065,7 +7065,7 @@
           cards: topCards,
           cardName: card.name
         };
-        const msg = `${player.name} memeriksa 2 kartu teratas deck: pilih 1 untuk disimpan ke tangan (1 lainnya dibuang)!`;
+        const msg = `${player.name} inspected the top 2 cards of the deck: pick 1 to keep (the other is discarded)!`;
         addLog(`[${card.name}]: ${msg}`);
         return msg;
       }
@@ -7092,7 +7092,7 @@
       }
       case "relocate_board_traps": {
         if (!Array.isArray(state.boardTokens) || state.boardTokens.length === 0) {
-          const msg = "Tidak ada Token/Trap aktif di papan untuk dipindahkan.";
+          const msg = "No active Tokens/Traps on the board to relocate.";
           addLog(`[Entrusted Dream]: ${msg}`);
           return msg;
         }
@@ -7124,7 +7124,7 @@
           if (rmIdx !== -1) state.boardTokens.splice(rmIdx, 1);
         }
 
-        const msg = `${player.name} memindahkan [${tok.name}] dari [${prevTid}] ke [${destTileId}]. ${res.summary}`;
+        const msg = `${player.name} relocated [${tok.name}] from [${prevTid}] to [${destTileId}]. ${res.summary}`;
         addLog(`[Entrusted Dream]: ${msg}`);
         return msg;
       }
@@ -7156,8 +7156,8 @@
           remainingTurns: getFullCycleTurns(),
           expiresOnCycleEnd: true
         });
-        addLog(`ULTIMATE [Complete Combustion]: ${player.name} bertransformasi menjadi SAM!`);
-        return `${player.name} bertransformasi menjadi SAM! Hand & Deck ditukar ke SAM.`;
+        addLog(`ULTIMATE [Complete Combustion]: ${player.name} transformed into SAM!`);
+        return `${player.name} transformed into SAM! Hand & Deck swapped to SAM.`;
       }
       case "sam_dash_aoe_5tc": {
         const prevTileId = player.tileId;
@@ -7201,13 +7201,13 @@
         });
         const dmgMsg =
           hitVictims.length > 0
-            ? `${player.name} menghantam [${player.tileId}] dengan ledakan api! Damage AOE: ${hitVictims.join(", ")}`
-            : `${player.name} mendarat dengan ledakan api di [${player.tileId}] (tidak ada lawan dalam radius 1 blok).`;
+            ? `${player.name} struck [${player.tileId}] with a fiery blast! AOE Hit: ${hitVictims.join(", ")}`
+            : `${player.name} landed with a fiery blast at [${player.tileId}] (no opponents within 1 block).`;
         addLog(`[${card.name}]: ${dmgMsg}`);
         return dmgMsg;
       }
       case "sam_push_back_3": {
-        if (!targetPlayer || targetPlayer.index === player.index) return "Tidak ada lawan dalam radius 4 blok.";
+        if (!targetPlayer || targetPlayer.index === player.index) return "No opponents within 4 blocks.";
         const beforeTile = targetPlayer.tileId;
         const walked = movePlayerInstantAlongPath(targetPlayer, 3, -1, shouldActivateBlock, {
           soundTheme: "sam",
@@ -7222,21 +7222,21 @@
         });
         if (hitSomething) {
           modifyPlayerTC(targetPlayer, -10, "own_skill");
-          addLog(`[Supernova Overload]: ${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}] & menabrak Player/Token (-10 TC)!`);
-          return `${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}] & kehilangan 10 TC!`;
+          addLog(`[Supernova Overload]: ${targetPlayer.name} was knocked back 3 blocks to [${targetPlayer.tileId}] & collided with a Player/Token (-10 TC)!`);
+          return `${targetPlayer.name} was knocked back 3 blocks to [${targetPlayer.tileId}] & lost 10 TC!`;
         }
-        addLog(`[Supernova Overload]: ${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}]!`);
-        return `${targetPlayer.name} terdorong mundur 3 blok ke [${targetPlayer.tileId}]!`;
+        addLog(`[Supernova Overload]: ${targetPlayer.name} was knocked back 3 blocks to [${targetPlayer.tileId}]!`);
+        return `${targetPlayer.name} was knocked back 3 blocks to [${targetPlayer.tileId}]!`;
       }
       case "sam_discounted_versus": {
-        if (!targetPlayer || targetPlayer.index === player.index) return "Tidak ada lawan dalam radius 4 blok.";
+        if (!targetPlayer || targetPlayer.index === player.index) return "No opponents within 4 blocks.";
         const isTier2 = options.choiceValue === "tier2";
         const samBet = isTier2 ? 15 : 0;
         const oppBet = isTier2 ? 30 : 15;
         const challengerIdx = player.index;
         const opponentIdx = targetPlayer.index;
-        const stakeLabel = isTier2 ? `SAM 15 TC vs Lawan 30 TC` : `SAM Gratis (0 TC) vs Lawan 15 TC`;
-        addLog(`[Scorched Earth Execution]: ${player.name} memaksa ${targetPlayer.name} masuk duel Versus (${stakeLabel})!`);
+        const stakeLabel = isTier2 ? `SAM 15 TC vs Opponent 30 TC` : `SAM Free (0 TC) vs Opponent 15 TC`;
+        addLog(`[Scorched Earth Execution]: ${player.name} forced ${targetPlayer.name} into a Versus Duel (${stakeLabel})!`);
         setTimeout(() => {
           if (!state || state.winner || state.activeMinigame) return;
           dismissSkillPopup(true, true);
@@ -7286,7 +7286,7 @@
         });
         triggerBoardTileVfx(fireIds, "sam_fire_impact");
         playSfx("sam_impact");
-        const msg = `${player.name} membakar 2 tile pilihan bebas [${fireIds.join(" & ")}] dengan Deathstar Destruction!`;
+        const msg = `${player.name} ignited 2 chosen tiles [${fireIds.join(" & ")}] with Deathstar Destruction!`;
         addLog(`[${card.name}]: ${msg}`);
         return msg;
       }
@@ -7313,8 +7313,8 @@
         player.hand = [];
         player.deck = buildDeckForCharacter("firefly", state.compendiumId, false, player.id);
         drawCards(player, state.rules.startHandSize);
-        addLog(`ULTIMATE [Cooldown Protocol]: ${player.name} kembali ke mode Firefly!`);
-        return `${player.name} menonaktifkan armor dan kembali ke mode Firefly!`;
+        addLog(`ULTIMATE [Cooldown Protocol]: ${player.name} returned to Firefly mode!`);
+        return `${player.name} deactivated armor and returned to Firefly mode!`;
       }
       default:
         return card.description;
@@ -7944,7 +7944,7 @@
     `;
 
     return `
-      <svg class="round-progress-svg" viewBox="0 0 44 44" aria-label="Round ${rVal} dari ${tVal}">
+      <svg class="round-progress-svg" viewBox="0 0 44 44" aria-label="Round ${rVal} of ${tVal}">
         <defs>
           <clipPath id="eftRoundFillClip">${clipShape}</clipPath>
         </defs>
@@ -8021,7 +8021,7 @@
     const shardPill = document.getElementById("shard-zones-pill");
     if (shardPill) {
       shardPill.title =
-        state.activeShards.map((s) => `Zone ${s.roman} (${s.tileId})`).join(", ") || "Tidak ada Shard aktif";
+        state.activeShards.map((s) => `Zone ${s.roman} (${s.tileId})`).join(", ") || "No active Shards";
     }
 
     const weSlot = document.getElementById("world-event-pill-slot");
@@ -8043,19 +8043,19 @@
       const lcu = state.lastSkillCardUsed;
       if (lcu && lcu.cardName) {
         lcuSlot.innerHTML = `
-          <button type="button" class="last-card-used-card" onclick="window.EFT_APP.openLastUsedCardModal()" title="Klik untuk melihat efek kartu &amp; kejadian penggunaan terakhir">
+          <button type="button" class="last-card-used-card" onclick="window.EFT_APP.openLastUsedCardModal()" title="Click to inspect the last card effect &amp; outcome">
             ${lcu.cardImg ? `<img class="last-card-used-thumb" src="${lcu.cardImg}" alt="${escapeHtml(lcu.cardName)}" loading="lazy" decoding="async" />` : ""}
             <div class="last-card-used-meta">
               <span class="last-card-used-label">Last Card Used</span>
               <span class="last-card-used-name">${escapeHtml(lcu.cardName)}</span>
-              <span class="last-card-used-caster">${escapeHtml(lcu.casterName || "-")} · Klik detail</span>
+              <span class="last-card-used-caster">${escapeHtml(lcu.casterName || "-")} · View details</span>
             </div>
           </button>`;
       } else {
         lcuSlot.innerHTML = `
           <div class="last-card-used-empty">
             <span class="last-card-used-label">Last Card Used</span>
-            <span>Belum ada</span>
+            <span>None yet</span>
           </div>`;
       }
     }
@@ -8075,14 +8075,14 @@
             <span class="tag-badge">${escapeHtml(lcu.rarity || "Skill")}</span>
           </div>
           <div style="font-size:0.76rem;color:var(--text-muted);">
-            Digunakan oleh <strong style="color:#fff;">${escapeHtml(lcu.casterName || "-")}</strong> · Cycle ${lcu.cycle || 1} (Round ${lcu.round || 1})
+            Used by <strong style="color:#fff;">${escapeHtml(lcu.casterName || "-")}</strong> · Cycle ${lcu.cycle || 1} (Round ${lcu.round || 1})
           </div>
           <div class="last-used-detail-section">
-            <div class="last-used-detail-heading">Efek Skill Card</div>
+            <div class="last-used-detail-heading">Skill Card Effect</div>
             <div style="font-size:0.84rem;color:#e2e8f0;line-height:1.48;">${escapeHtml(lcu.description || "-")}</div>
           </div>
           <div class="last-used-detail-section">
-            <div class="last-used-detail-heading">Apa yang Terjadi</div>
+            <div class="last-used-detail-heading">What Happened</div>
             <div style="font-size:0.84rem;color:var(--mint-light);font-weight:700;line-height:1.48;">${escapeHtml(lcu.outcomeText || lcu.description || "-")}</div>
           </div>
         </div>
@@ -8105,17 +8105,17 @@
             <span class="tag-badge">${escapeHtml(c.rarity || "Skill")}</span>
             <div class="scry-pick-desc">${escapeHtml(c.description || "")}</div>
             <button type="button" class="btn btn-emerald" style="width:100%;" onclick="window.EFT_APP.resolveScryKeepChoice('${escapeHtml(c.uid)}')">
-              Ambil ke Tangan
+              Add to Hand
             </button>
           </div>`;
       })
       .join("");
 
     openInfoModal(
-      `${escapeHtml(cardName || "Insect's Instinct")}: Pilih 1 dari 2 Kartu Teratas`,
+      `${escapeHtml(cardName || "Insect's Instinct")}: Pick 1 of Top 2 Cards`,
       `<div style="display:flex;flex-direction:column;gap:12px;">
         <div style="font-size:0.8rem;color:#cbd5e1;">
-          Pilih <strong>1 kartu</strong> untuk dimasukkan ke tangan <strong>${escapeHtml(player.name)}</strong>. Kartu yang tidak dipilih akan otomatis dibuang.
+          Choose <strong>1 card</strong> to add to <strong>${escapeHtml(player.name)}'s</strong> hand. The unchosen card will be discarded automatically.
         </div>
         <div class="scry-pick-grid">${cardsHtml}</div>
       </div>`,
@@ -8155,11 +8155,11 @@
       let keepMsg = "";
       if (player.hand.length < lim) {
         player.hand.push(chosen);
-        keepMsg = `mengambil [${chosen.name}] ke tangan`;
+        keepMsg = `added [${chosen.name}] to hand`;
       } else {
         if (isCardForeignToPlayer(chosen, player)) returnForeignCardToOwner(chosen, player);
         else player.discard.push(chosen);
-        keepMsg = `tangan penuh sehingga [${chosen.name}] ikut dibuang`;
+        keepMsg = `hand was full so [${chosen.name}] was discarded`;
       }
       const discNames = [];
       discarded.forEach((dc) => {
@@ -8167,7 +8167,7 @@
         if (isCardForeignToPlayer(dc, player)) returnForeignCardToOwner(dc, player);
         else player.discard.push(dc);
       });
-      const fullMsg = `${player.name} ${keepMsg}${discNames.length > 0 ? ` & membuang [${discNames.join(", ")}]` : ""}!`;
+      const fullMsg = `${player.name} ${keepMsg}${discNames.length > 0 ? ` & discarded [${discNames.join(", ")}]` : ""}!`;
       addLog(`[${cardName || "Insect's Instinct"}]: ${fullMsg}`);
       if (state.lastSkillCardUsed && state.lastSkillCardUsed.cardName === (cardName || "Insect's Instinct")) {
         state.lastSkillCardUsed.outcomeText = fullMsg;
@@ -8199,17 +8199,17 @@
           viaId
         );
         const landTile = TILE_MAP[preview.landingTileId] || { name: preview.landingTileId };
-        const extra = preview.hitNextBranch ? ` · Belokan lagi (sisa ${preview.stepsLeftAtNextBranch})` : "";
+        const extra = preview.hitNextBranch ? ` · Another branch (${preview.stepsLeftAtNextBranch} left)` : "";
         banner.innerHTML = `
-          <span class="step-count-badge">Sisa ${pendingInteraction.stepsRemaining} Langkah</span>
+          <span class="step-count-badge">${pendingInteraction.stepsRemaining} ${pendingInteraction.stepsRemaining === 1 ? "Step" : "Steps"} Left</span>
           <span>Preview: <strong>${escapeHtml(landTile.name)} (${preview.landingTileId})</strong>${extra}: ${
-            touchOnly ? "Ketuk lagi tile ini untuk jalan" : "Klik tile untuk belok"
+            touchOnly ? "Tap this tile again to move" : "Click tile to turn"
           }</span>`;
       } else {
         banner.innerHTML = `
-          <span class="step-count-badge">Sisa ${pendingInteraction.stepsRemaining} Langkah</span>
-          <span>Pilih belokan langsung pada tile bercahaya (${
-            touchOnly ? "ketuk untuk preview" : "arahkan untuk preview, klik untuk belok"
+          <span class="step-count-badge">${pendingInteraction.stepsRemaining} ${pendingInteraction.stepsRemaining === 1 ? "Step" : "Steps"} Left</span>
+          <span>Choose a path directly on a glowing tile (${
+            touchOnly ? "tap to preview" : "hover to preview, click to turn"
           })</span>`;
       }
       return;
@@ -8219,7 +8219,7 @@
       banner.classList.add("visible", "branch-mode");
       banner.innerHTML = `
         <span class="step-count-badge">The Stage Is Mine</span>
-        <span>Mendarat di Normal Tile: Klik tile <strong>+1 / +2 / -1</strong> bercahaya di peta untuk berpindah &amp; aktifkan efek, atau Skip</span>`;
+        <span>Landed on Normal Tile: Click a glowing <strong>+1 / +2 / -1</strong> tile on the map to move &amp; trigger its effect, or Skip</span>`;
       return;
     }
 
@@ -8227,8 +8227,8 @@
       banner.classList.add("visible");
       banner.classList.remove("branch-mode");
       banner.innerHTML = `
-        <span class="step-count-badge">Sisa ${activeStepsRemaining} Langkah</span>
-        <span>${escapeHtml(getActivePlayer().name)} sedang berjalan...</span>`;
+        <span class="step-count-badge">${activeStepsRemaining} ${activeStepsRemaining === 1 ? "Step" : "Steps"} Left</span>
+        <span>${escapeHtml(getActivePlayer().name)} is moving...</span>`;
       return;
     }
 
@@ -8249,15 +8249,15 @@
       if (pas.expiresOnCycleEnd) {
         const totalR = (state.rules && state.rules.turnsPerCycle) || 4;
         const roundsLeft = Math.max(1, totalR - (state.roundInCycle || 1) + 1);
-        return `Sisa ${roundsLeft} Ronde`;
+        return `${roundsLeft} ${roundsLeft === 1 ? "Round" : "Rounds"} Left`;
       }
       if (typeof pas.remainingTurns === "number") {
         const playersCnt = Math.max(1, state.players.length || 4);
         return pas.remainingTurns === 1
-          ? "Sisa 1 Turn"
-          : `Sisa ${Math.max(1, Math.ceil(pas.remainingTurns / playersCnt))} Ronde`;
+          ? "1 Turn Left"
+          : `${Math.max(1, Math.ceil(pas.remainingTurns / playersCnt))} Rounds Left`;
       }
-      return "Aktif";
+      return "Active";
     };
 
     if (isActive) {
@@ -8269,7 +8269,7 @@
         title: primary.name || (matchDef ? matchDef.name : "Passive"),
         statusLabel: `ON · ${formatDur(primary)}`,
         extraLabel: activePassives.length > 1 ? extraList : "",
-        description: matchDef ? matchDef.description : "Efek passive karakter sedang aktif."
+        description: matchDef ? matchDef.description : "Character passive effect is currently active."
       };
     }
 
@@ -8279,7 +8279,7 @@
       title: baseDef ? baseDef.name : "Character Passive",
       statusLabel: "OFF",
       extraLabel: "",
-      description: baseDef ? baseDef.description : "Aktifkan kartu Unique / Passive karakter untuk menyalakan indikator ini."
+      description: baseDef ? baseDef.description : "Activate this character's Unique / Passive card to turn this indicator on."
     };
   }
 
@@ -8382,7 +8382,7 @@
         : "";
 
       return `
-      <div class="player-hud-card ${isTurn ? "is-active" : ""}" data-player-idx="${idx}" style="--p-color:${pColor};--p-rgb:${pRgb};" onclick="window.EFT_APP.focusCameraOnPlayer(${idx})" title="${escapeHtml(p.name)}${isAdminUnlocked ? " (Klik fokus, klik kanan edit)" : ""}"${rightClickAttr}>
+      <div class="player-hud-card ${isTurn ? "is-active" : ""}" data-player-idx="${idx}" style="--p-color:${pColor};--p-rgb:${pRgb};" onclick="window.EFT_APP.focusCameraOnPlayer(${idx})" title="${escapeHtml(p.name)}${isAdminUnlocked ? " (Click to focus, right-click to edit)" : ""}"${rightClickAttr}>
         <div class="ph-card-clip">
           <div class="ph-hit-flash" aria-hidden="true"></div>
           <div class="ph-portrait-col">${portraitHtml}</div>
@@ -8562,7 +8562,7 @@
 
   function buildTileInnerHtml(t, activeToken = null) {
     if (t.type === "intersect") {
-      return `<div class="lgr-split-hub" title="Belokan Split (tidak terhitung langkah)">${buildSplitHubSvg(t)}</div>`;
+      return `<div class="lgr-split-hub" title="Split Junction (does not cost a step)">${buildSplitHubSvg(t)}</div>`;
     }
     if (activeToken && t.type === "normal") {
       const tm = getTrapTileMeta(activeToken);
@@ -8640,7 +8640,7 @@
     const arrowsHtml = angles
       .map((deg) => `<span class="chibi-dir-arrow" style="transform:rotate(${deg}deg);">${arrowSvg}</span>`)
       .join("");
-    return `<div class="chibi-dir-indicator ${isRev ? "is-reverse" : ""}" title="${isRev ? "Arah gerak MUNDUR (Mind Deviation)" : "Arah gerak langkah dadu berikutnya"}">${arrowsHtml}${isRev ? `<span class="chibi-dir-rev-tag">REV</span>` : ""}</div>`;
+    return `<div class="chibi-dir-indicator ${isRev ? "is-reverse" : ""}" title="${isRev ? "Moving BACKWARD (Mind Deviation)" : "Next dice movement direction"}">${arrowsHtml}${isRev ? `<span class="chibi-dir-rev-tag">REV</span>` : ""}</div>`;
   }
 
   function buildStaticBoardRoadsSvg() {
@@ -8808,7 +8808,7 @@
       el.removeAttribute("data-preview-step");
       el.removeAttribute("data-preview-tag");
       if (el.classList.contains("branch-option")) {
-        el.setAttribute("data-branch-tag", "BELOK");
+        el.setAttribute("data-branch-tag", "TURN");
       }
     });
 
@@ -8822,7 +8822,7 @@
     const hovEl = tilesLayer.querySelector(`[data-tile-id="${hoveredBranchTileId}"]`);
     if (hovEl) {
       hovEl.classList.add("branch-hovered");
-      if (touchOnly) hovEl.setAttribute("data-branch-tag", "KLIK LAGI");
+      if (touchOnly) hovEl.setAttribute("data-branch-tag", "TAP AGAIN");
     }
 
     const viaId =
@@ -8837,7 +8837,7 @@
       viaId
     );
     if (preview.path.length === 1 && hovEl) {
-      hovEl.setAttribute("data-branch-tag", touchOnly ? "KLIK LAGI" : preview.hitNextBranch ? "BELOKAN" : "TUJUAN");
+      hovEl.setAttribute("data-branch-tag", touchOnly ? "TAP AGAIN" : preview.hitNextBranch ? "BRANCH" : "LANDING");
       return;
     }
 
@@ -8850,7 +8850,7 @@
         el.setAttribute("data-preview-step", String(i + 1));
       } else {
         el.classList.add("branch-preview-landing");
-        el.setAttribute("data-preview-tag", preview.hitNextBranch ? "BELOKAN" : "TUJUAN");
+        el.setAttribute("data-preview-tag", preview.hitNextBranch ? "BRANCH" : "LANDING");
       }
     }
   }
@@ -8860,88 +8860,88 @@
       title: "Tile +10 Tartarus Coin",
       badge: "+10 TC",
       accent: "#10b981",
-      effect: "Pemain yang berhenti tepat di tile ini memperoleh +10 Tartarus Coin (💰 TC) dari bank."
+      effect: "A player who lands directly on this tile gains +10 Tartarus Coins (💰 TC) from the bank."
     },
     tc_minus5: {
       title: "Tile -5 Tartarus Coin",
       badge: "-5 TC",
       accent: "#e11d48",
-      effect: "Pemain yang berhenti tepat di tile ini kehilangan 5 Tartarus Coin (💰 TC) ke bank."
+      effect: "A player who lands directly on this tile loses 5 Tartarus Coins (💰 TC) to the bank."
     },
     card_plus1: {
       title: "Tile +1 Skill Card",
       badge: "+1 Card",
       accent: "#0284c7",
-      effect: "Pemain yang berhenti tepat di tile ini menarik +1 Skill Card dari deck pribadinya (maksimal sesuai Hand Limit)."
+      effect: "A player who lands directly on this tile draws +1 Skill Card from their personal deck (up to the Hand Limit)."
     },
     card_minus1: {
       title: "Tile -1 Skill Card",
       badge: "-1 Card",
       accent: "#eab308",
-      effect: "Pemain yang berhenti tepat di tile ini harus membuang 1 kartu secara acak dari tangannya."
+      effect: "A player who lands directly on this tile must discard 1 random card from their hand."
     },
     pos_effect: {
       title: "Positive Effect Tile",
       badge: "Positive Deck",
       accent: "#34d399",
-      effect: "Menarik 1 Positive Effect Card secara acak (+10 TC, +15 TC, +1 Dice Next Turn, Draw 1 Card, atau Draw 2 Cards)."
+      effect: "Draws 1 random Positive Effect Card (+10 TC, +15 TC, +1 Die Next Turn, Draw 1 Card, or Draw 2 Cards)."
     },
     neg_effect: {
       title: "Negative Effect Tile",
       badge: "Negative Deck",
       accent: "#fb7185",
-      effect: "Menarik 1 Negative Effect Card secara acak (-5 TC, -10 TC, Discard 1 Card, Discard 2 Cards, atau -1 Dice Next Turn)."
+      effect: "Draws 1 random Negative Effect Card (-5 TC, -10 TC, Discard 1 Card, Discard 2 Cards, or -1 Die Next Turn)."
     },
     event: {
       title: "Global Event Tile",
       badge: "Global Event",
       accent: "#d946ef",
-      effect: "Mengambil 1 Global Event Card acak yang efeknya langsung berlaku ke seluruh pemain di arena."
+      effect: "Draws 1 random Global Event Card whose effect immediately applies to all players in the arena."
     },
     versus: {
       title: "Versus Duel Tile",
       badge: "1v1 Versus",
       accent: "#f97316",
-      effect: "Menantang salah satu lawan untuk duel dadu 1v1 dengan taruhan TC. Pemenang merebut taruhan tersebut."
+      effect: "Challenges an opponent to a 1v1 dice duel for a TC wager. The winner claims the pot."
     },
     trading: {
       title: "Trading Post",
       badge: "Trade",
       accent: "#84cc16",
-      effect: "Membuka barter dengan pemain lain: beli 1 kartu acak (💰 15 TC), jual 1 kartu (💰 15 TC), atau tukar 1 kartu acak."
+      effect: "Opens a trade with another player: buy 1 random card (💰 15 TC), sell 1 card (💰 15 TC), or swap 1 random card."
     },
     merchant: {
       title: "Merchant Shop",
       badge: "Shop",
       accent: "#f59e0b",
-      effect: "Berada di sisi jalur/belokan (tidak mengurangi langkah dadu). Saat melewati jalur yang ditunjuk panah Shop dengan 💰 >= 15 TC, pemain ditawarkan opsi membuka Merchant Shop."
+      effect: "Located beside the path (does not consume movement steps). Passing the arrowed Shop lane with 💰 >= 15 TC lets you open the Merchant Shop."
     },
     warp: {
       title: "Warp Teleporter",
       badge: "Warp",
       accent: "#60a5fa",
-      effect: "Saat berhenti tepat di tile ini, pemain langsung berpindah secara instan ke Warp Tile pasangannya di sisi lain peta."
+      effect: "Landing directly on this tile instantly warps you to its paired Warp Tile on the other side of the map."
     },
     river_top: {
-      title: "River Shortcut (Masuk)",
+      title: "River Shortcut (Entry)",
       badge: "River",
       accent: "#38bdf8",
-      effect: "Saat melewati tile ini dengan sisa langkah (> 0), pemain dapat membayar 💰 15 TC untuk menyeberang langsung ke River Exit."
+      effect: "Passing this tile with remaining steps (> 0) lets you pay 💰 15 TC to cross directly to the River Exit."
     },
     river_bottom: {
-      title: "River Shortcut (Keluar)",
+      title: "River Shortcut (Exit)",
       badge: "River Exit",
       accent: "#38bdf8",
-      effect: "Titik keluar penyeberangan Sungai Tartarus setelah memakai River Shortcut."
+      effect: "Exit landing point across the River Tartarus after taking the River Shortcut."
     }
   };
 
   const TOKEN_EFFECT_DESCRIPTIONS = {
-    virus_trap: "Punishing Virus (Trap): Lawan yang melewati atau mendarat di tile ini akan kehilangan 1 dadu pada roll dadu berikutnya.",
-    herb_tile: "Medicinal Herbs: Pemain yang melewati atau mendarat di sini langsung mendapat +10 💰 TC.",
-    restricted_zone: "Restricted Zone: Lawan yang mendarat di tile ini harus membayar 20 💰 TC kepada pemilik token.",
-    fire_tile: "Deathstar Fire: Pemain yang mendarat di sini kehilangan 15 💰 TC dan roll berikutnya maksimal 6 langkah.",
-    safe_zone: "Safe Zone (Oak Cake Break): Pemain yang berada di tile ini tidak dapat ditarget oleh efek kartu lawan."
+    virus_trap: "Punishing Virus (Trap): Opponents passing or landing on this tile lose 1 die on their next dice roll.",
+    herb_tile: "Medicinal Herbs: Players passing or landing here immediately gain +10 💰 TC.",
+    restricted_zone: "Restricted Zone: Opponents landing on this tile must pay 20 💰 TC to the token owner.",
+    fire_tile: "Deathstar Fire: Players landing here lose 15 💰 TC and their next roll is capped at 6 steps.",
+    safe_zone: "Safe Zone (Oak Cake Break): Players on this tile cannot be targeted by opponent card effects."
   };
 
   function renderDigitalBoard() {
@@ -9042,13 +9042,13 @@
           tip = tip ? `${tip} | ${tDesc}` : tDesc;
         }
         if (hasShard) {
-          const sTip = "Tartarus Shard aktif di tile ini (lewati dengan >= 100 TC untuk membeli).";
+          const sTip = "Tartarus Shard is active here (pass with >= 100 TC to purchase).";
           tip = tip ? `${tip} | ${sTip}` : sTip;
         }
 
         if (candidateSet.has(t.id)) {
           classes.push("branch-option");
-          branchTagAttr = ` data-branch-tag="BELOK"`;
+          branchTagAttr = ` data-branch-tag="TURN"`;
           const viaId =
             pendingInteraction.candidateViaMap && pendingInteraction.candidateViaMap[t.id]
               ? pendingInteraction.candidateViaMap[t.id]
@@ -9061,7 +9061,7 @@
             viaId
           );
           const landTile = TILE_MAP[prev.landingTileId];
-          tip = `Belok ke jalur ini -> Perkiraan berhenti di ${landTile ? landTile.name : prev.landingTileId}`;
+          tip = `Turn onto this path -> Estimated landing: ${landTile ? landTile.name : prev.landingTileId}`;
         }
         if (radiusSet.has(t.id)) classes.push("in-radius");
         if (localCanAct && pendingInteraction && pendingInteraction.type === "select_sam_fire_2" && pendingInteraction.firstTileId === t.id) {
@@ -9209,7 +9209,7 @@
     const drawCountEl = document.getElementById("draw-pile-count");
     if (drawCountEl && player) {
       const rem = (player.deck || []).length;
-      drawCountEl.textContent = `${rem} Kartu`;
+      drawCountEl.textContent = `${rem} ${rem === 1 ? "Card" : "Cards"}`;
     }
 
     const rollBtn = document.getElementById("btn-roll-dice");
@@ -9250,7 +9250,7 @@
     if (readoutEl) {
       if (state.lastDiceRoll && state.lastDiceRoll.length > 0) {
         const dirSign = state.lastDiceTotal < 0 ? "-" : "";
-        readoutEl.textContent = `Dadu: [${state.lastDiceRoll.join(" + ")}] (${dirSign}${Math.abs(state.lastDiceTotal)} langkah)`;
+        readoutEl.textContent = `Dice: [${state.lastDiceRoll.join(" + ")}] (${dirSign}${Math.abs(state.lastDiceTotal)} steps)`;
         readoutEl.classList.add("visible");
       } else {
         readoutEl.textContent = "";
@@ -9362,10 +9362,10 @@
     const bodyHtml =
       sortedEntries.length === 0
         ? `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:0.86rem;">
-             Draw Pile kosong. Semua kartu sudah berada di tangan atau discard pile hingga reshuffle Cycle berikutnya.
+             Draw Pile is empty. All cards are currently in hand or discard until the next Cycle reshuffle.
            </div>`
         : `<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:10px;">
-             Sisa <strong>${deck.length} kartu</strong> di Draw Pile milik <strong>${escapeHtml(player.name)}</strong> (diurutkan berdasarkan rarity, bukan urutan tarik acak):
+             <strong>${deck.length} card(s)</strong> remaining in <strong>${escapeHtml(player.name)}'s</strong> Draw Pile (sorted by rarity, not draw order):
            </div>
            <div class="draw-pile-grid">
              ${sortedEntries
@@ -9382,7 +9382,7 @@
                .join("")}
            </div>`;
 
-    openInfoModal(`Draw Pile: ${escapeHtml(player.name)} (${deck.length} Kartu)`, bodyHtml);
+    openInfoModal(`Draw Pile: ${escapeHtml(player.name)} (${deck.length} Cards)`, bodyHtml);
   }
 
   function renderPromptBar() {
@@ -9397,20 +9397,20 @@
       if (tm.type === "versus") {
         bar.innerHTML = isActor
           ? `
-          <div><strong>Versus Duel Aktif (${escapeHtml(actor.name)}):</strong> Pilih lawan &amp; jumlah taruhan TC</div>
+          <div><strong>Versus Duel Active (${escapeHtml(actor.name)}):</strong> Choose an opponent &amp; TC wager</div>
           <div style="display:flex;gap:6px;">
-            <button class="btn btn-gold btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Buka Pop-Up Versus</button>
+            <button class="btn btn-gold btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Open Versus Pop-Up</button>
           </div>`
-          : `<div><strong>Versus Duel (${escapeHtml(actor.name)}):</strong> Menunggu ${escapeHtml(actor.name)} memilih lawan duel...</div>`;
+          : `<div><strong>Versus Duel (${escapeHtml(actor.name)}):</strong> Waiting for ${escapeHtml(actor.name)} to choose an opponent...</div>`;
       } else {
         bar.innerHTML = isActor
           ? `
-          <div><strong>Trading Post Aktif (${escapeHtml(actor.name)}):</strong> Pilih partner &amp; jenis barter kartu</div>
+          <div><strong>Trading Post Active (${escapeHtml(actor.name)}):</strong> Choose a partner &amp; trade option</div>
           <div style="display:flex;gap:6px;">
-            <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Buka Pop-Up Trade</button>
-            <button class="btn btn-sm" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati Trade</button>
+            <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Open Trade Pop-Up</button>
+            <button class="btn btn-sm" onclick="window.EFT_APP.dismissSharedTileModal()">Skip Trade</button>
           </div>`
-          : `<div><strong>Trading Post (${escapeHtml(actor.name)}):</strong> Menunggu ${escapeHtml(actor.name)} menentukan transaksi barter...</div>`;
+          : `<div><strong>Trading Post (${escapeHtml(actor.name)}):</strong> Waiting for ${escapeHtml(actor.name)} to complete a trade...</div>`;
       }
       return;
     }
@@ -9432,7 +9432,7 @@
         pendingInteraction.player && pendingInteraction.player.name
           ? pendingInteraction.player.name
           : getActivePlayer().name;
-      bar.innerHTML = `<div>Menunggu <strong>${escapeHtml(actorName)}</strong> menentukan pilihan...</div>`;
+      bar.innerHTML = `<div>Waiting for <strong>${escapeHtml(actorName)}</strong> to decide...</div>`;
       return;
     }
 
@@ -9471,10 +9471,10 @@
         pendingInteraction.card.effectKey === "pull_all_players" &&
         pendingInteraction.validTileIds.includes(pendingInteraction.player.tileId);
       const selfPullBtn = isBocchiPull
-        ? `<button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.onTileClicked('${pendingInteraction.player.tileId}')">Tarik ke Tile Bocchi</button>`
+        ? `<button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.onTileClicked('${pendingInteraction.player.tileId}')">Pull to Bocchi's Tile</button>`
         : "";
       bar.innerHTML = `
-        <div><strong>Pilih Tile Tujuan di Peta</strong> (${escapeHtml(mover.name)} · <strong>${escapeHtml(pendingInteraction.card.name)}</strong>)</div>
+        <div><strong>Select Target Tile on Map</strong> (${escapeHtml(mover.name)} · <strong>${escapeHtml(pendingInteraction.card.name)}</strong>)</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
           ${selfPullBtn}
           ${changeBtn}
@@ -9482,35 +9482,35 @@
         </div>`;
     } else if (pendingInteraction.type === "select_sam_fire_1") {
       bar.innerHTML = `
-        <div><strong>Deathstar Destruction (Tile 1/2):</strong> Pilih <strong>tile pertama</strong> bebas di peta untuk dibakar</div>
+        <div><strong>Deathstar Destruction (Tile 1/2):</strong> Pick the <strong>first tile</strong> anywhere on the map to ignite</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
         </div>`;
     } else if (pendingInteraction.type === "select_sam_fire_2") {
       bar.innerHTML = `
-        <div><strong>Deathstar Destruction (Tile 2/2):</strong> Tile 1 (<strong>${escapeHtml(pendingInteraction.firstTileId || "")}</strong>) dipilih · Pilih <strong>tile kedua</strong> bebas di peta</div>
+        <div><strong>Deathstar Destruction (Tile 2/2):</strong> Tile 1 (<strong>${escapeHtml(pendingInteraction.firstTileId || "")}</strong>) selected · Pick the <strong>second tile</strong> anywhere on the map</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
         </div>`;
     } else if (pendingInteraction.type === "select_token_source") {
       bar.innerHTML = `
-        <div><strong>Entrusted Dream (Langkah 1/2):</strong> Pilih tile yang memiliki <strong>Token / Trap</strong> di peta untuk dipindahkan</div>
+        <div><strong>Entrusted Dream (Step 1/2):</strong> Select a tile with an active <strong>Token / Trap</strong> to relocate</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
         </div>`;
     } else if (pendingInteraction.type === "select_token_dest") {
       bar.innerHTML = `
-        <div><strong>Entrusted Dream (Langkah 2/2):</strong> Pilih tile tujuan bebas untuk memindahkan <strong>${escapeHtml(pendingInteraction.tokenName || "Token")}</strong> &amp; aktifkan efeknya</div>
+        <div><strong>Entrusted Dream (Step 2/2):</strong> Pick any destination tile to relocate <strong>${escapeHtml(pendingInteraction.tokenName || "Token")}</strong> &amp; trigger its effect</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
         </div>`;
     } else if (pendingInteraction.type === "haste_reaction") {
       const def = pendingInteraction.player || getActivePlayer();
       bar.innerHTML = `
-        <div><strong>Jendela Reaksi [Haste] (${escapeHtml(def.name)}):</strong> Respon kartu <strong>${escapeHtml(pendingInteraction.card?.name || "Skill")}</strong> di luar giliran!</div>
+        <div><strong>[Haste] Reaction Window (${escapeHtml(def.name)}):</strong> Respond to <strong>${escapeHtml(pendingInteraction.card?.name || "Skill")}</strong> out of turn!</div>
         <div style="display:flex;gap:6px;">
-          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openHasteReactionModal()">Buka Pilihan Haste</button>
-          <button class="btn btn-sm" onclick="window.EFT_APP.resolveHasteReaction(null)">Lewati</button>
+          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openHasteReactionModal()">Open Haste Options</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.resolveHasteReaction(null)">Skip</button>
         </div>`;
     } else if (pendingInteraction.type === "stage_is_mine") {
       const btns = pendingInteraction.validTileIds
@@ -9521,16 +9521,16 @@
         })
         .join("");
       bar.innerHTML = `
-        <div><strong>The Stage Is Mine (Passive):</strong> Pindah +1 / +2 / -1 dari Normal Tile?</div>
+        <div><strong>The Stage Is Mine (Passive):</strong> Move +1 / +2 / -1 from this Normal Tile?</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
           ${btns}
           <button class="btn btn-sm" onclick="window.EFT_APP.resolveStageIsMineChoice(null)">Tetap di Sini</button>
         </div>`;
     } else if (pendingInteraction.type === "scry_2_keep_1") {
       bar.innerHTML = `
-        <div><strong>${escapeHtml(pendingInteraction.cardName || "Insect's Instinct")}:</strong> Pilih 1 dari 2 kartu teratas deck untuk disimpan ke tangan.</div>
+        <div><strong>${escapeHtml(pendingInteraction.cardName || "Insect's Instinct")}:</strong> Choose 1 of the top 2 deck cards to keep in hand.</div>
         <div style="display:flex;gap:6px;">
-          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openScryPickModal()">Pilih Kartu</button>
+          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openScryPickModal()">Pick Card</button>
         </div>`;
     }
   }
@@ -9589,7 +9589,7 @@
           <div class="comp-exp-detail-meta">
             ${
               selectedCard.count
-                ? `Jumlah di Deck: ${selectedCard.count}x`
+                ? `Deck Copies: ${selectedCard.count}x`
                 : `Ultimate Shop: 💰 ${selectedCard.cost || ch.ultCost || 70} TC · [Retain]`
             }
           </div>
@@ -9721,12 +9721,12 @@
       root.innerHTML = `
         <div class="comp-strip-shell">
           <div id="comp-fade-left" class="comp-edge-fade-left is-hidden"></div>
-          <button id="comp-arrow-prev" class="comp-nav-arrow prev is-hidden" onclick="window.EFT_APP.scrollCompendiumStrip(-1)" aria-label="Karakter Sebelumnya">&lt;</button>
+          <button id="comp-arrow-prev" class="comp-nav-arrow prev is-hidden" onclick="window.EFT_APP.scrollCompendiumStrip(-1)" aria-label="Previous Character">&lt;</button>
           <div id="comp-strip-track" class="comp-strip-track" onscroll="window.EFT_APP.updateCompendiumScrollControls()">
             ${stripCardsHtml}
           </div>
           <div id="comp-fade-right" class="comp-edge-fade-right"></div>
-          <button id="comp-arrow-next" class="comp-nav-arrow next" onclick="window.EFT_APP.scrollCompendiumStrip(1)" aria-label="Karakter Berikutnya">&gt;</button>
+          <button id="comp-arrow-next" class="comp-nav-arrow next" onclick="window.EFT_APP.scrollCompendiumStrip(1)" aria-label="Next Character">&gt;</button>
         </div>`;
 
       requestAnimationFrame(() => updateCompendiumScrollControls());
@@ -9769,7 +9769,7 @@
     const samGalleryHtml =
       samModeCards.length > 0
         ? `<div class="comp-exp-sam-section">
-             <div class="comp-exp-cards-label" style="margin-bottom:8px;">Mode SAM: Skill Cards &amp; Transformation</div>
+             <div class="comp-exp-cards-label" style="margin-bottom:8px;">SAM Mode: Skill Cards &amp; Transformation</div>
              <div class="comp-exp-cards-row">
                ${renderGalleryRow(samModeCards)}
              </div>
@@ -9777,7 +9777,7 @@
         : "";
     const devDisclaimerHtml = ch.underDevelopment
       ? `<div class="comp-dev-disclaimer"><strong>Disclaimer (Under Development):</strong> ${escapeHtml(
-          ch.devDisclaimer || "Karakter ini masih dalam tahap pengembangan; efek kartu dan keseimbangan dapat berubah sewaktu-waktu."
+          ch.devDisclaimer || "This character is still under development; card effects and balance may change at any time."
         )}</div>`
       : "";
 
@@ -9786,7 +9786,7 @@
     root.innerHTML = `
       <div class="comp-expanded-panel" style="--char-accent:${escapeHtml(ch.color || "#34d399")};--char-rgb:${escapeHtml(rgb)};">
         <div class="comp-exp-portrait-col">
-          <button class="comp-exp-back-btn" onclick="window.EFT_APP.selectCompendiumCharacter(null)">&lt; Kembali</button>
+          <button class="comp-exp-back-btn" onclick="window.EFT_APP.selectCompendiumCharacter(null)">&lt; Back</button>
           ${
             cp && cp.src
               ? `<img class="comp-exp-portrait-img" src="${cp.src}" alt="${escapeHtml(ch.name)}" style="object-position:${escapeHtml(cp.objectPosition || "48% 12%")};" />`
@@ -9814,7 +9814,7 @@
           ${devDisclaimerHtml}
 
           <div class="comp-exp-specialty-box">
-            <div class="comp-exp-spec-label">Spesialis Karakter</div>
+            <div class="comp-exp-spec-label">Character Specialty</div>
             <div class="comp-exp-spec-val">${escapeHtml(ch.specialty)}</div>
           </div>
 
@@ -9822,8 +9822,8 @@
 
           <div>
             <div class="comp-exp-cards-label" style="margin-bottom:8px;">${
-              samModeCards.length > 0 ? "Mode Firefly: Skill Cards &amp; Ultimate" : "Skill Cards &amp; Ultimate"
-            } (Klik kartu untuk detail)</div>
+              samModeCards.length > 0 ? "Firefly Mode: Skill Cards &amp; Ultimate" : "Skill Cards &amp; Ultimate"
+            } (Click a card for details)</div>
             <div class="comp-exp-cards-row">
               ${cardsGalleryHtml}
             </div>
@@ -9999,7 +9999,7 @@
   function createLobbyRoom() {
     const uname = (setupDraft.username || "").trim();
     if (!uname) {
-      alert("Masukkan Username kamu terlebih dahulu sebelum membuat Room.");
+      alert("Please enter your Username before creating a Room.");
       return;
     }
     savePlayerProfile(uname, setupDraft.charId);
@@ -10009,13 +10009,13 @@
   function joinLobbyRoom() {
     const uname = (setupDraft.username || "").trim();
     if (!uname) {
-      alert("Masukkan Username kamu terlebih dahulu sebelum bergabung.");
+      alert("Please enter your Username before joining a Room.");
       return;
     }
     const codeInput = document.getElementById("setup-join-code");
     const code = ((codeInput && codeInput.value) || mp.roomCode || "").trim().toUpperCase();
     if (!code) {
-      alert("Masukkan Kode Room terlebih dahulu.");
+      alert("Please enter a Room Code first.");
       return;
     }
     mp.roomCode = code;
@@ -10073,7 +10073,7 @@
     }
 
     if (roster.length < 2) {
-      alert("Minimal 2 pemain (atau aktifkan opsi Bot) untuk memulai game.");
+      alert("At least 2 players (or enable AI Fill In) are required to start the match.");
       return;
     }
 
@@ -10093,7 +10093,7 @@
 
   function startFirebaseHostRoom() {
     if (!window.EFT_IS_FIREBASE_READY()) {
-      alert("Firebase belum dikonfigurasi.\n\nIsi firebaseConfig di playtest/firebaseConfig.js terlebih dahulu.");
+      alert("Firebase is not configured.\n\nPlease fill in firebaseConfig in playtest/firebaseConfig.js first.");
       return;
     }
     const code = "EFT" + Math.floor(100 + Math.random() * 900);
@@ -10147,22 +10147,22 @@
           mp.mode = "local";
           mp.roomCode = "";
           mp.lobby.status = "idle";
-          alert("Gagal menulis ke Firebase Database: " + err.message);
+          alert("Failed to write to Firebase Database: " + err.message);
         });
     } catch (e) {
-      alert("Gagal memulai Firebase Host: " + e.message);
+      alert("Failed to start Firebase Host: " + e.message);
     }
   }
 
   function joinFirebaseClientRoom(forcedCode = null) {
     if (!window.EFT_IS_FIREBASE_READY()) {
-      alert("Firebase belum dikonfigurasi di playtest/firebaseConfig.js.");
+      alert("Firebase is not configured in playtest/firebaseConfig.js.");
       return;
     }
     const codeEl = document.getElementById("setup-join-code");
     const code = (forcedCode || (codeEl && codeEl.value) || "").trim().toUpperCase();
     if (!code) {
-      alert("Masukkan Kode Room dari Host terlebih dahulu.");
+      alert("Please enter the Host's Room Code first.");
       return;
     }
 
@@ -10176,7 +10176,7 @@
         .then((snap) => {
           const data = snap.val();
           if (!data || (!data.stateJson && !data.lobbyJson)) {
-            alert(`Room [${code}] tidak ditemukan.`);
+            alert(`Room [${code}] was not found.`);
             return;
           }
 
@@ -10249,10 +10249,10 @@
           }
         })
         .catch((err) => {
-          alert("Gagal bergabung ke Firebase Room: " + err.message);
+          alert("Failed to join Firebase Room: " + err.message);
         });
     } catch (e) {
-      alert("Error bergabung ke Firebase: " + e.message);
+      alert("Error joining Firebase Room: " + e.message);
     }
   }
 
@@ -10359,7 +10359,7 @@
       ts: Date.now()
     };
     mp.fbActionsRef.push(msg).catch((err) => {
-      alert("Gagal mengirim aksi ke Firebase: " + err.message);
+      alert("Failed to send action to Firebase: " + err.message);
     });
   }
 
@@ -10440,7 +10440,7 @@
   function buyShopItem(shopId, itemType, closeAfter = false) {
     if (!canLocalPlayerAct() && !isAdminUnlocked) return;
     if (pendingInteraction && pendingInteraction.type === "prompt_merchant_pass" && pendingInteraction.shopId !== shopId && !isAdminUnlocked) {
-      alert(`Kamu sedang berada di Shop ${pendingInteraction.shopId} dan tidak bisa mengakses Shop ${shopId}.`);
+      alert(`You are currently at Shop ${pendingInteraction.shopId} and cannot access Shop ${shopId}.`);
       return;
     }
     if (isRemoteClient()) {
@@ -10464,15 +10464,15 @@
 
     if (itemType === "ultimate") {
       if (ultDef && ultDef.effectKey === "grant_meta_shard" && (player.metaShardBought || player.metaShard >= 1)) {
-        alert("Meta-Shard hanya dapat dibeli 1 kali per game.");
+        alert("Meta-Shard can only be purchased once per match.");
         return;
       }
       if (shop.ultStock <= 0 || pBuys.ult >= 1) {
-        alert("Stok Ultimate Card di Shop ini sudah habis untuk Cycle ini (1/Cycle).");
+        alert("This Shop's Ultimate Card stock is sold out for this Cycle (1/Cycle).");
         return;
       }
       if (player.hand.some((c) => c.rarity === "Ultimate")) {
-        alert("Kamu hanya boleh memegang maksimal 1 Ultimate Card di tangan pada saat yang sama.");
+        alert("You may only hold a maximum of 1 Ultimate Card in hand at a time.");
         return;
       }
       if (player.tc < ultCost) {
@@ -10543,7 +10543,7 @@
           options: { ...(pendingInteraction.options || {}), firstTileId: tileId },
           firstTileId: tileId,
           validTileIds: remainingIds,
-          tileStepLabels: { [tileId]: "API 1" }
+          tileStepLabels: { [tileId]: "FIRE 1" }
         };
         playSfx("click");
         renderAll();
@@ -10630,7 +10630,7 @@
     if (shardOnTile) {
       sections.push(`
         <div style="background:rgba(126,34,206,0.2);border:1px solid rgba(216,180,254,0.45);padding:10px 14px;border-radius:10px;font-size:0.82rem;color:#f3e8ff;">
-          <strong>💎 Tartarus Shard (Zone ${escapeHtml(shardOnTile.roman)}):</strong> Lewati tile ini dengan minimal 💰 ${state.rules.shardCost} TC untuk membeli 1 💎 Tartarus Shard.
+          <strong>💎 Tartarus Shard (Zone ${escapeHtml(shardOnTile.roman)}):</strong> Pass this tile with at least 💰 ${state.rules.shardCost} TC to buy 1 💎 Tartarus Shard.
         </div>`);
     }
 
@@ -10724,7 +10724,7 @@
       if (validPlayers.length === 0) {
         missingValidTarget = true;
         const isRadType = targetCard.targetType === "opponent_in_radius" || targetCard.targetType === "any_player_in_radius";
-        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">Tidak ada target valid (${isRadType ? `pemain di Spawn atau di luar radius ${rad} blok` : "semua lawan masih berada di Spawn"}).</div>`;
+        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">No valid targets (${isRadType ? `players are at Spawn or outside ${rad}-block radius` : "all opponents are still at Spawn"}).</div>`;
       } else {
         controlsHtml += `
           <div class="form-field">
@@ -10733,7 +10733,7 @@
               ${validPlayers
                 .map((vp) => {
                   const charNote = vp.charName && vp.charName !== vp.name ? `${vp.charName} · ` : "";
-                  const selfTag = vp.index === player.index ? " · Diri Sendiri" : "";
+                  const selfTag = vp.index === player.index ? " · Self" : "";
                   return `<option value="${vp.index}">${escapeHtml(vp.name)}${selfTag} (${charNote}${vp.tileId} · ${getTileDistance(
                     player.tileId,
                     vp.tileId
@@ -10750,9 +10750,9 @@
       );
       if (inRange.length === 0) {
         missingValidTarget = true;
-        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">Tidak ada lawan dalam radius ${rad} blok dari posisimu (${player.tileId}).</div>`;
+        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">No opponents within ${rad} blocks of your position (${player.tileId}).</div>`;
       } else {
-        controlsHtml += `<div style="color:#a7f3d0;font-size:0.78rem;">Target dalam radius ${rad} blok: <strong>${inRange
+        controlsHtml += `<div style="color:#a7f3d0;font-size:0.78rem;">Targets within ${rad} blocks: <strong>${inRange
           .map((o) => `${escapeHtml(o.name)} (${getTileDistance(player.tileId, o.tileId)} blok)`)
           .join(", ")}</strong></div>`;
       }
@@ -10762,7 +10762,7 @@
       const gainVal = targetCard.tcGain || (state.compendiumId === "comp_v0_1" ? 5 : 10);
       controlsHtml += `
         <div class="form-field">
-          <label>Pilih Efek:</label>
+          <label>Choose Effect:</label>
           <select id="card-modal-choice-val">
             <option value="tc">Gain +${gainVal} T-Coins</option>
             <option value="draw">Draw +1 Card</option>
@@ -10771,26 +10771,26 @@
     } else if (targetCard.effectKey === "choice_move1_2_or_10tc") {
       controlsHtml += `
         <div class="form-field">
-          <label>Pilih Efek:</label>
+          <label>Choose Effect:</label>
           <select id="card-modal-choice-val">
-            <option value="move">Move +1 / +2 Tiles (Pilih di Peta)</option>
+            <option value="move">Move +1 / +2 Tiles (Pick on Map)</option>
             <option value="tc">Gain +10 T-Coins</option>
           </select>
         </div>`;
     } else if (targetCard.effectKey === "relocate_board_traps") {
       if (!Array.isArray(state.boardTokens) || state.boardTokens.length === 0) {
         missingValidTarget = true;
-        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">Belum ada Token/Trap aktif di papan yang bisa dipindahkan saat ini.</div>`;
+        controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">There are no active Tokens/Traps on the board to relocate right now.</div>`;
       } else {
-        controlsHtml += `<div style="color:#a7f3d0;font-size:0.78rem;">Terdapat <strong>${state.boardTokens.length} Token/Trap</strong> aktif di peta. Klik <strong>Use Card</strong> untuk memilih tile token lalu pindahkan ke tile bebas dan langsung aktifkan efeknya!</div>`;
+        controlsHtml += `<div style="color:#a7f3d0;font-size:0.78rem;"><strong>${state.boardTokens.length} active Token(s)/Trap(s)</strong> on the board. Click <strong>Use Card</strong> to select a token, relocate it anywhere, and trigger its effect!</div>`;
       }
     } else if (targetCard.effectKey === "sam_discounted_versus") {
       controlsHtml += `
         <div class="form-field">
-          <label>Pilih Taruhan Versus (Diskon SAM):</label>
+          <label>Choose Versus Wager (SAM Discount):</label>
           <select id="card-modal-choice-val">
-            <option value="tier1">Tier 1: SAM Gratis (0 TC) vs Lawan 15 TC</option>
-            <option value="tier2">Tier 2: SAM 15 TC vs Lawan 30 TC</option>
+            <option value="tier1">Tier 1: SAM Free (0 TC) vs Opponent 15 TC</option>
+            <option value="tier2">Tier 2: SAM 15 TC vs Opponent 30 TC</option>
           </select>
         </div>`;
     }
@@ -10813,7 +10813,7 @@
     const built = buildSkillControlsForModal(entry.card, player);
     extraBox.innerHTML = `
       <div style="font-size:0.74rem;color:var(--mint-light);margin-bottom:6px;">
-        Efek disalin: ${escapeHtml(entry.card.description)}${entry.card.rarity === "Unique" ? " (Durasi 1 Turn)" : ""}
+        Copied effect: ${escapeHtml(entry.card.description)}${entry.card.rarity === "Unique" ? " (1 Turn Duration)" : ""}
       </div>
       ${built.html}`;
     if (useBtn && useBtn.dataset.baseOk === "1") {
@@ -10831,7 +10831,7 @@
     }
     const imgUrl = getCardImage(card, player.charId);
     const isMyTurn = ownerIdx === state.activePlayerIndex && canLocalPlayerAct();
-    const check = isMyTurn ? canPlaySkillCard(player, card) : { ok: false, reason: "Tunggu giliranmu untuk memakai kartu ini." };
+    const check = isMyTurn ? canPlaySkillCard(player, card) : { ok: false, reason: "Wait for your turn to play this card." };
 
     let controlsHtml = "";
     let missingValidTarget = false;
@@ -10846,25 +10846,25 @@
           (!e.cycle || e.cycle === state.cycle)
       );
       if (pool.length === 0) {
-        controlsHtml = `<div style="font-size:0.78rem;color:var(--mint-light);">Belum ada skill lawan non-Ultimate pada Cycle ${state.cycle}, memakai kartu ini akan memberi +15 TC.</div>`;
+        controlsHtml = `<div style="font-size:0.78rem;color:var(--mint-light);">No non-Ultimate opponent skills played in Cycle ${state.cycle} yet; using this card grants +15 TC instead.</div>`;
       } else {
         const firstBuilt = buildSkillControlsForModal(pool[0].card, player);
         missingValidTarget = firstBuilt.missingTarget;
         controlsHtml = `
           <div class="form-field">
-            <label>Pilih Skill Lawan pada Cycle ${state.cycle} (Non-Ultimate):</label>
+            <label>Select Opponent Skill from Cycle ${state.cycle} (Non-Ultimate):</label>
             <select id="card-modal-copy-skill" onchange="window.EFT_APP.onCopySkillSelectChange(${player.index})">
               ${pool
                 .map(
                   (e) =>
-                    `<option value="${e.id}">${escapeHtml(e.card.name)} oleh ${escapeHtml(e.casterName)} (${escapeHtml(e.card.rarity)})</option>`
+                    `<option value="${e.id}">${escapeHtml(e.card.name)} by ${escapeHtml(e.casterName)} (${escapeHtml(e.card.rarity)})</option>`
                 )
                 .join("")}
             </select>
           </div>
           <div id="card-modal-copy-extra">
             <div style="font-size:0.74rem;color:var(--mint-light);margin-bottom:6px;">
-              Efek disalin: ${escapeHtml(pool[0].card.description)}${pool[0].card.rarity === "Unique" ? " (Durasi 1 Ronde)" : ""}
+              Copied effect: ${escapeHtml(pool[0].card.description)}${pool[0].card.rarity === "Unique" ? " (1 Round Duration)" : ""}
             </div>
             ${firstBuilt.html}
           </div>`;
@@ -10885,8 +10885,8 @@
       emperorTax.owners.length > 0
         ? `<div style="background:rgba(245,158,11,0.14);border:1px solid rgba(251,191,36,0.42);padding:8px 10px;border-radius:8px;color:#fde68a;font-size:0.76rem;line-height:1.4;">
             <strong>The Emperor's Favor (${escapeHtml(emperorTax.owners.map((o) => o.name).join(" & "))}):</strong>
-            Aktivasi kartu ${escapeHtml(card.rarity)} ini meminta pajak <strong>💰 ${emperorTax.totalTax} TC</strong>.
-            ${player.tc < emperorTax.totalTax ? `<span style="color:#fda4af;">(TC kamu 💰 ${player.tc} TC, tidak cukup!)</span>` : ""}
+            Activating this ${escapeHtml(card.rarity)} card requires a tax of <strong>💰 ${emperorTax.totalTax} TC</strong>.
+            ${player.tc < emperorTax.totalTax ? `<span style="color:#fda4af;">(Your TC is 💰 ${player.tc} TC, not enough!)</span>` : ""}
           </div>`
         : "";
 
@@ -10956,7 +10956,7 @@
       (t) => t.type !== "spawn" && t.type !== "intersect" && !t.offTrack
     ).map((t) => t.id);
     if (validTileIds.length < 2) {
-      alert("Tidak cukup tile valid di papan.");
+      alert("Not enough valid tiles on the board.");
       return;
     }
     closeModal();
@@ -10988,7 +10988,7 @@
     });
     const validTileIds = Array.from(validSet);
     if (validTileIds.length === 0) {
-      alert("Belum ada Token/Trap aktif di papan yang bisa dipindahkan.");
+      alert("No active Tokens/Traps on the board to relocate.");
       return;
     }
     closeModal();
@@ -11032,7 +11032,7 @@
     }
 
     if (matches.length === 0) {
-      alert("Tidak ada tile yang sesuai.");
+      alert("No matching tiles available.");
       return;
     }
     closeModal();
@@ -11089,7 +11089,7 @@
 
     const validTileIds = Object.keys(tileStepLabels);
     if (validTileIds.length === 0) {
-      alert(`Tidak ada tile tujuan valid dari posisi ${movingPlayer.name} (${movingPlayer.tileId}).`);
+      alert(`No valid destination tiles from ${movingPlayer.name}'s position (${movingPlayer.tileId}).`);
       return;
     }
 
@@ -11144,9 +11144,9 @@
       ultDef && ultDef.effectKey === "grant_meta_shard" && (player.metaShardBought || player.metaShard >= 1);
     const ultDisabled = metaShardUsed || ultUsedThisCycle || hasUltInHand;
     let ultBtnLabel = `Buy Ultimate (${ultCost} TC)`;
-    if (metaShardUsed) ultBtnLabel = "Sudah Dibeli (Max 1/Game)";
-    else if (ultUsedThisCycle) ultBtnLabel = "Stok Habis (0/1 Cycle Ini)";
-    else if (hasUltInHand) ultBtnLabel = "Sudah Pegang 1 Ultimate di Tangan";
+    if (metaShardUsed) ultBtnLabel = "Already Purchased (Max 1/Match)";
+    else if (ultUsedThisCycle) ultBtnLabel = "Sold Out (0/1 This Cycle)";
+    else if (hasUltInHand) ultBtnLabel = "Already Holding 1 Ultimate";
 
     openInfoModal(
       `Merchant Shop ${shopId} (${player.name}: 💰 ${player.tc} TC)`,
@@ -11154,7 +11154,7 @@
         <div style="font-size:0.76rem;color:var(--mint-light);background:rgba(245,158,11,0.12);border:1px solid rgba(251,191,36,0.36);border-radius:8px;padding:7px 11px;">
           ${
             state.rules.independentShops
-              ? `Akses khusus <strong>Merchant Shop ${shopId}</strong> (${shopId === 1 ? "Jalur Atas" : "Jalur Bawah"}): Stok terpisah dari Shop ${shopId === 1 ? 2 : 1}.`
+              ? `Exclusive access to <strong>Merchant Shop ${shopId}</strong> (${shopId === 1 ? "Upper Path" : "Lower Path"}): Stock is separate from Shop ${shopId === 1 ? 2 : 1}.`
               : `Rulebook v0.1: Shared Global Merchant Shop Stock`
           }
         </div>
@@ -11223,7 +11223,7 @@
         const nonUltCnt = (p.hand || []).filter((c) => c && c.rarity !== "Ultimate").length;
         const ultCnt = (p.hand || []).filter((c) => c && c.rarity === "Ultimate").length;
         const tagHtml = isAct
-          ? `<span class="tag-badge" style="border-color:var(--mint-light);color:var(--mint-light);">Giliran</span>`
+          ? `<span class="tag-badge" style="border-color:var(--mint-light);color:var(--mint-light);">Turn</span>`
           : p.inSpawn
           ? `<span class="tag-badge" style="opacity:0.75;">Spawn</span>`
           : "";
@@ -11243,7 +11243,7 @@
             <div style="display:flex;align-items:center;gap:10px;font-size:0.78rem;font-weight:700;flex-shrink:0;">
               <span style="color:#fde047;">💰 ${p.tc} TC</span>
               <span style="color:#e9d5ff;">💎 ${totShards}/${state.rules.victoryShards}</span>
-              <span style="color:#cbd5e1;">${nonUltCnt} Kartu${ultCnt > 0 ? ` (+${ultCnt} Ult)` : ""}</span>
+              <span style="color:#cbd5e1;">${nonUltCnt} ${nonUltCnt === 1 ? "Card" : "Cards"}${ultCnt > 0 ? ` (+${ultCnt} Ult)` : ""}</span>
             </div>
           </div>`;
       })
@@ -11252,7 +11252,7 @@
     return `
       <div style="display:flex;flex-direction:column;gap:6px;background:rgba(6,16,20,0.55);border:1px solid var(--border-soft);border-radius:11px;padding:10px;">
         <div style="font-size:0.72rem;font-weight:800;color:var(--mint-light);text-transform:uppercase;letter-spacing:0.4px;">
-          Status Seluruh Pemain (TC · Shards · Kartu)
+          All Players Status (TC · Shards · Cards)
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;">
           ${rows}
@@ -11302,13 +11302,13 @@
     if (tm.status === "resolved") {
       tileModalMinimizedForId = null;
       openInfoModal(
-        tm.type === "versus" ? `Hasil Versus Duel: ${escapeHtml(actor.name)}` : `Hasil Trading Post: ${escapeHtml(actor.name)}`,
+        tm.type === "versus" ? `Versus Duel Result: ${escapeHtml(actor.name)}` : `Trading Post Result: ${escapeHtml(actor.name)}`,
         `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
           <div style="background:rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);border-radius:12px;padding:14px;font-size:0.9rem;color:#ecfdf5;line-height:1.45;text-align:center;">
-            ${escapeHtml(tm.summaryText || "Transaksi selesai.")}
+            ${escapeHtml(tm.summaryText || "Transaction completed.")}
           </div>
           ${statsHtml}
-          <button class="btn btn-emerald" onclick="window.EFT_APP.dismissSharedTileModal()">Lanjut</button>
+          <button class="btn btn-emerald" onclick="window.EFT_APP.dismissSharedTileModal()">Next</button>
         </div>`,
         "shared_tile_modal"
       );
@@ -11329,7 +11329,7 @@
           ${statsHtml}
           <div class="form-grid">
             <div class="form-field">
-              <label>Pilih Lawan Duel:</label>
+              <label>Choose Duel Opponent:</label>
               <select id="versus-opponent-select">
                 ${rivals
                   .map(
@@ -11342,7 +11342,7 @@
               </select>
             </div>
             <div class="form-field">
-              <label>Jumlah Taruhan (1-30 TC):</label>
+              <label>Wager Amount (1-30 TC):</label>
               <input
                 type="number"
                 id="versus-bet-input"
@@ -11351,26 +11351,26 @@
                 step="1"
                 value="15"
                 placeholder="1 - 30 TC"
-                oninput="if(this.value!==''){const v=Math.max(1,Math.min(30,Math.floor(Number(this.value)||1)));const lbl=document.getElementById('versus-pot-preview');if(lbl)lbl.textContent='Total Pot: 💰 '+(v*2)+' TC (Maks 30 TC)';}"
+                oninput="if(this.value!==''){const v=Math.max(1,Math.min(30,Math.floor(Number(this.value)||1)));const lbl=document.getElementById('versus-pot-preview');if(lbl)lbl.textContent='Total Pot: 💰 '+(v*2)+' TC (Max 30 TC)';}"
               />
               <div id="versus-pot-preview" style="font-size:0.72rem;color:var(--mint-light);margin-top:3px;">
-                Total Pot: 💰 30 TC (Maks 30 TC)
+                Total Pot: 💰 30 TC (Max 30 TC)
               </div>
             </div>
           </div>
-          <button class="btn btn-gold" onclick="window.EFT_APP.resolveVersusDuel()">Mulai Duel 1v1</button>
+          <button class="btn btn-gold" onclick="window.EFT_APP.resolveVersusDuel()">Start 1v1 Duel</button>
         </div>`,
         "shared_tile_modal"
       );
     } else if (tm.type === "trading") {
       const others = state.players.filter((p) => p.index !== actor.index);
       openInfoModal(
-        `Trading Post: Barter Kartu (${escapeHtml(actor.name)})`,
+        `Trading Post: Card Trade (${escapeHtml(actor.name)})`,
         `<div style="display:flex;flex-direction:column;gap:12px;">
           ${statsHtml}
           <div class="form-grid">
             <div class="form-field">
-              <label>Pilih Partner Barter:</label>
+              <label>Choose Trade Partner:</label>
               <select id="trade-partner-select">
                 ${others
                   .map((o) => {
@@ -11378,23 +11378,23 @@
                     const totShards = (o.shards || 0) + (o.metaShard || 0);
                     return `<option value="${o.index}">${escapeHtml(o.name)} (💰 ${o.tc} TC · 💎 ${totShards}/${
                       state.rules.victoryShards
-                    } · ${nonUltCnt} Kartu)</option>`;
+                    } · ${nonUltCnt} Cards)</option>`;
                   })
                   .join("")}
               </select>
             </div>
             <div class="form-field">
-              <label>Jenis Transaksi:</label>
+              <label>Trade Action:</label>
               <select id="trade-type-select">
-                <option value="buy_card_15">Beli 1 Kartu Acak (Bayar 💰 15 TC)</option>
-                <option value="sell_card_15">Jual 1 Kartu Acak (Terima 💰 15 TC)</option>
-                <option value="swap_random_card">Tukar 1 Kartu Acak (1:1)</option>
+                <option value="buy_card_15">Buy 1 Random Card (Pay 💰 15 TC)</option>
+                <option value="sell_card_15">Sell 1 Random Card (Receive 💰 15 TC)</option>
+                <option value="swap_random_card">Swap 1 Random Card (1:1)</option>
               </select>
             </div>
           </div>
           <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary" style="flex:1;" onclick="window.EFT_APP.executeTradeAction()">Konfirmasi Trade</button>
-            <button class="btn" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati</button>
+            <button class="btn btn-primary" style="flex:1;" onclick="window.EFT_APP.executeTradeAction()">Confirm Trade</button>
+            <button class="btn" onclick="window.EFT_APP.dismissSharedTileModal()">Skip</button>
           </div>
         </div>`,
         "shared_tile_modal"
@@ -11405,7 +11405,7 @@
   function openVersusModal(challenger) {
     const rivals = state.players.filter((p) => p.index !== challenger.index && !p.inSpawn);
     if (rivals.length === 0) {
-      addLog(`Versus Tile: Tidak ada lawan di luar Spawn untuk ditantang oleh ${challenger.name}.`);
+      addLog(`Versus Tile: No opponents outside Spawn for ${challenger.name} to challenge.`);
       return;
     }
     state.activeTileModal = {
@@ -11429,7 +11429,7 @@
     const oppIdx = forcedOppIdx !== null ? Number(forcedOppIdx) : oppEl ? Number(oppEl.value) : -1;
     const rawBet = forcedBet !== null ? Number(forcedBet) : betEl ? Number(betEl.value) : 15;
     if (!Number.isFinite(rawBet) || rawBet < 1 || rawBet > 30) {
-      alert("Masukkan jumlah taruhan (bet) antara 1 hingga 30 TC.");
+      alert("Please enter a wager between 1 and 30 TC.");
       return;
     }
     const bet = Math.max(1, Math.min(30, Math.floor(rawBet)));
@@ -11454,7 +11454,7 @@
     closeModal();
 
     startRandomMinigame("versus", {
-      reasonTitle: `Versus Tile · Taruhan 💰 ${bet} TC`,
+      reasonTitle: `Versus Tile · Wager 💰 ${bet} TC`,
       afterAction: "versus_wager",
       challengerIndex: challenger.index,
       opponentIndex: opponent.index,
@@ -11504,7 +11504,7 @@
       return idxs[Math.floor(Math.random() * idxs.length)];
     };
 
-    let summaryText = `${trader.name} melewati Trading Post tanpa transaksi.`;
+    let summaryText = `${trader.name} skipped the Trading Post without trading.`;
     const pCardIdx = pickNonUltIdx(partner.hand);
     const tCardIdx = pickNonUltIdx(trader.hand);
 
@@ -11514,9 +11514,9 @@
         partner.tc += 15;
         const bought = partner.hand.splice(pCardIdx, 1)[0];
         trader.hand.push(bought);
-        summaryText = `${trader.name} membeli 1 kartu acak dari ${partner.name} seharga 💰 15 TC!`;
+        summaryText = `${trader.name} bought 1 random card from ${partner.name} for 💰 15 TC!`;
       } else {
-        summaryText = `Trade gagal: TC ${trader.name} kurang dari 15 TC atau ${partner.name} tidak punya kartu non-Ultimate.`;
+        summaryText = `Trade failed: ${trader.name} has less than 15 TC or ${partner.name} has no non-Ultimate cards.`;
       }
     } else if (tradeType === "sell_card_15") {
       if (partner.tc >= 15 && tCardIdx !== -1) {
@@ -11524,9 +11524,9 @@
         trader.tc += 15;
         const sold = trader.hand.splice(tCardIdx, 1)[0];
         partner.hand.push(sold);
-        summaryText = `${trader.name} menjual 1 kartu acak ke ${partner.name} dan menerima 💰 15 TC!`;
+        summaryText = `${trader.name} sold 1 random card to ${partner.name} and received 💰 15 TC!`;
       } else {
-        summaryText = `Trade gagal: TC ${partner.name} kurang dari 15 TC atau ${trader.name} tidak punya kartu non-Ultimate.`;
+        summaryText = `Trade failed: ${partner.name} has less than 15 TC or ${trader.name} has no non-Ultimate cards.`;
       }
     } else if (tradeType === "swap_random_card") {
       if (tCardIdx !== -1 && pCardIdx !== -1) {
@@ -11534,9 +11534,9 @@
         const c2 = partner.hand.splice(pickNonUltIdx(partner.hand), 1)[0];
         trader.hand.push(c2);
         partner.hand.push(c1);
-        summaryText = `${trader.name} menukar 1 kartu acak (1:1) dengan ${partner.name}!`;
+        summaryText = `${trader.name} swapped 1 random card (1:1) with ${partner.name}!`;
       } else {
-        summaryText = `Trade gagal: salah satu pemain tidak memiliki kartu non-Ultimate untuk ditukar.`;
+        summaryText = `Trade failed: one of the players has no non-Ultimate cards to swap.`;
       }
     }
     addLog(`Trading Post: ${summaryText}`);
@@ -11586,11 +11586,11 @@
         "Admin Access",
         `<div style="display:flex;flex-direction:column;gap:12px;">
           <p style="font-size:0.84rem;color:#cbd5e1;line-height:1.45;">
-            Masukkan password Admin untuk membuka fitur editing player, teleport, free skill use, dan +/- card.
+            Enter the Admin password to unlock player editing, teleport, free skill use, and +/- card tools.
           </p>
           <div class="form-field">
-            <label>Password Admin:</label>
-            <input type="password" id="admin-pass-input" placeholder="Masukkan password admin" onkeydown="if(event.key==='Enter')window.EFT_APP.submitAdminPassword()" />
+            <label>Admin Password:</label>
+            <input type="password" id="admin-pass-input" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')window.EFT_APP.submitAdminPassword()" />
           </div>
           <div id="admin-pass-err" style="font-size:0.76rem;color:#fda4af;min-height:16px;"></div>
           <button class="btn btn-gold" onclick="window.EFT_APP.submitAdminPassword()">Unlock Admin</button>
@@ -11607,7 +11607,7 @@
       "Admin Controls (Unlocked)",
       `<div style="display:flex;flex-direction:column;gap:12px;">
         <div style="background:rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);border-radius:10px;padding:10px 12px;font-size:0.82rem;color:#a7f3d0;">
-          Admin Mode aktif. Seluruh fitur editing, Test Tools, +/- Card, dan Free Skill Use tersedia.
+          Admin Mode active. All editing tools, Test Tools, +/- Card, and Free Skill Use are unlocked.
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.3);border:1px solid var(--border-soft);border-radius:8px;padding:9px 12px;font-size:0.82rem;">
           <span>Free Skill Use (Bypass Limit &amp; Phase)</span>
@@ -11635,7 +11635,7 @@
       addLog("Admin Mode unlocked.");
       renderAll();
     } else if (errEl) {
-      errEl.textContent = "Password admin salah.";
+      errEl.textContent = "Incorrect admin password.";
     }
   }
 
@@ -12239,7 +12239,7 @@
               <input id="char-sfx-${c.id}" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('${c.id}', this.checked)" />
               <span>${c.name} <small>${c.tag}</small></span>
             </label>
-            <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('${c.id}')">Tes</button>
+            <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('${c.id}')">Test</button>
           </div>`
       )
       .join("");
@@ -12248,38 +12248,38 @@
       "Sound Settings &amp; Game Feel",
       `<div class="sound-modal-wrap">
         <div class="sound-modal-master-row" id="sound-control-pill">
-          <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Matikan atau aktifkan suara"></button>
+          <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Mute or unmute sound"></button>
           <div class="sound-modal-slider-col">
             <span class="sound-modal-label">Master Sound Effect</span>
-            <input id="sound-volume-slider" class="sound-volume-slider sound-modal-range" type="range" min="0" max="100" value="${pct}" aria-label="Volume Sound Effect" oninput="window.EFT_APP.setSoundVolume(this.value)" />
+            <input id="sound-volume-slider" class="sound-volume-slider sound-modal-range" type="range" min="0" max="100" value="${pct}" aria-label="Sound Effect Volume" oninput="window.EFT_APP.setSoundVolume(this.value)" />
           </div>
           <span id="sound-volume-label" class="sound-volume-label">${pct}%</span>
         </div>
 
         <div class="sound-modal-section">
           <label class="am-toggle-row">
-            <span>Getar Kamera (Screen Shake)</span>
+            <span>Camera Shake (Screen Shake)</span>
             <input id="screen-shake-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleScreenShake(this.checked)" />
           </label>
           <label class="am-toggle-row">
-            <span>Notifikasi Ganti Turn</span>
+            <span>Turn Change Alert</span>
             <span class="am-inline-ctrl">
-              <button type="button" class="am-mini-test-btn" onclick="event.preventDefault();event.stopPropagation();window.EFT_APP.previewTurnChangeSfx()">Tes</button>
+              <button type="button" class="am-mini-test-btn" onclick="event.preventDefault();event.stopPropagation();window.EFT_APP.previewTurnChangeSfx()">Test</button>
               <input id="turn-sfx-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleTurnSfx(this.checked)" />
             </span>
           </label>
           <label class="am-toggle-row">
-            <span>Skill Card SFX Karakter</span>
+            <span>Character Skill Card SFX</span>
             <input id="skill-sfx-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleSkillSfx(this.checked)" />
           </label>
           <div class="am-slider-row">
-            <span>Volume Skill SFX</span>
+            <span>Skill SFX Volume</span>
             <input id="skill-sfx-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="${skillPct}" oninput="window.EFT_APP.setSkillSfxVolume(this.value)" />
             <span id="skill-sfx-volume-label" class="sound-volume-label">${skillPct}%</span>
           </div>
         </div>
 
-        <div class="am-test-label">SFX Skill Per Karakter:</div>
+        <div class="am-test-label">Skill SFX by Character:</div>
         <div class="sound-modal-char-grid">${charRowsHtml}</div>
       </div>`,
       "sound_settings"
@@ -12355,7 +12355,7 @@
         ? `<span class="char-pick-dev-tag">Under Dev</span>`
         : "";
       const roleText = isTaken
-        ? "Dipilih: " + escapeHtml(takenBy)
+        ? "Picked by: " + escapeHtml(takenBy)
         : charBase.underDevelopment
         ? "Under Development"
         : escapeHtml(ch.title);
@@ -12526,7 +12526,7 @@
           <div class="panel-box" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <div>
               <div style="font-size:0.72rem;color:var(--text-muted);">Mode: <strong>${mp.mode.toUpperCase()}</strong></div>
-              <div style="font-size:0.95rem;font-weight:800;color:var(--mint-light);">Kode Room: ${escapeHtml(mp.roomCode)}</div>
+              <div style="font-size:0.95rem;font-weight:800;color:var(--mint-light);">Room Code: ${escapeHtml(mp.roomCode)}</div>
             </div>
             <div style="display:flex;gap:8px;">
               <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.copyInviteLink()">Copy Invite Link</button>
@@ -12535,31 +12535,31 @@
           </div>
 
           <div class="setup-char-box">
-            <div class="setup-char-box-label">Pilih Karakter Kamu (otomatis terkunci jika sudah diambil pemain lain):</div>
+            <div class="setup-char-box-label">Choose Your Character (locked automatically once picked by another player):</div>
             <div class="char-picker-grid">
               ${renderSetupCharPickerGrid(compId, me ? me.charId : setupDraft.charId, takenMap)}
             </div>
             <div class="setup-dev-disclaimer">
-              <strong>Disclaimer (Under Development):</strong> Karakter <strong>Mao-Mao</strong> dan <strong>Firefly / SAM</strong> sudah bisa dimainkan namun masih dalam tahap pengembangan; efek kartu &amp; keseimbangan masih dapat berubah.
+              <strong>Disclaimer (Under Development):</strong> <strong>Mao-Mao</strong> and <strong>Firefly / SAM</strong> are playable but still in active development; card effects &amp; balance are subject to change.
             </div>
           </div>
 
           <div class="panel-box" style="display:flex;flex-direction:column;gap:8px;">
-            <div class="panel-header" style="margin-bottom:4px;">Pemain di Lobby (${mp.lobby.members.length}/4)</div>
+            <div class="panel-header" style="margin-bottom:4px;">Players in Lobby (${mp.lobby.members.length}/4)</div>
             ${rosterHtml}
           </div>
 
           ${
             isHost
-              ? `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;color:#e2e8f0;cursor:pointer;" title="Isi slot kosong secara otomatis dengan AI hingga 4 pemain">
+              ? `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;color:#e2e8f0;cursor:pointer;" title="Automatically fill empty slots with AI bots up to 4 players">
                    <input type="checkbox" ${mp.lobby.fillWithBots ? "checked" : ""} onchange="window.EFT_APP.toggleLobbyFillBots(this.checked)" />
                    AI Fill In
                  </label>
-                 <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">Acak Urutan &amp; Mulai Game</button>`
+                 <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">Shuffle Order &amp; Start Match</button>`
               : `<button class="btn ${me && me.ready ? "btn-gold" : "btn-emerald"} setup-action-btn" onclick="window.EFT_APP.toggleLobbyReady()">${
-                  me && me.ready ? "Batalkan Ready" : "Siap (Ready)"
+                  me && me.ready ? "Cancel Ready" : "Ready"
                 }</button>
-                 <div style="font-size:0.74rem;color:var(--text-muted);text-align:center;">Menunggu Host memulai game &amp; mengacak urutan pemain...</div>`
+                 <div style="font-size:0.74rem;color:var(--text-muted);text-align:center;">Waiting for Host to start the match &amp; shuffle turn order...</div>`
           }
         </div>`,
         "welcome_lobby"
@@ -12583,11 +12583,11 @@
         extraRows += `
           <div class="setup-extra-row-3col">
             <div class="form-field">
-              <label>Pemain ${i + 2} Username (opsional):</label>
-              <input type="text" value="${escapeHtml(ext.username)}" placeholder="${ctrlType === "bot" ? `Bot ${i + 2}` : `Pemain ${i + 2}`}" oninput="window.EFT_APP.updateSetupExtraPlayer(${i}, 'username', this.value)" />
+              <label>Player ${i + 2} Username (optional):</label>
+              <input type="text" value="${escapeHtml(ext.username)}" placeholder="${ctrlType === "bot" ? `Bot ${i + 2}` : `Player ${i + 2}`}" oninput="window.EFT_APP.updateSetupExtraPlayer(${i}, 'username', this.value)" />
             </div>
             <div class="form-field">
-              <label>Karakter Pemain ${i + 2}:</label>
+              <label>Player ${i + 2} Character:</label>
               <select onchange="window.EFT_APP.updateSetupExtraPlayer(${i}, 'charId', this.value)">
                 ${allowedChars
                   .map((c) => `<option value="${c.id}" ${c.id === chosenId ? "selected" : ""}>${c.name}</option>`)
@@ -12595,7 +12595,7 @@
               </select>
             </div>
             <div class="form-field">
-              <label>Kontrol:</label>
+              <label>Control:</label>
               <select onchange="window.EFT_APP.updateSetupExtraPlayer(${i}, 'controlType', this.value)">
                 <option value="bot" ${ctrlType === "bot" ? "selected" : ""}>Bot (AI)</option>
                 <option value="human" ${ctrlType === "human" ? "selected" : ""}>Player</option>
@@ -12606,35 +12606,35 @@
 
       tabBodyHtml = `
         <div class="panel-box setup-bottom-panel">
-          <div class="panel-header" style="margin-bottom:4px;">Pengaturan Match Lokal / Solo</div>
+          <div class="panel-header" style="margin-bottom:4px;">Local / Solo Match Settings</div>
           <div class="form-field">
-            <label>Jumlah Pemain:</label>
+            <label>Player Count:</label>
             <select onchange="window.EFT_APP.updateSetupDraft('playerCount', this.value)">
-              <option value="2" ${setupDraft.playerCount === 2 ? "selected" : ""}>2 Pemain</option>
-              <option value="3" ${setupDraft.playerCount === 3 ? "selected" : ""}>3 Pemain</option>
-              <option value="4" ${setupDraft.playerCount === 4 ? "selected" : ""}>4 Pemain (Standar)</option>
+              <option value="2" ${setupDraft.playerCount === 2 ? "selected" : ""}>2 Players</option>
+              <option value="3" ${setupDraft.playerCount === 3 ? "selected" : ""}>3 Players</option>
+              <option value="4" ${setupDraft.playerCount === 4 ? "selected" : ""}>4 Players (Standard)</option>
             </select>
           </div>
           ${extraRows}
-          <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startLocalRandomizedMatch()">Acak Urutan &amp; Mulai Match</button>
+          <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startLocalRandomizedMatch()">Shuffle Order &amp; Start Match</button>
         </div>`;
     } else {
       tabBodyHtml = `
         <div class="grid-2col setup-mp-cards">
           <div class="panel-box setup-bottom-panel">
-            <div class="panel-header" style="margin-bottom:2px;">Buat Room Online (Host)</div>
+            <div class="panel-header" style="margin-bottom:2px;">Create Online Room (Host)</div>
             <p style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin:0 0 6px;">
-              Buat room online dan bagikan kode atau link invite ke temanmu untuk bermain bersama.
+              Create an online room and share the room code or invite link to play with friends.
             </p>
-            <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.createLobbyRoom()">Buat Room</button>
+            <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.createLobbyRoom()">Create Room</button>
           </div>
           <div class="panel-box setup-bottom-panel">
-            <div class="panel-header" style="margin-bottom:2px;">Gabung Room</div>
+            <div class="panel-header" style="margin-bottom:2px;">Join Room</div>
             <div class="form-field">
-              <label>Kode Room:</label>
+              <label>Room Code:</label>
               <input type="text" id="setup-join-code" placeholder="EFT456" value="${escapeHtml(mp.roomCode)}" style="text-transform:uppercase;font-weight:800;" />
             </div>
-            <button class="btn btn-gold setup-action-btn" onclick="window.EFT_APP.joinLobbyRoom()">Gabung Room</button>
+            <button class="btn btn-gold setup-action-btn" onclick="window.EFT_APP.joinLobbyRoom()">Join Room</button>
           </div>
         </div>`;
     }
@@ -12643,7 +12643,7 @@
       "Escape From Tartarus",
       `<div class="setup-modal-stack">
         <div class="setup-mode-pills">
-          <button type="button" class="setup-mode-pill-btn ${setupDraft.tab === "local" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('local')">Main Lokal / Solo</button>
+          <button type="button" class="setup-mode-pill-btn ${setupDraft.tab === "local" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('local')">Local / Solo Play</button>
           <button type="button" class="setup-mode-pill-btn ${setupDraft.tab === "multiplayer" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('multiplayer')">Multiplayer</button>
         </div>
 
@@ -12653,12 +12653,12 @@
         </div>
 
         <div class="setup-char-box">
-          <div class="setup-char-box-label">Pilih Karakter Kamu:</div>
+          <div class="setup-char-box-label">Choose Your Character:</div>
           <div class="char-picker-grid">
             ${renderSetupCharPickerGrid(compId, setupDraft.charId, {})}
           </div>
           <div class="setup-dev-disclaimer">
-            <strong>Disclaimer (Under Development):</strong> Karakter <strong>Mao-Mao</strong> dan <strong>Firefly / SAM</strong> sudah bisa dimainkan namun masih dalam tahap pengembangan; efek kartu &amp; keseimbangan masih dapat berubah.
+            <strong>Disclaimer (Under Development):</strong> <strong>Mao-Mao</strong> and <strong>Firefly / SAM</strong> are playable but still in active development; card effects &amp; balance are subject to change.
           </div>
         </div>
 
@@ -12671,7 +12671,7 @@
   function startLocalRandomizedMatch() {
     const uname = (setupDraft.username || "").trim();
     if (!uname) {
-      alert("Masukkan Username kamu terlebih dahulu sebelum mulai bermain.");
+      alert("Please enter your Username before starting the match.");
       const inp = document.getElementById("setup-username-input");
       if (inp) inp.focus();
       return;
@@ -12845,10 +12845,10 @@
       const inviteUrl = `${baseUrl}?room=${encodeURIComponent(mp.roomCode)}`;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(inviteUrl).then(() => {
-          alert(`Link Invite berhasil disalin:\n${inviteUrl}\n\nBagikan link ini ke teman Anda!`);
+          alert(`Invite link copied:\n${inviteUrl}\n\nShare this link with your friends!`);
         });
       } else {
-        prompt("Salin Link Invite ini untuk teman Anda:", inviteUrl);
+        prompt("Copy this Invite Link for your friends:", inviteUrl);
       }
     },
     openNewMatchSetupModal,
@@ -12907,7 +12907,7 @@
       const opponent = state.players.find((p) => p.index !== challenger.index);
       if (!opponent) return;
       startRandomMinigame("versus", {
-        reasonTitle: "Manual Versus Duel · Taruhan 💰 15 TC",
+        reasonTitle: "Manual Versus Duel · Wager 💰 15 TC",
         afterAction: "versus_wager",
         challengerIndex: challenger.index,
         opponentIndex: opponent.index,

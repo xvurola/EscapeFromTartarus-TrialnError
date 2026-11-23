@@ -421,7 +421,7 @@ window.EFT_DATA = {
       name: "Mao-Mao",
       shortName: "Mao-Mao",
       underDevelopment: true,
-      devDisclaimer: "Under Development: Mao-Mao masih dalam tahap pengembangan; efek kartu & keseimbangan dapat berubah sewaktu-waktu.",
+      devDisclaimer: "Under Development: Mao-Mao is currently in development; card effects and balance may change at any time.",
       title: "The Apothecary",
       specialty: "Reactive Negation, Threat Mitigation & Area Denial",
       color: "#10b981",
@@ -450,7 +450,7 @@ window.EFT_DATA = {
       name: "Firefly / SAM",
       shortName: "Firefly",
       underDevelopment: true,
-      devDisclaimer: "Under Development: Firefly / SAM masih dalam tahap pengembangan; efek kartu & transformasi SAM dapat berubah sewaktu-waktu.",
+      devDisclaimer: "Under Development: Firefly / SAM is currently in development; card effects and SAM transformation may change at any time.",
       title: "Stellaron Hunter",
       specialty: "Tactical Safe Zones & Complete Combustion Transformation",
       color: "#38bdf8",
@@ -501,7 +501,7 @@ window.EFT_DATA = {
       menuPortrait: "assets/menu-portraits/mostima.svg",
       chibi: "",
       ultCost: 70,
-      lore: "Coming Soon (TBA): Mostima dari Arknights sedang dalam tahap konsep dan perancangan skill set.",
+      lore: "Coming Soon (TBA): Mostima from Arknights is currently in the concept and skill design phase.",
       cards: [],
       ultimate: null
     },
@@ -522,7 +522,7 @@ window.EFT_DATA = {
       menuPortrait: "assets/menu-portraits/arlecchino.svg",
       chibi: "",
       ultCost: 70,
-      lore: "Coming Soon (TBA): Arlecchino dari Genshin Impact sedang dalam tahap konsep dan perancangan skill set.",
+      lore: "Coming Soon (TBA): Arlecchino from Genshin Impact is currently in the concept and skill design phase.",
       cards: [],
       ultimate: null
     }

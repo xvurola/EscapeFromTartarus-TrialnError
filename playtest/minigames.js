@@ -261,11 +261,11 @@
     }
     const introCd = document.getElementById("mg-intro-cd");
     if (introCd && mg.phase === "intro") {
-      introCd.textContent = `Dimulai dalam ${Math.max(1, sec)}...`;
+      introCd.textContent = `Starting in ${Math.max(1, sec)}...`;
     }
     const resCd = document.getElementById("mg-result-cd");
     if (resCd && mg.phase === "result") {
-      resCd.textContent = `Kembali ke papan dalam ${Math.max(1, sec)} detik...`;
+      resCd.textContent = `Returning to board in ${Math.max(1, sec)}s...`;
     }
   }
 
@@ -357,7 +357,7 @@
       mode, // "versus" | "ffa"
       gameId: chosen.id,
       name: chosen.title,
-      reasonTitle: opts.reasonTitle || (mode === "versus" ? "Versus Duel 1v1" : "Minigame Akhir Ronde"),
+      reasonTitle: opts.reasonTitle || (mode === "versus" ? "Versus Duel 1v1" : "End-of-Round Minigame"),
       afterAction: opts.afterAction || "none", // "advance_round" | "versus_wager" | "none"
       wager: mode === "versus" ? Math.max(0, Number(opts.wager) || 15) : 0,
       challengerRisk: mode === "versus" && opts.challengerRisk !== undefined ? Math.max(0, Number(opts.challengerRisk)) : null,
@@ -420,7 +420,7 @@
 
     mg.phase = "result";
     mg.winnerIndices = Array.isArray(resultSpec.winnerIndices) ? resultSpec.winnerIndices : [];
-    mg.resultHeadline = resultSpec.headline || "Minigame Selesai!";
+    mg.resultHeadline = resultSpec.headline || "Minigame Complete!";
     mg.resultSub = resultSpec.sub || "";
 
     if (!mg.rewardsSettled) {
@@ -463,12 +463,12 @@
         winnerEntry.isWinner = true;
         winnerEntry.rank = 1;
         winnerEntry.rewardDelta = gained;
-        winnerEntry.rewardNote = gained > 0 ? `Menang Duel (+${gained} TC)` : "Menang Duel (Entry Gratis · 0 TC)";
+        winnerEntry.rewardNote = gained > 0 ? `Won Duel (+${gained} TC)` : "Won Duel (Free Entry · 0 TC)";
 
         loserEntry.isWinner = false;
         loserEntry.rank = 2;
         loserEntry.rewardDelta = -taken;
-        loserEntry.rewardNote = taken > 0 ? `Kalah Taruhan (-${taken} TC)` : "Kalah Duel (0 TC)";
+        loserEntry.rewardNote = taken > 0 ? `Lost Wager (-${taken} TC)` : "Lost Duel (0 TC)";
 
         mg.resultHeadline = `${winnerP.name} Memenangkan Duel!`;
         mg.resultSub =
@@ -846,7 +846,7 @@
         mg.entries[i].isTied = true;
       });
       if (hostApi && hostApi.addLog) {
-        hostApi.addLog(`Dice of Fate SERI (${maxTotal})! Adu ulang Tie-Breaker #${d.tieRound}: ${d.tiedNames.join(" vs ")}.`);
+        hostApi.addLog(`Dice of Fate TIE (${maxTotal})! Rematch Tie-Breaker #${d.tieRound}: ${d.tiedNames.join(" vs ")}.`);
       }
       playSfx("branch");
       setPhaseTimer(mg, 1500);
@@ -876,16 +876,16 @@
     if (mg.mode === "versus") {
       transitionToResult(mg, {
         winnerIndices: [winner.playerIndex],
-        headline: `${winner.name} Menang Dice of Fate!`,
-        sub: `Roll tertinggi ${winner.finalScore} mengamankan kemenangan duel!`
+        headline: `${winner.name} Wins Dice of Fate!`,
+        sub: `Highest roll of ${winner.finalScore} wins the duel!`
       });
       return;
     }
 
     transitionToResult(mg, {
       winnerIndices: [winner.playerIndex],
-      headline: `Pemenang: ${winner.name} (Roll ${winner.finalScore})!`,
-      sub: `Hadiah Tartarus Coin dibagikan sesuai peringkat roll 1d20.`,
+      headline: `Winner: ${winner.name} (Roll ${winner.finalScore})!`,
+      sub: `Tartarus Coin rewards distributed by 1d20 roll ranking.`,
       customSettle: (m, state, api) => {
         const lines = ranked.map((entry, rankIdx) => {
           const baseReward = m.payouts[rankIdx] !== undefined ? m.payouts[rankIdx] : 10;
@@ -893,7 +893,7 @@
           const earned = p ? api.modifyPlayerTC(p, baseReward, "minigame") : baseReward;
           entry.reward = earned;
           entry.rewardDelta = earned;
-          entry.rewardNote = `Peringkat #${rankIdx + 1}`;
+          entry.rewardNote = `Rank #${rankIdx + 1}`;
           return `#${rankIdx + 1} ${entry.name} (${entry.finalScore}) +${earned} TC`;
         });
         api.addLog(`Dice of Fate (${m.reasonTitle}): ${lines.join(" | ")}`);
@@ -910,8 +910,8 @@
     accentRgb: "52, 211, 153",
     modes: ["versus", "ffa"],
     ruleText: {
-      versus: "Lempar dadu 1d20 secara bergantian; angka tertinggi menang duel (seri langsung tie-breaker)!",
-      ffa: "Semua pemain melempar dadu 1d20; angka tertinggi meraih hadiah koin terbesar (seri langsung tie-breaker)!"
+      versus: "Take turns rolling 1d20; highest roll wins the duel (ties go straight to tie-breaker)!",
+      ffa: "All players roll 1d20; highest roll claims the biggest coin prize (ties go straight to tie-breaker)!"
     },
     initData(mg) {
       mg.data = {
@@ -997,10 +997,10 @@
       const curEntry = curEntryIdx >= 0 ? mg.entries[curEntryIdx] : null;
       let statusText = "Dice of Fate";
       if (d.status === "tie_pause") {
-        statusText = `SERI! Adu Ulang Tie-Breaker #${d.tieRound}: ${(d.tiedNames || []).join(" vs ")}`;
+        statusText = `TIE! Tie-Breaker Rematch #${d.tieRound}: ${(d.tiedNames || []).join(" vs ")}`;
       } else if (curEntry) {
         const tieTag = d.tieRound > 0 ? `Tie-Breaker #${d.tieRound} · ` : "";
-        statusText = `${tieTag}Giliran Roll: ${curEntry.name}`;
+        statusText = `${tieTag}Rolling Turn: ${curEntry.name}`;
       }
 
       const rowsHtml = mg.entries
@@ -1027,19 +1027,19 @@
 
           let rightHtml = "";
           if (d.status === "tie_pause") {
-            rightHtml = entry.isTied ? `<span class="dof-tie-badge">Adu Ulang</span>` : `<span class="dof-wait-tag">Gugur</span>`;
+            rightHtml = entry.isTied ? `<span class="dof-tie-badge">Rematch</span>` : `<span class="dof-wait-tag">Eliminated</span>`;
           } else if (entry.eliminated) {
-            rightHtml = `<span class="dof-wait-tag">Gugur</span>`;
+            rightHtml = `<span class="dof-wait-tag">Eliminated</span>`;
           } else if (isCurrent) {
             if (d.isAnimatingRoll) {
-              rightHtml = `<span class="dof-wait-tag">Mengocok dadu...</span>`;
+              rightHtml = `<span class="dof-wait-tag">Rolling dice...</span>`;
             } else if (dofCanLocalRoll(mg, entry)) {
               rightHtml = `${d.tieRound > 0 ? `<span class="dof-tie-badge">Tie-Breaker</span>` : ""}<button class="dof-roll-btn" onclick="window.EFT_MINIGAMES.dispatchAction('dof_roll', {}, ${entry.playerIndex})">Roll Dice</button>`;
             } else {
-              rightHtml = `<span class="dof-wait-tag">Menunggu ${esc(entry.name)}...</span>`;
+              rightHtml = `<span class="dof-wait-tag">Waiting for ${esc(entry.name)}...</span>`;
             }
           } else if (hasRolled) {
-            rightHtml = `<span class="dof-wait-tag">Selesai</span>`;
+            rightHtml = `<span class="dof-wait-tag">Done</span>`;
           } else if (isInActivePool) {
             const posInOrder = d.activeOrder.indexOf(idx);
             rightHtml = `${d.tieRound > 0 ? `<span class="dof-tie-badge">Tie-Breaker</span>` : ""}<span class="dof-wait-tag">Antrean #${posInOrder + 1}</span>`;
@@ -1069,7 +1069,7 @@
 
       const hintText =
         mg.mode === "versus"
-          ? `Duel 1v1 · Taruhan 💰 ${mg.wager} TC`
+          ? `1v1 Duel · Wager 💰 ${mg.wager} TC`
           : `1st: 💰 +${mg.payouts[0] || 30} TC · 2nd/3rd: +${mg.payouts[1] || 15} TC · 4th: +${mg.payouts[3] || 10} TC`;
 
       return {
@@ -1090,9 +1090,9 @@
   // MINIGAME 2 (VERSUS 1v1): GUNTING BATU KERTAS (BEST OF 3)
   // ============================================================================
   const RPS_CHOICES = [
-    { id: "batu", label: "Batu", emoji: "✊" },
-    { id: "gunting", label: "Gunting", emoji: "✌️" },
-    { id: "kertas", label: "Kertas", emoji: "✋" }
+    { id: "batu", label: "Rock", emoji: "✊" },
+    { id: "gunting", label: "Scissors", emoji: "✌️" },
+    { id: "kertas", label: "Paper", emoji: "✋" }
   ];
   const RPS_CHOICE_MAP = {
     batu: RPS_CHOICES[0],
@@ -1138,7 +1138,7 @@
     if (res === 0) {
       d.tieStreak = (d.tieStreak || 0) + 1;
       d.roundWinnerIdx = -1;
-      d.roundMsg = `SERI (${RPS_CHOICE_MAP[c0].label} vs ${RPS_CHOICE_MAP[c1].label})! Ronde diulang...`;
+      d.roundMsg = `DRAW (${RPS_CHOICE_MAP[c0].label} vs ${RPS_CHOICE_MAP[c1].label})! Replaying round...`;
       playSfx("branch");
     } else {
       d.tieStreak = 0;
@@ -1146,7 +1146,7 @@
       d.scores[winPos]++;
       d.roundWinnerIdx = winPos;
       const winEntry = mg.entries[winPos];
-      d.roundMsg = `${winEntry.name} menang ronde ini! (${RPS_CHOICE_MAP[winPos === 0 ? c0 : c1].label} mengalahkan ${RPS_CHOICE_MAP[winPos === 0 ? c1 : c0].label})`;
+      d.roundMsg = `${winEntry.name} wins this round! (${RPS_CHOICE_MAP[winPos === 0 ? c0 : c1].label} beats ${RPS_CHOICE_MAP[winPos === 0 ? c1 : c0].label})`;
       playSfx("dice_land");
     }
 
@@ -1156,13 +1156,13 @@
 
   registerMinigame({
     id: "rps",
-    title: "Gunting Batu Kertas",
-    shortTitle: "Gunting Batu Kertas",
+    title: "Rock Paper Scissors",
+    shortTitle: "Rock Paper Scissors",
     icon: "✂️",
     accent: "#fb923c",
     accentRgb: "251, 146, 60",
     modes: ["versus"],
-    ruleText: "Format Best of 3: pilih Gunting, Batu, atau Kertas secara rahasia dalam 6 detik; seri diulang, 2 kemenangan menang!",
+    ruleText: "Best of 3: secretly pick Rock, Paper, or Scissors within 6 seconds; draws replay, first to 2 wins!",
     initData(mg) {
       mg.data = {
         round: 1,
@@ -1229,8 +1229,8 @@
       } else if (d.subPhase === "reveal" && rem <= 0) {
         if (d.scores[0] >= 2 || d.scores[1] >= 2) {
           const winPos = d.scores[0] >= 2 ? 0 : 1;
-          mg.entries[0].scoreText = `Skor ${d.scores[0]} - ${d.scores[1]}`;
-          mg.entries[1].scoreText = `Skor ${d.scores[1]} - ${d.scores[0]}`;
+          mg.entries[0].scoreText = `Score ${d.scores[0]} - ${d.scores[1]}`;
+          mg.entries[1].scoreText = `Score ${d.scores[1]} - ${d.scores[0]}`;
           transitionToResult(mg, {
             winnerIndices: [mg.entries[winPos].playerIndex]
           });
@@ -1275,13 +1275,13 @@
         if (isReveal && d.roundWinnerIdx !== -1 && d.roundWinnerIdx !== pos) cls.push("is-round-lose");
 
         let icon = "❔";
-        let label = "Memilih...";
+        let label = "Choosing...";
         if (isReveal && picked) {
           icon = RPS_CHOICE_MAP[picked].emoji;
           label = RPS_CHOICE_MAP[picked].label;
         } else if (picked) {
           icon = "🔒";
-          label = "Pilihan Terkunci!";
+          label = "Locked In!";
         }
         return `
           <div class="${cls.join(" ")}">
@@ -1305,7 +1305,7 @@
                   const locked = !!d.choices[h.playerIndex];
                   return `
                     <div class="rps-hotseat-box">
-                      <div style="font-size:0.8rem;font-weight:800;color:${esc(h.color)};">${esc(h.name)} ${locked ? "(✓ Terkunci)" : "(Pilih Rahasia)"}</div>
+                      <div style="font-size:0.8rem;font-weight:800;color:${esc(h.color)};">${esc(h.name)} ${locked ? "(✓ Locked)" : "(Secret Pick)"}</div>
                       <div class="rps-choice-row">
                         ${RPS_CHOICES.map(
                           (c, ci) => `
@@ -1331,23 +1331,23 @@
                 <button class="rps-choice-btn ${myPick === c.id ? "is-selected" : ""}" ${myPick ? "disabled" : ""} onclick="window.EFT_MINIGAMES.dispatchAction('rps_pick', {choice:'${c.id}'}, ${me.playerIndex})">
                   <span class="rps-choice-icon">${c.emoji}</span>
                   <span class="rps-choice-label">${c.label}</span>
-                  <span class="rps-choice-key">Tombol ${keys[ci]}</span>
+                  <span class="rps-choice-key">Key ${keys[ci]}</span>
                 </button>`
               ).join("")}
             </div>
-            <div class="mg-hint-note">${myPick ? "Pilihan terkunci! Menunggu lawan..." : "Pilih sebelum waktu habis (otomatis acak jika kehabisan waktu)."}</div>`;
+            <div class="mg-hint-note">${myPick ? "Choice locked! Waiting for opponent..." : "Pick before time runs out (auto-random on timeout)."}</div>`;
         } else {
-          controlsHtml = `<div class="mg-hint-note">Menonton duel 1v1 secara langsung...</div>`;
+          controlsHtml = `<div class="mg-hint-note">Spectating 1v1 duel live...</div>`;
         }
       } else {
         controlsHtml = `<div class="mg-round-msg">${esc(d.roundMsg)}</div>`;
       }
 
       return {
-        subtitle: `Best of 3 · Ronde ${d.round} · Taruhan 💰 ${mg.wager} TC`,
+        subtitle: `Best of 3 · Round ${d.round} · Wager 💰 ${mg.wager} TC`,
         bodyHtml: `
           <div class="mg-duel-board">
-            ${renderDuelScoreboard(mg, d.scores, `Ronde ${d.round} · Bo3`, 2)}
+            ${renderDuelScoreboard(mg, d.scores, `Round ${d.round} · Bo3`, 2)}
             <div class="mg-stage-panel">
               <div class="rps-duel-reveal">
                 ${renderSlot(p0, 0)}
@@ -1364,12 +1364,12 @@
   // ============================================================================
   // MINIGAME 3 (VERSUS 1v1): QUICK DRAW (BEST OF 3 + FAKE-OUTS)
   // ============================================================================
-  const QD_FAKE_SIGNALS = ["SIAP...", "JANGAN!", "TUNGGU...", "TAHAN!"];
+  const QD_FAKE_SIGNALS = ["READY...", "DON'T!", "WAIT...", "HOLD!"];
 
   function qdStartRound(mg) {
     const d = mg.data;
     d.subPhase = "wait";
-    d.signalText = "BERSIAP...";
+    d.signalText = "GET READY...";
     d.roundMsg = "";
     d.roundWinnerIdx = -1;
     d.fireAt = 0;
@@ -1401,13 +1401,13 @@
     accent: "#f43f5e",
     accentRgb: "244, 63, 94",
     modes: ["versus"],
-    ruleText: "Format Best of 3: tunggu sinyal 'TEMBAK!' lalu tekan secepat mungkin! Waspada sinyal pengecoh (false start = langsung kalah ronde).",
+    ruleText: "Best of 3: wait for the 'FIRE!' signal then strike as fast as possible! Watch out for fake signals (false start = instant round loss).",
     initData(mg) {
       mg.data = {
         round: 1,
         scores: [0, 0],
         subPhase: "wait", // "wait" | "fake" | "fire" | "reveal"
-        signalText: "BERSIAP...",
+        signalText: "GET READY...",
         roundMsg: "",
         roundWinnerIdx: -1,
         fireAt: 0,
@@ -1435,7 +1435,7 @@
 
       if (d.subPhase === "wait" || d.subPhase === "fake" || (payload && payload.falseStart)) {
         playSfx("coin_loss");
-        qdResolveRound(mg, oppPos, `FALSE START! ${actor.name} menekan terlalu cepat, ${opp.name} menang ronde!`);
+        qdResolveRound(mg, oppPos, `FALSE START! ${actor.name} pressed too early, ${opp.name} wins the round!`);
         return;
       }
 
@@ -1444,7 +1444,7 @@
         const clientMs = payload && typeof payload.reactionMs === "number" && payload.reactionMs >= 30 && payload.reactionMs <= 4500 ? Math.round(payload.reactionMs) : hostElapsed;
         const reactionMs = Math.min(hostElapsed, clientMs);
         playSfx("dice_land");
-        qdResolveRound(mg, actorPos, `TEMBAK! ${actor.name} tercepat (${reactionMs} ms)!`);
+        qdResolveRound(mg, actorPos, `FIRE! ${actor.name} was fastest (${reactionMs} ms)!`);
       }
     },
     onBotThink(mg, now) {
@@ -1458,11 +1458,11 @@
           if (d.subPhase === "fake") {
             const oppPos = pos === 0 ? 1 : 0;
             playSfx("coin_loss");
-            qdResolveRound(mg, oppPos, `FALSE START! ${e.name} tertipu sinyal pengecoh, ${mg.entries[oppPos].name} menang ronde!`);
+            qdResolveRound(mg, oppPos, `FALSE START! ${e.name} fell for a fake signal, ${mg.entries[oppPos].name} wins the round!`);
           } else if (d.subPhase === "fire") {
             const ms = Math.max(120, now - (d.fireAt || now));
             playSfx("dice_land");
-            qdResolveRound(mg, pos, `TEMBAK! ${e.name} tercepat (${ms} ms)!`);
+            qdResolveRound(mg, pos, `FIRE! ${e.name} was fastest (${ms} ms)!`);
           }
         }
       });
@@ -1471,7 +1471,7 @@
       const d = mg.data;
       if (d.subPhase !== "reveal") {
         const winPos = randInt(0, 1);
-        qdResolveRound(mg, winPos, `${mg.entries[winPos].name} memenangkan adu refleks!`);
+        qdResolveRound(mg, winPos, `${mg.entries[winPos].name} wins the reflex duel!`);
       }
     },
     onTick(mg, now) {
@@ -1492,7 +1492,7 @@
           syncAndBroadcast(mg, true);
         } else {
           d.subPhase = "fire";
-          d.signalText = "TEMBAK!";
+          d.signalText = "FIRE!";
           d.fireAt = now;
           d.botActionAt = {};
           mg.entries.forEach((e) => {
@@ -1506,18 +1506,18 @@
         }
       } else if (d.subPhase === "fake" && now >= d.nextEventAt) {
         d.subPhase = "wait";
-        d.signalText = "BERSIAP...";
+        d.signalText = "GET READY...";
         d.nextEventAt = now + randInt(900, 1600);
         d.botActionAt = {};
         syncAndBroadcast(mg, true);
       } else if (d.subPhase === "fire" && getHostRemainingMs(mg, now) <= 0) {
         const randWin = randInt(0, 1);
-        qdResolveRound(mg, randWin, `Waktu reaksi habis! ${mg.entries[randWin].name} mengambil ronde.`);
+        qdResolveRound(mg, randWin, `Reaction time expired! ${mg.entries[randWin].name} takes the round.`);
       } else if (d.subPhase === "reveal" && getHostRemainingMs(mg, now) <= 0) {
         if (d.scores[0] >= 2 || d.scores[1] >= 2) {
           const winPos = d.scores[0] >= 2 ? 0 : 1;
-          mg.entries[0].scoreText = `Skor ${d.scores[0]} - ${d.scores[1]}`;
-          mg.entries[1].scoreText = `Skor ${d.scores[1]} - ${d.scores[0]}`;
+          mg.entries[0].scoreText = `Score ${d.scores[0]} - ${d.scores[1]}`;
+          mg.entries[1].scoreText = `Score ${d.scores[1]} - ${d.scores[0]}`;
           transitionToResult(mg, {
             winnerIndices: [mg.entries[winPos].playerIndex]
           });
@@ -1576,34 +1576,34 @@
         btnHtml = `
           <div class="qd-trigger-wrap">
             <button class="qd-trigger-btn ${isFire ? "is-fire-ready" : ""}" onpointerdown="window.EFT_MINIGAMES.quickDrawTrigger(${humans[0].playerIndex})">
-              ${esc(humans[0].name)}<br/><span style="font-size:0.78rem;opacity:0.88;">Klik / Tombol [A]</span>
+              ${esc(humans[0].name)}<br/><span style="font-size:0.78rem;opacity:0.88;">Click / Key [A]</span>
             </button>
             <button class="qd-trigger-btn ${isFire ? "is-fire-ready" : ""}" onpointerdown="window.EFT_MINIGAMES.quickDrawTrigger(${humans[1].playerIndex})">
-              ${esc(humans[1].name)}<br/><span style="font-size:0.78rem;opacity:0.88;">Klik / Tombol [L]</span>
+              ${esc(humans[1].name)}<br/><span style="font-size:0.78rem;opacity:0.88;">Click / Key [L]</span>
             </button>
           </div>`;
       } else if (humans.length === 1) {
         btnHtml = `
           <div class="qd-trigger-wrap">
             <button class="qd-trigger-btn ${isFire ? "is-fire-ready" : ""}" onpointerdown="window.EFT_MINIGAMES.quickDrawTrigger(${humans[0].playerIndex})">
-              ${isFire ? "🔫 TEMBAK SEKARANG!" : "⚡ SIAGA (Tunggu TEMBAK!)"}
-              <div style="font-size:0.76rem;margin-top:4px;opacity:0.88;">Klik / Tap / Spasi</div>
+              ${isFire ? "FIRE NOW!" : "STANDBY (Wait for FIRE!)"}
+              <div style="font-size:0.76rem;margin-top:4px;opacity:0.88;">Click / Tap / Space</div>
             </button>
           </div>`;
       } else {
-        btnHtml = `<div class="mg-hint-note">Menonton adu refleks 1v1...</div>`;
+        btnHtml = `<div class="mg-hint-note">Spectating 1v1 reflex duel...</div>`;
       }
 
       return {
-        subtitle: `Best of 3 · Ronde ${d.round} · Taruhan 💰 ${mg.wager} TC`,
+        subtitle: `Best of 3 · Round ${d.round} · Wager 💰 ${mg.wager} TC`,
         bodyHtml: `
           <div class="mg-duel-board">
-            ${renderDuelScoreboard(mg, d.scores, `Ronde ${d.round} · Bo3`, 2)}
+            ${renderDuelScoreboard(mg, d.scores, `Round ${d.round} · Bo3`, 2)}
             <div class="mg-stage-panel" style="padding:0;">
               <div class="qd-arena ${arenaCls}">
-                <div class="qd-signal-banner ${bannerCls}">${isReveal ? "HASIL RONDE" : esc(d.signalText)}</div>
+                <div class="qd-signal-banner ${bannerCls}">${isReveal ? "ROUND RESULT" : esc(d.signalText)}</div>
                 ${btnHtml}
-                <div class="mg-hint-note">Jangan terkecoh sinyal palsu seperti "SIAP..." atau "JANGAN!"</div>
+                <div class="mg-hint-note">Do not fall for fake signals like "READY..." or "DON'T!"</div>
               </div>
             </div>
           </div>`
@@ -1660,7 +1660,7 @@
     accent: "#fbbf24",
     accentRgb: "251, 191, 36",
     modes: ["versus"],
-    ruleText: "Format Best of 3: penantang memilih Heads atau Tail dalam 5 detik, lawan otomatis sisi sebaliknya, lalu koin dilempar!",
+    ruleText: "Best of 3: challenger picks Heads or Tails within 5 seconds, opponent takes the opposite side, then the coin flips!",
     initData(mg) {
       mg.data = {
         round: 1,
@@ -1706,16 +1706,16 @@
         const challengerWon = d.challengerPick === d.coinResult;
         const winPos = challengerWon ? 0 : 1;
         d.scores[winPos]++;
-        const sideLabel = d.coinResult === "heads" ? "HEADS (Mahkota)" : "TAIL (Tartarus)";
-        d.roundMsg = `Koin mendarat di ${sideLabel}! ${mg.entries[winPos].name} menang ronde ${d.round}!`;
+        const sideLabel = d.coinResult === "heads" ? "HEADS (Crown)" : "TAILS (Tartarus)";
+        d.roundMsg = `Coin landed on ${sideLabel}! ${mg.entries[winPos].name} wins round ${d.round}!`;
         playSfx("dice_land");
         setPhaseTimer(mg, 1750);
         syncAndBroadcast(mg, true);
       } else if (d.subPhase === "reveal" && rem <= 0) {
         if (d.scores[0] >= 2 || d.scores[1] >= 2) {
           const winPos = d.scores[0] >= 2 ? 0 : 1;
-          mg.entries[0].scoreText = `Skor ${d.scores[0]} - ${d.scores[1]}`;
-          mg.entries[1].scoreText = `Skor ${d.scores[1]} - ${d.scores[0]}`;
+          mg.entries[0].scoreText = `Score ${d.scores[0]} - ${d.scores[1]}`;
+          mg.entries[1].scoreText = `Score ${d.scores[1]} - ${d.scores[0]}`;
           transitionToResult(mg, {
             winnerIndices: [mg.entries[winPos].playerIndex]
           });
@@ -1747,8 +1747,8 @@
       const p0 = mg.entries[0];
       const p1 = mg.entries[1];
       const canPick = d.subPhase === "choosing" && canLocalControlSeat(mg, p0.playerIndex);
-      const p0Side = d.challengerPick ? (d.challengerPick === "heads" ? "HEADS 👑" : "TAIL ⚜️") : "Memilih...";
-      const p1Side = d.challengerPick ? (d.challengerPick === "heads" ? "TAIL ⚜️" : "HEADS 👑") : "Otomatis sisi lawan";
+      const p0Side = d.challengerPick ? (d.challengerPick === "heads" ? "HEADS 👑" : "TAIL ⚜️") : "Choosing...";
+      const p1Side = d.challengerPick ? (d.challengerPick === "heads" ? "TAIL ⚜️" : "HEADS 👑") : "Opposite side";
 
       let coinStyle = "";
       let coinCls = "coin-body";
@@ -1767,16 +1767,16 @@
       if (d.subPhase === "choosing") {
         if (canPick) {
           bottomHtml = `
-            <div style="font-size:0.88rem;font-weight:800;color:#fef08a;">${esc(p0.name)}, pilih sisi koin kamu!</div>
+            <div style="font-size:0.88rem;font-weight:800;color:#fef08a;">${esc(p0.name)}, pick your coin side!</div>
             <div class="coin-choice-btns">
               <button class="coin-pick-btn btn-heads" onclick="window.EFT_MINIGAMES.dispatchAction('coin_pick', {side:'heads'}, ${p0.playerIndex})">👑 HEADS <span style="font-size:0.72rem;opacity:0.8;">[H]</span></button>
               <button class="coin-pick-btn btn-tails" onclick="window.EFT_MINIGAMES.dispatchAction('coin_pick', {side:'tails'}, ${p0.playerIndex})">⚜️ TAIL <span style="font-size:0.72rem;opacity:0.8;">[T]</span></button>
             </div>`;
         } else {
-          bottomHtml = `<div class="mg-hint-note">Menunggu <strong>${esc(p0.name)}</strong> memilih Heads atau Tail...</div>`;
+          bottomHtml = `<div class="mg-hint-note">Waiting for <strong>${esc(p0.name)}</strong> to pick Heads or Tails...</div>`;
         }
       } else if (d.subPhase === "flipping") {
-        bottomHtml = `<div class="mg-round-msg">Melempar koin takdir...</div>`;
+        bottomHtml = `<div class="mg-round-msg">Flipping the coin of fate...</div>`;
       } else {
         bottomHtml = `<div class="mg-round-msg">${esc(d.roundMsg)}</div>`;
       }
@@ -1784,10 +1784,10 @@
       const coinDomId = `mg-coin-body-${mg.id}-r${d.round}`;
 
       return {
-        subtitle: `Best of 3 · Ronde ${d.round} · Taruhan 💰 ${mg.wager} TC`,
+        subtitle: `Best of 3 · Round ${d.round} · Wager 💰 ${mg.wager} TC`,
         bodyHtml: `
           <div class="mg-duel-board">
-            ${renderDuelScoreboard(mg, d.scores, `Ronde ${d.round} · Bo3`, 2, [p0Side, p1Side])}
+            ${renderDuelScoreboard(mg, d.scores, `Round ${d.round} · Bo3`, 2, [p0Side, p1Side])}
             <div class="mg-stage-panel">
               <div class="coin-stage">
                 <div class="coin-scene">
@@ -1832,27 +1832,27 @@
   function sobGenerateChests(roundNum, playerCount) {
     if (roundNum === 1) {
       return [
-        { id: 0, tier: "Rendah", value: randInt(4, 6), icon: "🧳" },
-        { id: 1, tier: "Sedang", value: randInt(7, 9), icon: "💼" },
-        { id: 2, tier: "Tinggi", value: randInt(11, 13), icon: "👑" }
+        { id: 0, tier: "Low", value: randInt(4, 6), icon: "🧳" },
+        { id: 1, tier: "Medium", value: randInt(7, 9), icon: "💼" },
+        { id: 2, tier: "High", value: randInt(11, 13), icon: "👑" }
       ];
     }
     if (roundNum === 2) {
       return [
-        { id: 0, tier: "Rendah", value: randInt(4, 5), icon: "🧳" },
-        { id: 1, tier: "Sedang", value: randInt(6, 8), icon: "💼" },
-        { id: 2, tier: "Tinggi", value: randInt(10, 12), icon: "💰" },
+        { id: 0, tier: "Low", value: randInt(4, 5), icon: "🧳" },
+        { id: 1, tier: "Medium", value: randInt(6, 8), icon: "💼" },
+        { id: 2, tier: "High", value: randInt(10, 12), icon: "💰" },
         { id: 3, tier: "Jackpot", value: randInt(13, 15), icon: "👑" }
       ];
     }
     // Round 3: high stakes (3 chests for maximum mind-game collision! Max 3-round total = 13 + 15 + 17 = 45 TC)
     const base = [
-      { id: 0, tier: "Sedang", value: randInt(7, 9), icon: "💼" },
-      { id: 1, tier: "Tinggi", value: randInt(11, 13), icon: "💰" },
+      { id: 0, tier: "Medium", value: randInt(7, 9), icon: "💼" },
+      { id: 1, tier: "High", value: randInt(11, 13), icon: "💰" },
       { id: 2, tier: "Jackpot", value: randInt(15, 17), icon: "👑" }
     ];
     if (playerCount <= 2) {
-      base.push({ id: 3, tier: "Rendah", value: randInt(4, 6), icon: "🧳" });
+      base.push({ id: 3, tier: "Low", value: randInt(4, 6), icon: "🧳" });
     }
     return base;
   }
@@ -1929,13 +1929,13 @@
 
   registerMinigame({
     id: "split_or_bust",
-    title: "Rebutan Peti (Split or Bust)",
-    shortTitle: "Rebutan Peti",
+    title: "Split or Bust",
+    shortTitle: "Split or Bust",
     icon: "🧰",
     accent: "#38bdf8",
     accentRgb: "56, 189, 248",
     modes: ["ffa"],
-    ruleText: "3 ronde cepat (Maks. 45 TC): pilih 1 peti diam-diam! 1 pemain = penuh, 2 pemain = bagi dua, 3+ pemain = HANGUS (0 TC)!",
+    ruleText: "3 fast rounds (Max 45 TC): secretly pick 1 chest! 1 player = full prize, 2 players = split in half, 3+ players = BUST (0 TC)!",
     initData(mg) {
       const totals = {};
       mg.entries.forEach((e) => {
@@ -2009,13 +2009,13 @@
           mg.entries.forEach((e) => {
             const earned = cappedTotals[e.playerIndex] || 0;
             e.isWinner = winners.some((w) => w.playerIndex === e.playerIndex);
-            e.scoreText = `Total Peti: ${earned} TC`;
-            e.rewardNote = earned > 0 ? "Rampasan Peti" : "Nihil";
+            e.scoreText = `Chest Total: ${earned} TC`;
+            e.rewardNote = earned > 0 ? "Chest Loot" : "None";
           });
           transitionToResult(mg, {
             winnerIndices: winners.map((w) => w.playerIndex),
-            headline: winners.length > 0 ? `Perampas Terbesar: ${winners.map((w) => w.name).join(" & ")}!` : "Semua Peti Hangus!",
-            sub: `Total hadiah dari 3 ronde Rebutan Peti (maks. ${FFA_MAX_TC_REWARD} TC) langsung ditambahkan ke saldo TC.`,
+            headline: winners.length > 0 ? `Top Looter: ${winners.map((w) => w.name).join(" & ")}!` : "All Chests Busted!",
+            sub: `Total rewards from 3 rounds of Split or Bust (max ${FFA_MAX_TC_REWARD} TC) added directly to TC balance.`,
             deltas: cappedTotals
           });
         }
@@ -2050,8 +2050,8 @@
               ? `<span style="color:#6ee7b7;font-weight:900;">+${rGain} TC</span>`
               : `<span style="color:#fda4af;font-weight:900;">0 TC</span>`
             : picked
-            ? `<span style="color:#6ee7b7;font-weight:800;">✓ Terkunci</span>`
-            : `<span style="color:#94a3b8;">Memilih...</span>`;
+            ? `<span style="color:#6ee7b7;font-weight:800;">✓ Locked</span>`
+            : `<span style="color:#94a3b8;">Choosing...</span>`;
           return `
             <div class="sob-player-card ${picked ? "is-picked" : ""} ${isActing ? "is-acting" : ""}">
               <div style="display:flex;align-items:center;gap:7px;min-width:0;">
@@ -2087,15 +2087,15 @@
                 return pe ? `<span class="sob-picker-pill" style="--p-color:${esc(pe.color)};">${esc(pe.name)}</span>` : "";
               })
               .join("");
-            let badgeHtml = `<span class="sob-outcome-badge is-empty">Tidak Dipilih</span>`;
-            if (out.kind === "full") badgeHtml = `<span class="sob-outcome-badge is-full">Penuh +${out.perPlayer} TC</span>`;
-            else if (out.kind === "split") badgeHtml = `<span class="sob-outcome-badge is-split">Bagi Dua +${out.perPlayer} TC</span>`;
-            else if (out.kind === "bust") badgeHtml = `<span class="sob-outcome-badge is-bust">HANGUS! 0 TC</span>`;
+            let badgeHtml = `<span class="sob-outcome-badge is-empty">Unclaimed</span>`;
+            if (out.kind === "full") badgeHtml = `<span class="sob-outcome-badge is-full">Full +${out.perPlayer} TC</span>`;
+            else if (out.kind === "split") badgeHtml = `<span class="sob-outcome-badge is-split">Split +${out.perPlayer} TC</span>`;
+            else if (out.kind === "bust") badgeHtml = `<span class="sob-outcome-badge is-bust">BUST! 0 TC</span>`;
             footerHtml = `<div class="sob-chest-pickers">${pickerPills}</div>${badgeHtml}`;
           } else {
             footerHtml = `
               <div class="sob-chest-pickers">
-                ${myPick === chest.id ? `<span class="sob-picker-pill" style="--p-color:#34d399;">Pilihan Kamu</span>` : `<span style="font-size:0.72rem;color:#94a3b8;">Tombol [${ci + 1}]</span>`}
+                ${myPick === chest.id ? `<span class="sob-picker-pill" style="--p-color:#34d399;">Your Pick</span>` : `<span style="font-size:0.72rem;color:#94a3b8;">Key [${ci + 1}]</span>`}
               </div>`;
           }
 
@@ -2103,7 +2103,7 @@
 
           return `
             <div class="${cls.join(" ")}" ${clickAttr}>
-              <span class="sob-chest-tier">Peti #${ci + 1} · ${esc(chest.tier)}</span>
+              <span class="sob-chest-tier">Chest #${ci + 1} · ${esc(chest.tier)}</span>
               <div class="sob-chest-icon">${isReveal && out && out.kind === "bust" ? "💥" : isReveal && out && out.pickers.length > 0 ? "✨" : chest.icon}</div>
               <div class="sob-chest-value">💰 ${chest.value} TC</div>
               ${footerHtml}
@@ -2112,13 +2112,13 @@
         .join("");
 
       const promptNote = isReveal
-        ? `<div class="mg-round-msg">Peti dibuka! 1 pemain = Penuh · 2 pemain = Bagi Dua · 3+ pemain = Hangus!</div>`
+        ? `<div class="mg-round-msg">Chests opened! 1 player = Full · 2 players = Split · 3+ players = Bust!</div>`
         : activeHuman
-        ? `<div class="mg-round-msg">${humans.length > 1 ? `Giliran Pilih Rahasia (${esc(activeHuman.name)}): ` : ""}Klik 1 peti sebelum waktu habis!</div>`
-        : `<div class="mg-hint-note">Pilihan terkunci! Menunggu pemain lain memilih peti...</div>`;
+        ? `<div class="mg-round-msg">${humans.length > 1 ? `Secret Pick (${esc(activeHuman.name)}): ` : ""}Click 1 chest before time runs out!</div>`
+        : `<div class="mg-hint-note">Choice locked! Waiting for other players to pick...</div>`;
 
       return {
-        subtitle: `Ronde ${d.round} / ${SOB_TOTAL_ROUNDS} · Pilih 1 Peti Secara Rahasia`,
+        subtitle: `Round ${d.round} / ${SOB_TOTAL_ROUNDS} · Secretly Pick 1 Chest`,
         bodyHtml: `
           <div class="sob-layout">
             <div class="sob-players-strip">${playersStripHtml}</div>
@@ -2307,13 +2307,13 @@
 
       const labelMap = {
         blackjack: "BLACKJACK! (1.5x)",
-        win: "Menang (1x)",
-        push: "Seri (Push)",
-        lose: s.isFreeStake ? "Kalah (Modal Gratis)" : "Kalah",
-        bust: s.isFreeStake ? "Bust (Modal Gratis)" : "Bust"
+        win: "Win (1x)",
+        push: "Push (Tie)",
+        lose: s.isFreeStake ? "Lose (Free Stake)" : "Lose",
+        bust: s.isFreeStake ? "Bust (Free Stake)" : "Bust"
       };
       e.isWinner = outcome === "blackjack" || outcome === "win";
-      e.scoreText = `Kartu ${pEv.total} vs Dealer ${dealerEv.total}`;
+      e.scoreText = `Hand ${pEv.total} vs Dealer ${dealerEv.total}`;
       e.rewardNote = `${labelMap[outcome]} · Bet ${s.bet} TC`;
     });
 
@@ -2371,7 +2371,7 @@
     accent: "#a855f7",
     accentRgb: "168, 85, 247",
     modes: ["ffa"],
-    ruleText: `Pasang taruhan dalam 10 detik (maks. pendapatan +${FFA_MAX_TC_REWARD} TC), lalu main paralel melawan Dealer (mendekati 21 tanpa Bust; Blackjack bayar 1.5x)!`,
+    ruleText: `Place your bet within 10 seconds (max gain +${FFA_MAX_TC_REWARD} TC), then play in parallel against the Dealer (closest to 21 without Bust; Blackjack pays 1.5x)!`,
     initData(mg) {
       const state = getState();
       const seats = {};
@@ -2524,9 +2524,9 @@
           headline: dealerEv.isBust
             ? `Dealer BUST (${dealerEv.total})!`
             : winCount > 0
-            ? `Dealer ${dealerEv.total}: ${winCount} Pemain Menang!`
-            : `Dealer Menang (${dealerEv.total})!`,
-          sub: "Ringkasan hasil taruhan & perubahan saldo TC seluruh pemain.",
+            ? `Dealer ${dealerEv.total}: ${winCount} Player(s) Won!`
+            : `Dealer Wins (${dealerEv.total})!`,
+          sub: "Summary of wager outcomes and TC balance changes for all players.",
           deltas: d.pendingDeltas || {}
         });
       }
@@ -2561,7 +2561,7 @@
       const dealerEv = bjEvalHand(d.dealerHand);
       const dealerScoreText =
         d.subPhase === "betting"
-          ? "Menunggu Taruhan"
+          ? "Waiting for Bets"
           : d.dealerRevealed
           ? `${dealerEv.total}${dealerEv.isBust ? " (BUST)" : dealerEv.isNatural ? " (BLACKJACK!)" : ""}`
           : d.dealerHand[0]
@@ -2570,7 +2570,7 @@
 
       const dealerCardsHtml =
         d.subPhase === "betting"
-          ? `<div style="font-size:0.82rem;color:#94a3b8;padding:12px 0;">Dealer siap membagikan kartu setelah semua taruhan terkunci...</div>`
+          ? `<div style="font-size:0.82rem;color:#94a3b8;padding:12px 0;">Dealer will deal cards once all bets are locked...</div>`
           : d.dealerHand.map((card, i) => bjRenderCardHtml(card, !d.dealerRevealed && i === 1)).join("");
 
       const seatsHtml = mg.entries
@@ -2591,13 +2591,13 @@
             if (s.isFreeStake) {
               bodyHtml = `
                 <div style="font-size:0.78rem;color:#fde68a;background:rgba(245,158,11,0.14);border:1px solid rgba(251,191,36,0.4);border-radius:9px;padding:8px;text-align:center;">
-                  Saldo kurang dari ${BJ_MIN_BET} TC, mendapat <strong>Modal Gratis 💰 ${BJ_MIN_BET} TC</strong>!
+                  Balance below ${BJ_MIN_BET} TC, granted <strong>Free Stake 💰 ${BJ_MIN_BET} TC</strong>!
                 </div>`;
             } else if (canControl && !s.betLocked) {
               bodyHtml = `
                 <div style="font-size:0.78rem;color:#cbd5e1;display:flex;justify-content:space-between;">
-                  <span>Saldo: <strong>💰 ${s.wallet} TC</strong></span>
-                  <span style="color:#fde047;font-weight:900;">Taruhan: 💰 ${s.bet} TC</span>
+                  <span>Balance: <strong>💰 ${s.wallet} TC</strong></span>
+                  <span style="color:#fde047;font-weight:900;">Bet: 💰 ${s.bet} TC</span>
                 </div>
                 <div class="bj-bet-btns">
                   <button class="bj-quick-btn ${s.bet === BJ_MIN_BET ? "is-active" : ""}" onclick="window.EFT_MINIGAMES.dispatchAction('bj_set_bet', {amount:${BJ_MIN_BET}}, ${e.playerIndex})">Min (${BJ_MIN_BET})</button>
@@ -2605,17 +2605,17 @@
                   <button class="bj-quick-btn ${s.bet === q50 ? "is-active" : ""}" onclick="window.EFT_MINIGAMES.dispatchAction('bj_set_bet', {amount:${q50}}, ${e.playerIndex})">50%</button>
                   <button class="bj-quick-btn ${s.bet === qMax ? "is-active" : ""}" onclick="window.EFT_MINIGAMES.dispatchAction('bj_set_bet', {amount:${qMax}}, ${e.playerIndex})">Max</button>
                 </div>
-                <button class="bj-act-btn bj-btn-hit" onclick="window.EFT_MINIGAMES.dispatchAction('bj_lock_bet', {}, ${e.playerIndex})">Kunci Taruhan (💰 ${s.bet} TC)</button>`;
+                <button class="bj-act-btn bj-btn-hit" onclick="window.EFT_MINIGAMES.dispatchAction('bj_lock_bet', {}, ${e.playerIndex})">Lock Bet (💰 ${s.bet} TC)</button>`;
             } else {
               bodyHtml = `
                 <div style="font-size:0.8rem;color:${s.betLocked ? "#6ee7b7" : "#94a3b8"};text-align:center;padding:10px 0;font-weight:700;">
-                  ${s.betLocked ? `✓ Taruhan Terkunci: 💰 ${s.bet} TC` : `Sedang memasang taruhan...`}
+                  ${s.betLocked ? `✓ Bet Locked: 💰 ${s.bet} TC` : `Placing bet...`}
                 </div>`;
             }
           } else {
             const canDouble = s.hand.length === 2 && !s.isFreeStake && s.wallet >= s.bet * 2 && s.bet * 2 <= BJ_MAX_BET;
             const statusLabels = {
-              playing: "Sedang Bermain",
+              playing: "Playing",
               stand: "Stand",
               bust: "BUST!",
               blackjack: "BLACKJACK!"
@@ -2626,7 +2626,7 @@
                 <div class="bj-action-row">
                   <button class="bj-act-btn bj-btn-hit" onclick="window.EFT_MINIGAMES.dispatchAction('bj_hit', {}, ${e.playerIndex})">Hit [H]</button>
                   <button class="bj-act-btn bj-btn-stand" onclick="window.EFT_MINIGAMES.dispatchAction('bj_stand', {}, ${e.playerIndex})">Stand [S]</button>
-                  <button class="bj-act-btn bj-btn-double" ${canDouble ? "" : "disabled"} title="${canDouble ? "Gandakan taruhan & ambil 1 kartu terakhir" : "Saldo tidak cukup / bukan 2 kartu awal"}" onclick="window.EFT_MINIGAMES.dispatchAction('bj_double', {}, ${e.playerIndex})">2x [D]</button>
+                  <button class="bj-act-btn bj-btn-double" ${canDouble ? "" : "disabled"} title="${canDouble ? "Double your bet & draw 1 final card" : "Insufficient balance or not initial 2 cards"}" onclick="window.EFT_MINIGAMES.dispatchAction('bj_double', {}, ${e.playerIndex})">2x [D]</button>
                 </div>`;
             } else if (d.subPhase === "settled") {
               const sign = s.netDelta > 0 ? "+" : "";
@@ -2653,7 +2653,7 @@
                   <span style="font-weight:800;font-size:0.86rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.name)}</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;">
-                  <span style="font-size:0.74rem;color:#fde047;font-weight:800;">💰 ${s.bet}${s.doubled ? " (2x)" : ""}${s.isFreeStake ? " Gratis" : ""}</span>
+                  <span style="font-size:0.74rem;color:#fde047;font-weight:800;">💰 ${s.bet}${s.doubled ? " (2x)" : ""}${s.isFreeStake ? " Free" : ""}</span>
                   ${d.subPhase !== "betting" ? `<span class="bj-score-badge">${ev.total}</span>` : ""}
                 </div>
               </div>
@@ -2664,12 +2664,12 @@
 
       const phaseSub =
         d.subPhase === "betting"
-          ? "Fase 1: Pasang Taruhan (10 Detik)"
+          ? "Phase 1: Place Your Bet (10 Seconds)"
           : d.subPhase === "playing"
-          ? "Fase 2: Bermain Melawan Dealer (Hit / Stand / Double)"
+          ? "Phase 2: Play Against Dealer (Hit / Stand / Double)"
           : d.subPhase === "dealer"
-          ? "Giliran Dealer (Wajib Hit hingga ≥ 17)..."
-          : "Hasil Ronde Blackjack";
+          ? "Dealer Turn (Must Hit to 17+)..."
+          : "Blackjack Round Results";
 
       return {
         subtitle: phaseSub,
@@ -2705,7 +2705,7 @@
           </div>
           <div class="mg-fighter-meta">
             <div class="mg-fighter-name">${esc(p0.name)}</div>
-            <div class="mg-fighter-tag">${sideTags ? esc(sideTags[0]) : "Penantang"}</div>
+            <div class="mg-fighter-tag">${sideTags ? esc(sideTags[0]) : "Challenger"}</div>
             <div class="mg-score-pips">${pips(scores[0] || 0)}</div>
           </div>
         </div>
@@ -2719,7 +2719,7 @@
           </div>
           <div class="mg-fighter-meta">
             <div class="mg-fighter-name">${esc(p1.name)}</div>
-            <div class="mg-fighter-tag">${sideTags ? esc(sideTags[1]) : "Lawan"}</div>
+            <div class="mg-fighter-tag">${sideTags ? esc(sideTags[1]) : "Opponent"}</div>
             <div class="mg-score-pips">${pips(scores[1] || 0)}</div>
           </div>
         </div>
@@ -2773,7 +2773,7 @@
     const pill = document.getElementById("mg-wheel-status-pill");
     if (pill) {
       pill.classList.add("is-landed");
-      pill.textContent = `Terpilih: ${mg.name}!`;
+      pill.textContent = `Selected: ${mg.name}!`;
     }
     const chip = document.getElementById(`mg-pool-chip-${mg.gameId}`);
     if (chip) chip.classList.add("is-winner");
@@ -2788,8 +2788,8 @@
     }
 
     const poolDefs = (mg.wheelPoolIds || []).map((id) => getMinigameDef(id)).filter(Boolean);
-    const modeLabel = mg.mode === "versus" ? "DUEL VERSUS TILE 1v1" : "MINIGAME AKHIR RONDE";
-    const subLabel = mg.mode === "versus" ? `${mg.entries[0]?.name || ""} vs ${mg.entries[1]?.name || ""} · Taruhan 💰 ${mg.wager} TC` : mg.reasonTitle;
+    const modeLabel = mg.mode === "versus" ? "1v1 VERSUS TILE DUEL" : "END-OF-ROUND MINIGAME";
+    const subLabel = mg.mode === "versus" ? `${mg.entries[0]?.name || ""} vs ${mg.entries[1]?.name || ""} · Wager 💰 ${mg.wager} TC` : mg.reasonTitle;
 
     overlay.innerHTML = `
       <div class="mg-shell">
@@ -2812,7 +2812,7 @@
           </div>
 
           <div id="mg-wheel-status-pill" class="mg-wheel-status-pill ${mg.wheelLanded ? "is-landed" : ""}">
-            ${mg.wheelLanded ? `Terpilih: ${esc(mg.name)}!` : "Mengacak minigame dari pool..."}
+            ${mg.wheelLanded ? `Selected: ${esc(mg.name)}!` : "Spinning minigame pool..."}
           </div>
 
           <div class="mg-wheel-pool-chips">
@@ -2868,7 +2868,7 @@
   function renderIntroPhase(overlay, mg) {
     const def = getMinigameDef(mg.gameId) || {};
     const ruleStr = typeof def.ruleText === "object" ? def.ruleText[mg.mode] || "" : def.ruleText || "";
-    const modeTag = mg.mode === "versus" ? `Versus 1v1 · Taruhan 💰 ${mg.wager} TC` : `End-of-Round · Semua Pemain`;
+    const modeTag = mg.mode === "versus" ? `Versus 1v1 · Wager 💰 ${mg.wager} TC` : `End-of-Round · All Players`;
 
     const avatarsHtml = mg.entries
       .map(
@@ -2890,7 +2890,7 @@
             <div class="mg-intro-rule">${esc(ruleStr)}</div>
             <div class="mg-intro-players">${avatarsHtml}</div>
             <div class="mg-timer-bar-track" style="max-width:340px;"><div id="mg-timer-bar-fill" class="mg-timer-bar-fill"></div></div>
-            <div id="mg-intro-cd" class="mg-intro-countdown">Dimulai dalam 3...</div>
+            <div id="mg-intro-cd" class="mg-intro-countdown">Starting in 3...</div>
           </div>
         </div>
       </div>`;
@@ -2938,15 +2938,15 @@
         <div class="mg-result-stage">
           <div class="mg-result-card">
             <div class="mg-result-banner">
-              <div class="mg-result-eyebrow">HASIL ${esc(mg.name.toUpperCase())}</div>
+              <div class="mg-result-eyebrow">${esc(mg.name.toUpperCase())} RESULTS</div>
               <div class="mg-result-headline">${esc(mg.resultHeadline)}</div>
               <div class="mg-result-sub">${esc(mg.resultSub)}</div>
             </div>
             <div class="mg-result-rows">${rowsHtml}</div>
             <div class="mg-timer-bar-track"><div id="mg-timer-bar-fill" class="mg-timer-bar-fill"></div></div>
             <div class="mg-result-footer">
-              <span id="mg-result-cd" class="mg-hint-note">Kembali ke papan dalam 5 detik...</span>
-              <button class="dof-finish-btn" onclick="window.EFT_MINIGAMES.finishActiveMinigame()">Kembali ke Papan</button>
+              <span id="mg-result-cd" class="mg-hint-note">Returning to board in 5s...</span>
+              <button class="dof-finish-btn" onclick="window.EFT_MINIGAMES.finishActiveMinigame()">Back to Board</button>
             </div>
           </div>
         </div>
