@@ -219,20 +219,15 @@
        ======================================================================== -->
   <main id="view-simulator" class="view-container active">
     <div class="arena-stage">
-      <!-- TOP-RIGHT GAME STATUS CARD (CYCLE, TURN, PHASE, CARD USE, SHARD ZONES) -->
+      <!-- TOP-RIGHT GAME STATUS (BORDERLESS CYCLE + ROUND PROGRESS RING + TURN + TIMER + SHARDS) -->
       <div class="hud-top-right-status">
         <div class="status-info-card">
           <div class="status-cycle-row">
-            <span class="status-cycle-main">Cycle <span id="metric-cycle">1</span></span>
-            <span class="status-cycle-sub">(<span id="metric-round">1 / 4</span>)</span>
+            <span class="status-cycle-main">Cycle <span id="metric-cycle">I</span></span>
+            <div id="round-progress-ring" class="round-progress-ring" title="Round Progress"></div>
           </div>
-          <div class="status-divider"></div>
-          <div class="status-meta-grid">
-            <span>Turn : <strong id="turn-player-label">Bocchi</strong></span>
-            <span>Phase: <strong id="phase-name-label">Main Phase 1</strong></span>
-          </div>
-          <div class="status-card-use-row">
-            Card Use : <span id="metric-card-use">0 / 2</span>
+          <div class="status-turn-pill">
+            <span>Turn: <strong id="turn-player-label">Bocchi</strong></span>
           </div>
           <div id="status-turn-timer-row" class="status-turn-timer-row" title="Batas waktu 180 detik (3 menit) per giliran">
             <span>Turn Timer :</span>
@@ -335,6 +330,69 @@
       <!-- INTERACTIVE DRAGGABLE & ZOOMABLE BOARD VIEWPORT -->
       <div id="board-viewport" class="board-viewport">
         <div id="map-canvas-wrap" class="digital-board-surface">
+          <div class="map-art-backdrop" aria-hidden="true">
+            <svg class="map-art-svg" viewBox="0 0 2970 1998" preserveAspectRatio="none" fill="none">
+              <defs>
+                <radialGradient id="tartarusCoreMist" cx="50%" cy="50%" r="54%">
+                  <stop offset="0%" stop-color="#133336" stop-opacity="0.48" />
+                  <stop offset="56%" stop-color="#0b1d20" stop-opacity="0.22" />
+                  <stop offset="100%" stop-color="#060e10" stop-opacity="0" />
+                </radialGradient>
+                <radialGradient id="tartarusGoldHalo" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#e5a93c" stop-opacity="0.09" />
+                  <stop offset="65%" stop-color="#e5a93c" stop-opacity="0.02" />
+                  <stop offset="100%" stop-color="#e5a93c" stop-opacity="0" />
+                </radialGradient>
+                <linearGradient id="tartarusRiverMist" x1="35%" y1="15%" x2="22%" y2="85%">
+                  <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.09" />
+                  <stop offset="50%" stop-color="#0ea5e9" stop-opacity="0.04" />
+                  <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.08" />
+                </linearGradient>
+              </defs>
+              <rect width="2970" height="1998" fill="url(#tartarusCoreMist)" />
+              <circle cx="1485" cy="999" r="760" fill="url(#tartarusGoldHalo)" />
+
+              <!-- Outer Ancient Cartography Frame -->
+              <rect x="46" y="42" width="2878" height="1914" rx="28" stroke="#9fd6be" stroke-opacity="0.09" stroke-width="2" />
+              <rect x="66" y="62" width="2838" height="1874" rx="22" stroke="#e5a93c" stroke-opacity="0.07" stroke-width="1.5" stroke-dasharray="14 10" />
+
+              <!-- Corner Cartography Brackets -->
+              <path d="M 88 150 L 88 86 L 152 86" stroke="#e5a93c" stroke-opacity="0.22" stroke-width="3" />
+              <path d="M 2882 150 L 2882 86 L 2818 86" stroke="#e5a93c" stroke-opacity="0.22" stroke-width="3" />
+              <path d="M 88 1848 L 88 1912 L 152 1912" stroke="#e5a93c" stroke-opacity="0.22" stroke-width="3" />
+              <path d="M 2882 1848 L 2882 1912 L 2818 1912" stroke="#e5a93c" stroke-opacity="0.22" stroke-width="3" />
+
+              <!-- Central Tartarus Astrolabe Rings -->
+              <circle cx="1485" cy="999" r="690" stroke="#9fd6be" stroke-opacity="0.08" stroke-width="2" stroke-dasharray="18 14" />
+              <circle cx="1485" cy="999" r="515" stroke="#e5a93c" stroke-opacity="0.08" stroke-width="1.8" />
+              <circle cx="1485" cy="999" r="350" stroke="#9fd6be" stroke-opacity="0.09" stroke-width="1.5" stroke-dasharray="6 10" />
+              <circle cx="1485" cy="999" r="170" stroke="#e5a93c" stroke-opacity="0.09" stroke-width="1.5" />
+
+              <!-- Subtle Cardinal Compass Axes -->
+              <line x1="1485" y1="120" x2="1485" y2="1878" stroke="#9fd6be" stroke-opacity="0.055" stroke-width="1.5" />
+              <line x1="160" y1="999" x2="2810" y2="999" stroke="#9fd6be" stroke-opacity="0.055" stroke-width="1.5" />
+              <line x1="760" y1="274" x2="2210" y2="1724" stroke="#e5a93c" stroke-opacity="0.045" stroke-width="1.2" />
+              <line x1="2210" y1="274" x2="760" y2="1724" stroke="#e5a93c" stroke-opacity="0.045" stroke-width="1.2" />
+
+              <!-- Subtle Tartarus River Basin Contour -->
+              <path d="M 1080 120 C 1220 620, 620 1120, 740 1890" stroke="url(#tartarusRiverMist)" stroke-width="210" stroke-linecap="round" />
+              <path d="M 1080 120 C 1220 620, 620 1120, 740 1890" stroke="#38bdf8" stroke-opacity="0.07" stroke-width="2" stroke-dasharray="16 20" />
+
+              <!-- Subtle Topographic Terrain Arcs -->
+              <path d="M 110 420 Q 420 260 660 440 T 1020 340" stroke="#9fd6be" stroke-opacity="0.06" stroke-width="2" />
+              <path d="M 2180 280 Q 2480 420 2840 310" stroke="#9fd6be" stroke-opacity="0.06" stroke-width="2" />
+              <path d="M 2080 1680 Q 2440 1560 2830 1720" stroke="#e5a93c" stroke-opacity="0.06" stroke-width="2" />
+              <path d="M 130 1620 Q 410 1480 680 1660" stroke="#9fd6be" stroke-opacity="0.06" stroke-width="2" />
+
+              <!-- Subtle Compass Rose Emblem (Bottom-Right Corner) -->
+              <g transform="translate(2740 1760)" opacity="0.18">
+                <circle cx="0" cy="0" r="54" stroke="#e5a93c" stroke-width="1.5" />
+                <circle cx="0" cy="0" r="38" stroke="#9fd6be" stroke-width="1" stroke-dasharray="4 4" />
+                <polygon points="0,-58 10,-10 58,0 10,10 0,58 -10,10 -58,0 -10,-10" fill="#e5a93c" fill-opacity="0.28" stroke="#e5a93c" stroke-width="1.2" />
+                <circle cx="0" cy="0" r="6" fill="#9fd6be" />
+              </g>
+            </svg>
+          </div>
           <svg id="map-svg-overlay" class="board-connections-svg" viewBox="0 0 2970 1998"></svg>
           <div id="map-nodes-layer" style="position:absolute;inset:0;width:100%;height:100%;"></div>
         </div>
@@ -364,6 +422,9 @@
 
         <div class="roll-action-dock">
           <div id="last-roll-readout" class="last-roll-readout"></div>
+          <div id="roll-card-used-label" class="roll-card-used-label">
+            Card Used: <span id="metric-card-use">0 / 2</span>
+          </div>
           <button id="btn-roll-dice" class="eft-roll-btn" onclick="window.EFT_APP.handleRollButton()">
             <span class="eft-roll-title">Roll</span>
             <span id="roll-counter-label" class="eft-roll-count">0/2</span>
