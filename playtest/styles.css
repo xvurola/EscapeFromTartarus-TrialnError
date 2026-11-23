@@ -8489,19 +8489,26 @@ body:not(.modal-open) .tucked-card:hover,
 /* Modal Pop-Up Stages for Compendium, Rules & Sound Settings */
 .compendium-modal-stage {
   min-height: 460px;
-  height: min(68dvh, 620px);
+  height: min(76dvh, 660px);
   display: flex;
   flex-direction: column;
 }
 
 .compendium-showcase-root.is-modal-mode {
   height: 100%;
-  min-height: 440px;
+  min-height: 0;
+  flex: 1;
+}
+
+.compendium-showcase-root.is-modal-mode .comp-strip-shell,
+.compendium-showcase-root.is-modal-mode .comp-strip-track {
+  height: 100%;
+  align-items: stretch;
 }
 
 .compendium-showcase-root.is-modal-mode .comp-char-card {
-  flex: 0 0 236px;
-  height: 410px;
+  flex: 0 0 248px;
+  height: 100%;
 }
 
 .rules-modal-stage {
@@ -8628,16 +8635,16 @@ body:not(.modal-open) .tucked-card:hover,
 
   .compendium-modal-stage {
     min-height: 240px;
-    height: 70dvh;
+    height: 74dvh;
   }
 
   .compendium-showcase-root.is-modal-mode {
-    min-height: 220px;
+    min-height: 0;
   }
 
   .compendium-showcase-root.is-modal-mode .comp-char-card {
-    flex: 0 0 132px;
-    height: 210px;
+    flex: 0 0 138px;
+    height: 100%;
   }
 }
 

@@ -5874,6 +5874,11 @@
       return;
     }
 
+    if (flowCard.effectKey === "sam_fire_tiles") {
+      startSamFireTileSelection(cardUid, options, flowCard);
+      return;
+    }
+
     if (
       flowCard.targetType === "normal_tile_in_radius" ||
       flowCard.targetType === "any_tile" ||
@@ -7248,12 +7253,25 @@
         return `${player.name} memaksa ${targetPlayer.name} duel Versus (${stakeLabel})!`;
       }
       case "sam_fire_tiles": {
-        const startId = options.targetTileId || player.tileId;
-        const tObj = TILE_MAP[startId];
-        const fireIds = [tObj.id];
-        const nextPlayable = getNextPlayableOptions(tObj.id, null, 1);
-        if (nextPlayable.length > 0 && nextPlayable[0].tileId !== tObj.id && nextPlayable[0].tileId !== "T0") {
-          fireIds.push(nextPlayable[0].tileId);
+        let fireIds = [];
+        if (Array.isArray(options.targetTileIds) && options.targetTileIds.length > 0) {
+          const uniq = [];
+          options.targetTileIds.forEach((fid) => {
+            if (fid && TILE_MAP[fid] && TILE_MAP[fid].type !== "spawn" && TILE_MAP[fid].type !== "intersect" && !uniq.includes(fid)) {
+              uniq.push(fid);
+            }
+          });
+          fireIds = uniq.slice(0, 2);
+        } else {
+          const startId = options.targetTileId && TILE_MAP[options.targetTileId] ? options.targetTileId : player.tileId;
+          if (startId && TILE_MAP[startId]) fireIds.push(startId);
+          const candidates = DATA.BOARD_TILES.filter(
+            (t) => t.type !== "spawn" && t.type !== "intersect" && !t.offTrack && !fireIds.includes(t.id)
+          );
+          if (candidates.length > 0 && fireIds.length < 2) {
+            const pick = candidates[Math.floor(Math.random() * candidates.length)];
+            fireIds.push(pick.id);
+          }
         }
         fireIds.forEach((fid) => {
           state.boardTokens = state.boardTokens.filter((tk) => !(tk.tileId === fid && tk.type === "fire_tile"));
@@ -7268,7 +7286,7 @@
         });
         triggerBoardTileVfx(fireIds, "sam_fire_impact");
         playSfx("sam_impact");
-        const msg = `${player.name} membakar tile [${fireIds.join(" & ")}] dengan Deathstar Destruction!`;
+        const msg = `${player.name} membakar 2 tile pilihan bebas [${fireIds.join(" & ")}] dengan Deathstar Destruction!`;
         addLog(`[${card.name}]: ${msg}`);
         return msg;
       }
@@ -8953,7 +8971,9 @@
       (pendingInteraction.type === "select_tile_target" ||
         pendingInteraction.type === "stage_is_mine" ||
         pendingInteraction.type === "select_token_source" ||
-        pendingInteraction.type === "select_token_dest")
+        pendingInteraction.type === "select_token_dest" ||
+        pendingInteraction.type === "select_sam_fire_1" ||
+        pendingInteraction.type === "select_sam_fire_2")
         ? pendingInteraction.validTileIds || []
         : [];
 
@@ -9044,6 +9064,9 @@
           tip = `Belok ke jalur ini -> Perkiraan berhenti di ${landTile ? landTile.name : prev.landingTileId}`;
         }
         if (radiusSet.has(t.id)) classes.push("in-radius");
+        if (localCanAct && pendingInteraction && pendingInteraction.type === "select_sam_fire_2" && pendingInteraction.firstTileId === t.id) {
+          classes.push("tile-has-trap", "tile-trap-fire");
+        }
         const stepLbl =
           radiusSet.size > 0 &&
           pendingInteraction.tileStepLabels &&
@@ -9455,6 +9478,18 @@
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
           ${selfPullBtn}
           ${changeBtn}
+          <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
+        </div>`;
+    } else if (pendingInteraction.type === "select_sam_fire_1") {
+      bar.innerHTML = `
+        <div><strong>Deathstar Destruction (Tile 1/2):</strong> Pilih <strong>tile pertama</strong> bebas di peta untuk dibakar</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
+        </div>`;
+    } else if (pendingInteraction.type === "select_sam_fire_2") {
+      bar.innerHTML = `
+        <div><strong>Deathstar Destruction (Tile 2/2):</strong> Tile 1 (<strong>${escapeHtml(pendingInteraction.firstTileId || "")}</strong>) dipilih · Pilih <strong>tile kedua</strong> bebas di peta</div>
+        <div style="display:flex;gap:6px;">
           <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
         </div>`;
     } else if (pendingInteraction.type === "select_token_source") {
@@ -10498,6 +10533,32 @@
         chooseBranchTile(tileId);
         return;
       }
+      if (pendingInteraction.type === "select_sam_fire_1" && pendingInteraction.validTileIds.includes(tileId)) {
+        const remainingIds = pendingInteraction.validTileIds.filter((id) => id !== tileId);
+        pendingInteraction = {
+          type: "select_sam_fire_2",
+          cardUid: pendingInteraction.cardUid,
+          card: pendingInteraction.card,
+          player: pendingInteraction.player,
+          options: { ...(pendingInteraction.options || {}), firstTileId: tileId },
+          firstTileId: tileId,
+          validTileIds: remainingIds,
+          tileStepLabels: { [tileId]: "API 1" }
+        };
+        playSfx("click");
+        renderAll();
+        return;
+      }
+      if (pendingInteraction.type === "select_sam_fire_2" && pendingInteraction.validTileIds.includes(tileId)) {
+        const { cardUid, options, firstTileId } = pendingInteraction;
+        pendingInteraction = null;
+        playSkillCardFromHand(cardUid, {
+          ...(options || {}),
+          targetTileIds: [firstTileId, tileId],
+          targetTileId: firstTileId
+        });
+        return;
+      }
       if (pendingInteraction.type === "select_token_source" && pendingInteraction.validTileIds.includes(tileId)) {
         const covering = getTokensCoveringTile(tileId);
         const chosenTok = covering[0];
@@ -10884,6 +10945,31 @@
     }
 
     proceedCardActivationAfterTax(cardUid, flowCard, options);
+  }
+
+  function startSamFireTileSelection(cardUid, options = {}, specCard = null) {
+    const player = getActivePlayer();
+    const card = player.hand.find((c) => c.uid === cardUid);
+    if (!card) return;
+    const effectiveCard = specCard || card;
+    const validTileIds = DATA.BOARD_TILES.filter(
+      (t) => t.type !== "spawn" && t.type !== "intersect" && !t.offTrack
+    ).map((t) => t.id);
+    if (validTileIds.length < 2) {
+      alert("Tidak cukup tile valid di papan.");
+      return;
+    }
+    closeModal();
+    pendingInteraction = {
+      type: "select_sam_fire_1",
+      cardUid,
+      card: effectiveCard,
+      player,
+      options,
+      validTileIds,
+      tileStepLabels: {}
+    };
+    renderAll();
   }
 
   function startTokenSourceSelection(cardUid, options = {}, specCard = null) {
