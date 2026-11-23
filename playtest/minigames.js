@@ -910,8 +910,8 @@
     accentRgb: "52, 211, 153",
     modes: ["versus", "ffa"],
     ruleText: {
-      versus: "Lempar dadu 1d20 secara bergantian — angka tertinggi menang duel (seri langsung tie-breaker)!",
-      ffa: "Semua pemain melempar dadu 1d20 — angka tertinggi meraih hadiah koin terbesar (seri langsung tie-breaker)!"
+      versus: "Lempar dadu 1d20 secara bergantian; angka tertinggi menang duel (seri langsung tie-breaker)!",
+      ffa: "Semua pemain melempar dadu 1d20; angka tertinggi meraih hadiah koin terbesar (seri langsung tie-breaker)!"
     },
     initData(mg) {
       mg.data = {
@@ -1012,7 +1012,7 @@
           const hasRolled = entry.total !== null;
           const showCharSub = entry.charName && entry.charName.toLowerCase() !== entry.name.toLowerCase();
 
-          let numText = "—";
+          let numText = "-";
           let numCls = "is-pending";
           if (hasRolled) {
             numText = String(entry.total);
@@ -1162,7 +1162,7 @@
     accent: "#fb923c",
     accentRgb: "251, 146, 60",
     modes: ["versus"],
-    ruleText: "Format Best of 3 — pilih Gunting, Batu, atau Kertas secara rahasia dalam 6 detik; seri diulang, 2 kemenangan menang!",
+    ruleText: "Format Best of 3: pilih Gunting, Batu, atau Kertas secara rahasia dalam 6 detik; seri diulang, 2 kemenangan menang!",
     initData(mg) {
       mg.data = {
         round: 1,
@@ -1401,7 +1401,7 @@
     accent: "#f43f5e",
     accentRgb: "244, 63, 94",
     modes: ["versus"],
-    ruleText: "Format Best of 3 — tunggu sinyal 'TEMBAK!' lalu tekan secepat mungkin! Waspada sinyal pengecoh (false start = langsung kalah ronde).",
+    ruleText: "Format Best of 3: tunggu sinyal 'TEMBAK!' lalu tekan secepat mungkin! Waspada sinyal pengecoh (false start = langsung kalah ronde).",
     initData(mg) {
       mg.data = {
         round: 1,
@@ -1435,7 +1435,7 @@
 
       if (d.subPhase === "wait" || d.subPhase === "fake" || (payload && payload.falseStart)) {
         playSfx("coin_loss");
-        qdResolveRound(mg, oppPos, `FALSE START! ${actor.name} menekan terlalu cepat — ${opp.name} menang ronde!`);
+        qdResolveRound(mg, oppPos, `FALSE START! ${actor.name} menekan terlalu cepat, ${opp.name} menang ronde!`);
         return;
       }
 
@@ -1458,7 +1458,7 @@
           if (d.subPhase === "fake") {
             const oppPos = pos === 0 ? 1 : 0;
             playSfx("coin_loss");
-            qdResolveRound(mg, oppPos, `FALSE START! ${e.name} tertipu sinyal pengecoh — ${mg.entries[oppPos].name} menang ronde!`);
+            qdResolveRound(mg, oppPos, `FALSE START! ${e.name} tertipu sinyal pengecoh, ${mg.entries[oppPos].name} menang ronde!`);
           } else if (d.subPhase === "fire") {
             const ms = Math.max(120, now - (d.fireAt || now));
             playSfx("dice_land");
@@ -1660,7 +1660,7 @@
     accent: "#fbbf24",
     accentRgb: "251, 191, 36",
     modes: ["versus"],
-    ruleText: "Format Best of 3 — penantang memilih Heads atau Tail dalam 5 detik, lawan otomatis sisi sebaliknya, lalu koin dilempar!",
+    ruleText: "Format Best of 3: penantang memilih Heads atau Tail dalam 5 detik, lawan otomatis sisi sebaliknya, lalu koin dilempar!",
     initData(mg) {
       mg.data = {
         round: 1,
@@ -1935,7 +1935,7 @@
     accent: "#38bdf8",
     accentRgb: "56, 189, 248",
     modes: ["ffa"],
-    ruleText: "3 ronde cepat (Maks. 45 TC) — pilih 1 peti diam-diam! 1 pemain = penuh, 2 pemain = bagi dua, 3+ pemain = HANGUS (0 TC)!",
+    ruleText: "3 ronde cepat (Maks. 45 TC): pilih 1 peti diam-diam! 1 pemain = penuh, 2 pemain = bagi dua, 3+ pemain = HANGUS (0 TC)!",
     initData(mg) {
       const totals = {};
       mg.entries.forEach((e) => {
@@ -2114,7 +2114,7 @@
       const promptNote = isReveal
         ? `<div class="mg-round-msg">Peti dibuka! 1 pemain = Penuh · 2 pemain = Bagi Dua · 3+ pemain = Hangus!</div>`
         : activeHuman
-        ? `<div class="mg-round-msg">${humans.length > 1 ? `Giliran Pilih Rahasia: ${esc(activeHuman.name)} — ` : ""}Klik 1 peti sebelum waktu habis!</div>`
+        ? `<div class="mg-round-msg">${humans.length > 1 ? `Giliran Pilih Rahasia (${esc(activeHuman.name)}): ` : ""}Klik 1 peti sebelum waktu habis!</div>`
         : `<div class="mg-hint-note">Pilihan terkunci! Menunggu pemain lain memilih peti...</div>`;
 
       return {
@@ -2524,7 +2524,7 @@
           headline: dealerEv.isBust
             ? `Dealer BUST (${dealerEv.total})!`
             : winCount > 0
-            ? `Dealer ${dealerEv.total} — ${winCount} Pemain Menang!`
+            ? `Dealer ${dealerEv.total}: ${winCount} Pemain Menang!`
             : `Dealer Menang (${dealerEv.total})!`,
           sub: "Ringkasan hasil taruhan & perubahan saldo TC seluruh pemain.",
           deltas: d.pendingDeltas || {}
@@ -2591,7 +2591,7 @@
             if (s.isFreeStake) {
               bodyHtml = `
                 <div style="font-size:0.78rem;color:#fde68a;background:rgba(245,158,11,0.14);border:1px solid rgba(251,191,36,0.4);border-radius:9px;padding:8px;text-align:center;">
-                  Saldo kurang dari ${BJ_MIN_BET} TC — Mendapat <strong>Modal Gratis 💰 ${BJ_MIN_BET} TC</strong>!
+                  Saldo kurang dari ${BJ_MIN_BET} TC, mendapat <strong>Modal Gratis 💰 ${BJ_MIN_BET} TC</strong>!
                 </div>`;
             } else if (canControl && !s.betLocked) {
               bodyHtml = `

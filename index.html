@@ -2,8 +2,8 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#081312" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#081113" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <title>Escape From Tartarus</title>
@@ -71,6 +71,12 @@
             Multiplayer
           </button>
         </div>
+        <div class="mts-secondary-actions">
+          <button type="button" class="mts-guide-btn" onclick="window.EFT_APP.openQuickGuideModal(0)">
+            Panduan Cepat (45 Detik)
+          </button>
+        </div>
+        <div id="mts-resume-slot" class="mts-resume-slot"></div>
       </div>
     </div>
 
@@ -81,25 +87,29 @@
   <header class="studio-topbar">
     <div class="topbar-brand-group">
       <div class="brand-title">Escape From Tartarus</div>
-      <button id="btn-admin-mode" class="util-pill-btn topbar-admin-btn" onclick="window.EFT_APP.openAdminModal()">Admin</button>
-      <button class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1, true)">Shop</button>
-      <button class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
-      <button class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.undoLastAction()">Undo</button>
+      <button id="btn-admin-mode" type="button" class="util-pill-btn topbar-admin-btn" onclick="window.EFT_APP.openAdminModal()">Admin</button>
+      <button type="button" class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.openMerchantModal(1, true)">Shop</button>
+      <button type="button" class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.toggleDrawer('drawer-sandbox')">Test Tools</button>
+      <button type="button" class="util-pill-btn topbar-admin-btn admin-only-el" onclick="window.EFT_APP.undoLastAction()">Undo</button>
     </div>
 
-    <nav class="center-nav-pills">
-      <button class="nav-oval-pill active" data-tab="simulator" onclick="window.EFT_APP.switchTab('simulator')">
+    <nav class="center-nav-pills" aria-label="Navigasi Utama">
+      <button type="button" class="nav-oval-pill active" data-tab="simulator" onclick="window.EFT_APP.switchTab('simulator')">
         Play Arena
       </button>
-      <button class="nav-oval-pill" data-tab="compendium" onclick="window.EFT_APP.switchTab('compendium')">
+      <button type="button" class="nav-oval-pill" data-tab="compendium" onclick="window.EFT_APP.switchTab('compendium')">
         Character Compendium
       </button>
-      <button class="nav-oval-pill" data-tab="rules" onclick="window.EFT_APP.switchTab('rules')">
+      <button type="button" class="nav-oval-pill" data-tab="rules" onclick="window.EFT_APP.switchTab('rules')">
         Rules
+      </button>
+      <button type="button" class="nav-oval-pill" onclick="window.EFT_APP.openQuickGuideModal(0)">
+        Guide
       </button>
     </nav>
 
     <div class="topbar-right">
+      <div id="mp-conn-pill" class="mp-conn-pill" aria-live="polite"></div>
       <div id="sound-control-pill" class="sound-control-pill" title="Kontrol Sound Effect &amp; Skill SFX">
         <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Matikan atau aktifkan suara">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -124,7 +134,11 @@
           </svg>
         </button>
         <div id="audio-mixer-popover" class="audio-mixer-popover" onclick="event.stopPropagation()">
-          <div class="am-title">Audio &amp; Skill Card SFX</div>
+          <div class="am-title">Audio, Skill SFX &amp; Feel</div>
+          <label class="am-toggle-row">
+            <span>Getar Kamera (Screen Shake)</span>
+            <input id="screen-shake-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleScreenShake(this.checked)" />
+          </label>
           <label class="am-toggle-row">
             <span>Notifikasi Ganti Turn</span>
             <span class="am-inline-ctrl">
@@ -402,11 +416,11 @@
   </section>
 
   <!-- MODAL OVERLAY -->
-  <div id="app-modal" class="modal-backdrop" onclick="if(event.target===this)window.EFT_APP.closeModal()">
+  <div id="app-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title" onclick="if(event.target===this)window.EFT_APP.closeModal()">
     <div id="app-modal-card" class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-title" style="color:#f8fafc;font-size:1rem;">Modal Title</h3>
-        <button class="btn btn-sm" onclick="window.EFT_APP.closeModal()">Close</button>
+        <h2 id="modal-title" style="color:#eef4f1;font-size:1rem;margin:0;">Modal Title</h2>
+        <button type="button" class="btn btn-sm" onclick="window.EFT_APP.closeModal()">Close</button>
       </div>
       <div id="modal-body"></div>
     </div>
@@ -414,6 +428,7 @@
 
   <script src="playtest/firebaseConfig.js"></script>
   <script src="playtest/gameData.js"></script>
+  <script src="playtest/boardWebGL.js"></script>
   <script src="playtest/minigames.js"></script>
   <script src="playtest/app.js"></script>
 </body>

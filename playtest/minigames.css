@@ -180,11 +180,10 @@
 
 .mg-wheel-glow {
   position: absolute;
-  inset: -24px;
+  inset: -18px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.25) 0%, rgba(251, 191, 36, 0.12) 45%, transparent 72%);
+  background: radial-gradient(circle, rgba(159, 214, 190, 0.16) 0%, rgba(229, 169, 60, 0.08) 45%, transparent 72%);
   pointer-events: none;
-  animation: mgWheelAmbient 2.4s ease-in-out infinite alternate;
 }
 
 @keyframes mgWheelAmbient {
@@ -1559,5 +1558,15 @@
 
   .mg-result-row {
     padding: 6px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-shell *,
+  .mg-shell *::before,
+  .mg-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

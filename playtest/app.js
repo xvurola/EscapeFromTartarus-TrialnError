@@ -481,6 +481,7 @@
   const sfxLastPlayed = {};
   let audioCtx = null;
   let audioNoiseBuffer = null;
+  let audioBuses = null;
 
   function loadSoundPrefs() {
     const defaultChars = { bocchi: true, aventurine: true, joker: true, lilith: true, maomao: true, firefly: true };
@@ -502,6 +503,7 @@
             volume: vol,
             turnSfxEnabled: p.turnSfxEnabled !== false,
             skillSfxEnabled: p.skillSfxEnabled !== false,
+            screenShakeEnabled: p.screenShakeEnabled !== false,
             skillSfxVolume: skillVol,
             charSkillSfx: charMap
           };
@@ -513,6 +515,7 @@
       volume: 0.45,
       turnSfxEnabled: true,
       skillSfxEnabled: true,
+      screenShakeEnabled: true,
       skillSfxVolume: 0.75,
       charSkillSfx: defaultChars
     };
@@ -524,6 +527,21 @@
     try {
       localStorage.setItem(SOUND_PREFS_KEY, JSON.stringify(soundPrefs));
     } catch (e) {}
+  }
+
+  function syncAudioBusGains() {
+    if (!audioCtx || !audioBuses) return;
+    const now = audioCtx.currentTime;
+    const mSlider = soundPrefs.muted ? 0 : Math.max(0, Math.min(1, Number(soundPrefs.volume) || 0));
+    // Quadratic slider-to-gain mapping (audio-design Pattern 1: true silence at 0, even perceptual travel)
+    const mGain = mSlider <= 0.005 ? 0 : mSlider * mSlider;
+    const skSlider = soundPrefs.skillSfxEnabled === false ? 0 : Math.max(0, Math.min(1, Number(soundPrefs.skillSfxVolume ?? 0.75)));
+    const skGain = skSlider <= 0.005 ? 0 : skSlider * skSlider;
+    audioBuses.master.gain.setTargetAtTime(mGain, now, 0.015);
+    audioBuses.sfx.gain.setTargetAtTime(0.46, now, 0.015);
+    audioBuses.skill.gain.setTargetAtTime(skGain * 0.62, now, 0.015);
+    audioBuses.turn.gain.setTargetAtTime(soundPrefs.turnSfxEnabled === false ? 0 : 0.48, now, 0.015);
+    audioBuses.ui.gain.setTargetAtTime(0.38, now, 0.015);
   }
 
   function ensureAudioCtx(allowCreate = false) {
@@ -539,6 +557,34 @@
     }
     if (audioCtx && audioCtx.state === "suspended") {
       audioCtx.resume().catch(() => {});
+    }
+    if (audioCtx && !audioBuses) {
+      try {
+        const master = audioCtx.createGain();
+        const limiter = audioCtx.createDynamicsCompressor();
+        limiter.threshold.setValueAtTime(-6, audioCtx.currentTime);
+        limiter.knee.setValueAtTime(12, audioCtx.currentTime);
+        limiter.ratio.setValueAtTime(6, audioCtx.currentTime);
+        limiter.attack.setValueAtTime(0.003, audioCtx.currentTime);
+        limiter.release.setValueAtTime(0.18, audioCtx.currentTime);
+
+        const sfx = audioCtx.createGain();
+        const skill = audioCtx.createGain();
+        const turn = audioCtx.createGain();
+        const ui = audioCtx.createGain();
+
+        sfx.connect(limiter);
+        skill.connect(limiter);
+        turn.connect(limiter);
+        ui.connect(limiter);
+        limiter.connect(master);
+        master.connect(audioCtx.destination);
+
+        audioBuses = { master, limiter, sfx, skill, turn, ui };
+        syncAudioBusGains();
+      } catch (e) {
+        audioBuses = null;
+      }
     }
     if (audioCtx && !audioNoiseBuffer) {
       try {
@@ -556,7 +602,7 @@
 
   function getEffectiveSfxGain() {
     if (soundPrefs.muted || soundPrefs.volume <= 0.005) return 0;
-    return Math.pow(soundPrefs.volume, 1.25) * 0.32;
+    return soundPrefs.volume * soundPrefs.volume * 0.46;
   }
 
   function getEffectiveSkillSfxGain(charId = "", isPreview = false) {
@@ -566,9 +612,9 @@
       if (soundPrefs.skillSfxEnabled === false) return 0;
       if (charId && soundPrefs.charSkillSfx && soundPrefs.charSkillSfx[charId] === false) return 0;
     }
-    const effectiveVol = isPreview ? Math.max(0.25, skillVol) : skillVol;
+    const effectiveVol = isPreview ? Math.max(0.3, skillVol) : skillVol;
     if (effectiveVol <= 0.005) return 0;
-    return Math.pow(soundPrefs.volume, 1.1) * Math.pow(effectiveVol, 1.1) * 0.44;
+    return soundPrefs.volume * soundPrefs.volume * (effectiveVol * effectiveVol) * 0.62;
   }
 
   function playSoftTone(ctx, dest, opts) {
@@ -665,17 +711,36 @@
     const t = ctx.currentTime;
     const warmFilter = ctx.createBiquadFilter();
     warmFilter.type = "lowpass";
-    warmFilter.frequency.setValueAtTime(type === "skill" ? 4200 : type === "turn_reminder" ? 3400 : 2400, t);
+    warmFilter.frequency.setValueAtTime(type === "skill" ? 4200 : type === "turn_reminder" ? 3400 : 2500, t);
     warmFilter.Q.setValueAtTime(0.55, t);
 
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(masterLevel, t);
-    warmFilter.connect(master);
-    master.connect(ctx.destination);
+    // Subtle pitch & gain micro-variation on repetitive SFX (audio-design Pattern 3)
+    const varyTypes = new Set(["click", "step", "dice_tick", "coin_gain", "coin_loss"]);
+    const gainJitter = varyTypes.has(type) ? 0.88 + Math.random() * 0.24 : 1;
+    const pitchJitter = varyTypes.has(type) ? 0.96 + Math.random() * 0.08 : 1;
+
+    const voiceGain = ctx.createGain();
+    if (audioBuses && !isSkillPreview && !isTurnPreview) {
+      const targetBus =
+        type === "skill"
+          ? audioBuses.skill
+          : type === "turn_reminder" || type === "turn"
+          ? audioBuses.turn
+          : type === "click" || type === "preview"
+          ? audioBuses.ui
+          : audioBuses.sfx;
+      voiceGain.gain.setValueAtTime(gainJitter, t);
+      warmFilter.connect(voiceGain);
+      voiceGain.connect(targetBus);
+    } else {
+      voiceGain.gain.setValueAtTime(masterLevel * gainJitter, t);
+      warmFilter.connect(voiceGain);
+      voiceGain.connect(audioBuses ? audioBuses.limiter : ctx.destination);
+    }
 
     switch (type) {
       case "click":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 520, endFreq: 420, duration: 0.045, attack: 0.006, gain: 0.24, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 520 * pitchJitter, endFreq: 420 * pitchJitter, duration: 0.045, attack: 0.006, gain: 0.24, type: "sine" });
         break;
       case "preview":
         playSoftTone(ctx, warmFilter, { startTime: t, freq: 587, endFreq: 740, duration: 0.075, attack: 0.008, gain: 0.26, type: "sine" });
@@ -981,6 +1046,7 @@
           </svg>`;
     }
     const mixerBtn = document.getElementById("btn-audio-mixer");
+    const shakeToggle = document.getElementById("screen-shake-toggle");
     const turnToggle = document.getElementById("turn-sfx-toggle");
     const skillToggle = document.getElementById("skill-sfx-toggle");
     const skillSlider = document.getElementById("skill-sfx-volume-slider");
@@ -989,15 +1055,26 @@
     const skillActive = !isEffectivelyMuted && soundPrefs.skillSfxEnabled !== false && skillPct > 0;
 
     if (mixerBtn) mixerBtn.classList.toggle("is-off", !skillActive && soundPrefs.turnSfxEnabled === false);
+    if (shakeToggle) shakeToggle.checked = soundPrefs.screenShakeEnabled !== false;
     if (turnToggle) turnToggle.checked = soundPrefs.turnSfxEnabled !== false;
     if (skillToggle) skillToggle.checked = soundPrefs.skillSfxEnabled !== false;
     if (skillSlider) skillSlider.value = String(skillPct);
     if (skillLabel) skillLabel.textContent = soundPrefs.skillSfxEnabled === false ? "Off" : `${skillPct}%`;
+    syncAudioBusGains();
 
     ["bocchi", "aventurine", "joker", "lilith", "maomao", "firefly"].forEach((cid) => {
       const cb = document.getElementById(`char-sfx-${cid}`);
       if (cb) cb.checked = !soundPrefs.charSkillSfx || soundPrefs.charSkillSfx[cid] !== false;
     });
+  }
+
+  function toggleScreenShake(enabled) {
+    soundPrefs.screenShakeEnabled = !!enabled;
+    saveSoundPrefs();
+    syncSoundControlUi();
+    if (soundPrefs.screenShakeEnabled) {
+      addCameraTrauma(0.32);
+    }
   }
 
   function toggleAudioMixerPopover() {
@@ -1258,12 +1335,15 @@
     ]
   };
 
-  // Camera state: "follow" zooms & tracks active player; "wide" shows whole board; "free" when user drags
+  // Camera state: "follow" zooms & tracks active player; "free" when user drags
   const camera = {
-    mode: "follow", // "follow" | "wide" | "free"
+    mode: "follow", // "follow" | "free"
     zoom: 0.96,
     panX: 0,
     panY: 0,
+    shakeX: 0,
+    shakeY: 0,
+    shakeRot: 0,
     isDragging: false,
     dragStartX: 0,
     dragStartY: 0,
@@ -1272,10 +1352,101 @@
     movedDuringDrag: false
   };
 
+  // ============================================================================
+  // GAME FEEL ENGINE (Trauma Screen Shake + Overlapping-Safe Hit-Stop)
+  // ============================================================================
+  const gameFeel = {
+    trauma: 0,
+    t: 0,
+    rafId: null,
+    lastTime: 0,
+    hitStopId: 0
+  };
+
+  function isScreenShakeAllowed() {
+    if (soundPrefs && soundPrefs.screenShakeEnabled === false) return false;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+    return true;
+  }
+
+  function stepCameraShake(now) {
+    gameFeel.rafId = null;
+    if (!gameFeel.lastTime) gameFeel.lastTime = now;
+    const realDt = Math.min(0.05, Math.max(0.001, (now - gameFeel.lastTime) / 1000));
+    gameFeel.lastTime = now;
+
+    if (gameFeel.trauma <= 0 || !isScreenShakeAllowed()) {
+      gameFeel.trauma = 0;
+      camera.shakeX = 0;
+      camera.shakeY = 0;
+      camera.shakeRot = 0;
+      applyCameraTransform();
+      return;
+    }
+
+    gameFeel.trauma = Math.max(0, gameFeel.trauma - 1.9 * realDt);
+    const shake = gameFeel.trauma * gameFeel.trauma;
+    gameFeel.t += realDt * 34;
+    // Summed sines at unrelated rates (game-feel Pattern 1: smooth, never random buzz)
+    camera.shakeX = 13 * shake * Math.sin(gameFeel.t * 1.7);
+    camera.shakeY = 9 * shake * Math.sin(gameFeel.t * 2.3);
+    camera.shakeRot = 0.65 * shake * Math.sin(gameFeel.t * 1.1);
+    applyCameraTransform();
+
+    if (gameFeel.trauma > 0) {
+      gameFeel.rafId = requestAnimationFrame(stepCameraShake);
+    } else {
+      camera.shakeX = 0;
+      camera.shakeY = 0;
+      camera.shakeRot = 0;
+      applyCameraTransform();
+    }
+  }
+
+  function addCameraTrauma(amount) {
+    if (!isScreenShakeAllowed()) return;
+    gameFeel.trauma = Math.min(1, gameFeel.trauma + Math.max(0, Number(amount) || 0));
+    if (!gameFeel.rafId) {
+      gameFeel.lastTime = performance.now();
+      gameFeel.rafId = requestAnimationFrame(stepCameraShake);
+    }
+  }
+
+  function triggerHitStop(durationMs = 55) {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const clamped = Math.max(25, Math.min(120, Number(durationMs) || 55));
+    const myId = ++gameFeel.hitStopId;
+    if (window.EFT_WEBGL_VFX) window.EFT_WEBGL_VFX.setHitStopActive(true);
+    setTimeout(() => {
+      if (myId === gameFeel.hitStopId && window.EFT_WEBGL_VFX) {
+        window.EFT_WEBGL_VFX.setHitStopActive(false);
+      }
+    }, clamped);
+  }
+
+  function triggerGameFeedback(tier = "small", opts = {}) {
+    const t = String(tier || "small");
+    if (t === "large") {
+      addCameraTrauma(0.76);
+      triggerHitStop(95);
+    } else if (t === "medium") {
+      addCameraTrauma(0.38);
+      triggerHitStop(48);
+    } else {
+      addCameraTrauma(0.14);
+    }
+    if (opts.tileId && window.EFT_WEBGL_VFX) {
+      window.EFT_WEBGL_VFX.burstAtTile(opts.tileId, opts.vfxKind || "skill_cast", opts.color || null);
+    }
+  }
+
   function applyCameraTransform() {
     const surface = document.getElementById("map-canvas-wrap");
     if (!surface) return;
-    surface.style.transform = `translate(${camera.panX.toFixed(1)}px, ${camera.panY.toFixed(1)}px) scale(${camera.zoom.toFixed(3)})`;
+    const tx = camera.panX + (camera.shakeX || 0);
+    const ty = camera.panY + (camera.shakeY || 0);
+    const rotPart = camera.shakeRot ? ` rotate(${camera.shakeRot.toFixed(2)}deg)` : "";
+    surface.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${camera.zoom.toFixed(3)})${rotPart}`;
 
     const followBtn = document.getElementById("btn-cam-follow");
     if (followBtn) {
@@ -1565,19 +1736,35 @@
     );
   }
 
+  function loadOrCreatePersistentClientId() {
+    const key = "eft_persistent_client_id";
+    try {
+      const existing = localStorage.getItem(key);
+      if (existing && /^cli_[a-z0-9]{6,20}$/i.test(existing)) return existing;
+      const fresh = "cli_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+      localStorage.setItem(key, fresh);
+      return fresh;
+    } catch (e) {
+      return "cli_" + Math.random().toString(36).slice(2, 10);
+    }
+  }
+
   // Multiplayer state (Online Firebase Realtime Database)
   const mp = {
     mode: "local", // "local" | "firebase_host" | "firebase_client"
     roomCode: "",
     mySeat: -1,
-    clientId: "cli_" + Math.random().toString(36).slice(2, 10),
+    clientId: loadOrCreatePersistentClientId(),
     fbDb: null,
     fbRoomRef: null,
     fbActionsRef: null,
     fbSeatsRef: null,
+    fbConnRef: null,
     fbStateListener: null,
     fbActionListener: null,
     fbSeatsListener: null,
+    fbConnListener: null,
+    isConnected: false,
     onlineSeats: {},
     processedActionIds: new Set(),
     lobby: {
@@ -1589,6 +1776,393 @@
       members: []
     }
   };
+
+  // ============================================================================
+  // PERSISTENCE, MULTIPLAYER RECONNECT & LOCAL AUTOSAVE (save-systems v1)
+  // ============================================================================
+  const SAVE_SCHEMA_VERSION = 1;
+  const MP_SESSION_KEY = "eft_mp_session_v1";
+  const LOCAL_SAVE_KEY = "eft_local_autosave_v1";
+  const LOCAL_SAVE_BAK_KEY = "eft_local_autosave_v1_bak";
+  let lastLocalAutosaveAt = 0;
+
+  function updateMpConnectionPill(statusKind = "hidden", text = "") {
+    const el = document.getElementById("mp-conn-pill");
+    if (!el) return;
+    if (statusKind === "hidden" || !text) {
+      el.className = "mp-conn-pill";
+      el.textContent = "";
+      return;
+    }
+    el.className = `mp-conn-pill visible is-${statusKind}`;
+    el.textContent = text;
+  }
+
+  function saveActiveMpSession(role, code) {
+    if (!code) return;
+    try {
+      localStorage.setItem(
+        MP_SESSION_KEY,
+        JSON.stringify({
+          version: SAVE_SCHEMA_VERSION,
+          role,
+          roomCode: String(code).toUpperCase(),
+          username: (setupDraft.username || "").trim() || "Player",
+          charId: setupDraft.charId || "bocchi",
+          clientId: mp.clientId,
+          savedAt: Date.now()
+        })
+      );
+    } catch (e) {}
+  }
+
+  function loadActiveMpSession() {
+    try {
+      const raw = localStorage.getItem(MP_SESSION_KEY);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (!d || d.version !== SAVE_SCHEMA_VERSION || !d.roomCode) return null;
+      if (Date.now() - (d.savedAt || 0) > 6 * 60 * 60 * 1000) {
+        localStorage.removeItem(MP_SESSION_KEY);
+        return null;
+      }
+      return d;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clearActiveMpSession() {
+    try {
+      localStorage.removeItem(MP_SESSION_KEY);
+    } catch (e) {}
+  }
+
+  function saveLocalMatchAutosave(force = false) {
+    if (!state || state.winner || !isMatchStarted || isInitializingMatch || mp.mode !== "local") return;
+    const now = Date.now();
+    if (!force && now - lastLocalAutosaveAt < 1200) return;
+    lastLocalAutosaveAt = now;
+    try {
+      const prev = localStorage.getItem(LOCAL_SAVE_KEY);
+      if (prev) {
+        localStorage.setItem(LOCAL_SAVE_BAK_KEY, prev);
+      }
+      const payload = {
+        version: SAVE_SCHEMA_VERSION,
+        savedAt: now,
+        state,
+        pending: serializePendingInteraction()
+      };
+      localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(payload));
+    } catch (e) {}
+  }
+
+  function clearLocalMatchAutosave() {
+    try {
+      localStorage.removeItem(LOCAL_SAVE_KEY);
+      localStorage.removeItem(LOCAL_SAVE_BAK_KEY);
+    } catch (e) {}
+  }
+
+  function loadLocalMatchAutosave() {
+    const keys = [LOCAL_SAVE_KEY, LOCAL_SAVE_BAK_KEY];
+    for (let i = 0; i < keys.length; i++) {
+      try {
+        const raw = localStorage.getItem(keys[i]);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          parsed.version === SAVE_SCHEMA_VERSION &&
+          parsed.state &&
+          Array.isArray(parsed.state.players) &&
+          parsed.state.players.length >= 2 &&
+          !parsed.state.winner &&
+          Date.now() - (parsed.savedAt || 0) < 24 * 60 * 60 * 1000
+        ) {
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    return null;
+  }
+
+  function attachFirebaseConnectionMonitor(seatsRef, roleLabel) {
+    if (!mp.fbDb || !seatsRef) return;
+    if (mp.fbConnRef && mp.fbConnListener) {
+      mp.fbConnRef.off("value", mp.fbConnListener);
+    }
+    mp.fbConnRef = mp.fbDb.ref(".info/connected");
+    mp.fbConnListener = mp.fbConnRef.on("value", (snap) => {
+      const connected = snap.val() === true;
+      mp.isConnected = connected;
+      if (mp.mode === "local" || !mp.roomCode) {
+        updateMpConnectionPill("hidden", "");
+        return;
+      }
+      if (connected) {
+        const mySeatRef = seatsRef.child(mp.clientId);
+        mySeatRef.set({ clientId: mp.clientId, status: roleLabel, joinedAt: Date.now() }).catch(() => {});
+        mySeatRef.onDisconnect().remove().catch(() => {});
+        updateMpConnectionPill("online", `Online · ${mp.roomCode}`);
+      } else {
+        updateMpConnectionPill("reconnecting", `Menyambung ulang (${mp.roomCode})...`);
+      }
+    });
+  }
+
+  function renderTitleResumeSlot() {
+    const slot = document.getElementById("mts-resume-slot");
+    if (!slot) return;
+    const mpSess = loadActiveMpSession();
+    const localSave = loadLocalMatchAutosave();
+
+    if (mpSess && window.EFT_IS_FIREBASE_READY && window.EFT_IS_FIREBASE_READY()) {
+      const roleLabel = mpSess.role === "host" ? "Host" : "Pemain";
+      slot.innerHTML = `
+        <div class="mts-resume-card">
+          <div class="mts-resume-info">
+            <span class="mts-resume-tag">Sesi Multiplayer Aktif</span>
+            <strong class="mts-resume-title">Room ${escapeHtml(mpSess.roomCode)} (${roleLabel})</strong>
+          </div>
+          <div class="mts-resume-actions">
+            <button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.reconnectSavedMultiplayerSession()">
+              Sambung Ulang
+            </button>
+            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.dismissSavedSessions('mp')">
+              Hapus
+            </button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    if (localSave && localSave.state) {
+      const st = localSave.state;
+      const activeName = st.players[st.activePlayerIndex] ? st.players[st.activePlayerIndex].name : "Player";
+      slot.innerHTML = `
+        <div class="mts-resume-card">
+          <div class="mts-resume-info">
+            <span class="mts-resume-tag">Match Lokal Tersimpan</span>
+            <strong class="mts-resume-title">Cycle ${st.cycle} (${st.roundInCycle}/${st.rules ? st.rules.turnsPerCycle : 4}) · Giliran ${escapeHtml(activeName)}</strong>
+          </div>
+          <div class="mts-resume-actions">
+            <button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.resumeSavedLocalMatch()">
+              Lanjutkan
+            </button>
+            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.dismissSavedSessions('local')">
+              Hapus
+            </button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    slot.innerHTML = "";
+  }
+
+  function dismissSavedSessions(kind = "all") {
+    playSfx("click");
+    if (kind === "mp" || kind === "all") clearActiveMpSession();
+    if (kind === "local" || kind === "all") clearLocalMatchAutosave();
+    renderTitleResumeSlot();
+  }
+
+  function resumeSavedLocalMatch() {
+    const saved = loadLocalMatchAutosave();
+    if (!saved || !saved.state) {
+      renderTitleResumeSlot();
+      return;
+    }
+    playSfx("click");
+    detachFirebaseListeners();
+    mp.mode = "local";
+    mp.roomCode = "";
+    mp.mySeat = -1;
+    state = saved.state;
+    pendingInteraction = saved.pending ? deserializePendingInteraction(saved.pending) : null;
+    isMatchStarted = true;
+    invalidateHudCache();
+    hideMainTitleScreen();
+    closeModal();
+    if (state.players && state.players[state.activePlayerIndex]) {
+      focusCameraOnTile(getActivePlayer().tileId);
+    }
+    renderAll();
+  }
+
+  function reconnectSavedMultiplayerSession() {
+    const sess = loadActiveMpSession();
+    if (!sess || !sess.roomCode) {
+      renderTitleResumeSlot();
+      return;
+    }
+    playSfx("click");
+    if (sess.username) setupDraft.username = sess.username;
+    if (sess.charId) setupDraft.charId = sess.charId;
+    if (sess.role === "host") {
+      rejoinFirebaseHostRoom(sess.roomCode);
+    } else {
+      joinFirebaseClientRoom(sess.roomCode);
+    }
+  }
+
+  function rejoinFirebaseHostRoom(code) {
+    if (!window.EFT_IS_FIREBASE_READY()) {
+      alert("Firebase belum dikonfigurasi di playtest/firebaseConfig.js.");
+      return;
+    }
+    const cleanCode = String(code || "").trim().toUpperCase();
+    if (!cleanCode) return;
+    try {
+      detachFirebaseListeners();
+      const db = ensureFirebaseDb();
+      const roomRef = db.ref("rooms/" + cleanCode);
+      roomRef
+        .once("value")
+        .then((snap) => {
+          const data = snap.val();
+          if (!data || (!data.stateJson && !data.lobbyJson)) {
+            clearActiveMpSession();
+            renderTitleResumeSlot();
+            alert(`Room [${cleanCode}] sudah tidak aktif.`);
+            return;
+          }
+          mp.mode = "firebase_host";
+          mp.roomCode = cleanCode;
+          mp.fbRoomRef = roomRef;
+          mp.fbActionsRef = roomRef.child("actions");
+          mp.fbSeatsRef = roomRef.child("seats");
+          if (data.lobbyJson) mp.lobby = JSON.parse(data.lobbyJson);
+          if (data.stateJson) {
+            state = JSON.parse(data.stateJson);
+            pendingInteraction = data.pendingJson ? deserializePendingInteraction(JSON.parse(data.pendingJson)) : null;
+          }
+          if (state && state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
+            mp.mySeat = state.seatMap[mp.clientId];
+          } else {
+            mp.mySeat = 0;
+          }
+
+          attachFirebaseConnectionMonitor(mp.fbSeatsRef, "Host Online");
+          mp.fbSeatsListener = mp.fbSeatsRef.on("value", (sSnap) => {
+            mp.onlineSeats = sSnap.val() || {};
+            refreshLobbyModalIfOpen();
+          });
+          mp.fbActionListener = mp.fbActionsRef.on("child_added", (aSnap) => {
+            const act = aSnap.val();
+            aSnap.ref.remove().catch(() => {});
+            if (!act || !act.action) return;
+            processRemoteClientAction(act);
+          });
+
+          saveActiveMpSession("host", cleanCode);
+          invalidateHudCache();
+          if (mp.lobby.status === "playing") {
+            isMatchStarted = true;
+            hideMainTitleScreen();
+            closeModal();
+            if (state && state.players && state.players[state.activePlayerIndex]) {
+              focusCameraOnTile(getActivePlayer().tileId);
+            }
+            renderAll();
+          } else {
+            openWelcomeSetupModal("multiplayer");
+          }
+        })
+        .catch((err) => {
+          alert("Gagal menyambung ulang sebagai Host: " + err.message);
+        });
+    } catch (e) {
+      alert("Gagal menyambung ulang Host: " + e.message);
+    }
+  }
+
+  // ============================================================================
+  // INTERACTIVE 4-STEP QUICK GUIDE (player-experience & game-ux-review)
+  // ============================================================================
+  const QUICK_GUIDE_SLIDES = [
+    {
+      step: "1 / 4",
+      title: "Tujuan Utama & Ekonomi Awal",
+      lead: "Kumpulkan 💎 3 Tartarus Shard untuk memenangkan pertandingan.",
+      points: [
+        "Semua pemain mulai di Spawn dengan modal awal 💰 20 TC dan 6 Skill Card.",
+        "Tartarus Shard muncul di Zona I sampai VI yang bercahaya di papan. Lewati atau injak tile Shard dan bayar 💰 100 TC untuk membelinya.",
+        "Di akhir setiap ronde penuh, seluruh pemain masuk ke Minigame FFA (hadiah maksimal 💰 45 TC)."
+      ]
+    },
+    {
+      step: "2 / 4",
+      title: "Alur 1 Giliran (Turn)",
+      lead: "Setiap giliran terdiri dari 2 fase gerak dengan batas waktu 3 menit.",
+      points: [
+        "Main Phase 1: Aktifkan Skill Card sebelum melempar dadu pertama.",
+        "Roll Dadu 1 (2x d6): Karakter berjalan otomatis dan berhenti jika menemui persimpangan, Shop, atau Shard.",
+        "Main Phase 2 & Roll Dadu 2: Kamu bisa memakai Skill Card lagi (maksimal 2 Skill Card per giliran) lalu lempar dadu kedua sebelum End Turn."
+      ]
+    },
+    {
+      step: "3 / 4",
+      title: "Kartu Skill, Block Effect & Ultimate",
+      lead: "Perhatikan keyword pada deskripsi kartu sebelum menggunakannya.",
+      points: [
+        "Kartu yang memindahkan posisi hanya memicu efek tile tujuan jika tertulis [Activate Block Effect].",
+        "Kartu dengan tag [Haste] bersifat reaktif dan dapat dipakai sesuai kondisi pemicunya.",
+        "Kartu Ultimate ([Retain]) tidak hilang saat pergantian Cycle dan dapat dibeli di Merchant Shop (💰 70 TC standar, 💰 50 TC untuk Firefly/SAM)."
+      ]
+    },
+    {
+      step: "4 / 4",
+      title: "Global Event, Kontrol Peta & Mode HP",
+      lead: "Gunakan kontrol papan dan info HUD agar tidak ketinggalan aksi lawan.",
+      points: [
+        "Seluruh Global Event yang berdurasi berlaku selama 2 Turn dan tampil di kanan atas.",
+        "Klik panel Last Card Used di kanan atas kapan saja untuk membaca efek kartu terakhir dan kejadian yang terjadi.",
+        "Untuk pengguna HP, putar perangkat ke mode Landscape. Geser peta dengan 1 jari, zoom dengan 2 jari, dan klik Focus Player untuk kembali ke pemain aktif."
+      ]
+    }
+  ];
+
+  function openQuickGuideModal(stepIndex = 0) {
+    playSfx("click");
+    const total = QUICK_GUIDE_SLIDES.length;
+    const idx = Math.max(0, Math.min(total - 1, Number(stepIndex) || 0));
+    const slide = QUICK_GUIDE_SLIDES[idx];
+    const dotsHtml = QUICK_GUIDE_SLIDES.map(
+      (_, i) =>
+        `<button type="button" class="qg-dot ${i === idx ? "active" : ""}" onclick="window.EFT_APP.openQuickGuideModal(${i})" aria-label="Langkah ${i + 1}"></button>`
+    ).join("");
+    const pointsHtml = slide.points.map((pt) => `<li>${escapeHtml(pt)}</li>`).join("");
+
+    openInfoModal(
+      `Panduan Cepat (${slide.step})`,
+      `<div class="qg-modal-wrap">
+        <div class="qg-step-head">
+          <span class="qg-step-badge">Langkah ${slide.step}</span>
+          <h3 class="qg-step-title">${escapeHtml(slide.title)}</h3>
+          <p class="qg-step-lead">${escapeHtml(slide.lead)}</p>
+        </div>
+        <ul class="qg-points-list">${pointsHtml}</ul>
+        <div class="qg-footer">
+          <div class="qg-dots">${dotsHtml}</div>
+          <div class="qg-nav-btns">
+            ${
+              idx > 0
+                ? `<button type="button" class="btn btn-sm" onclick="window.EFT_APP.openQuickGuideModal(${idx - 1})">Sebelumnya</button>`
+                : ""
+            }
+            ${
+              idx < total - 1
+                ? `<button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openQuickGuideModal(${idx + 1})">Lanjut</button>`
+                : `<button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.closeModal()">Siap Bermain</button>`
+            }
+          </div>
+        </div>
+      </div>`
+    );
+  }
 
   function isRemoteClient() {
     return mp.mode === "firebase_client";
@@ -1737,6 +2311,7 @@
 
   function initGame(patchId = "alpha2", compendiumId = "comp_beta1", customRoster = null, options = {}) {
     isInitializingMatch = true;
+    invalidateHudCache();
     clearTimeout(stepTimerId);
     clearDiceOverlay();
     clearDiceOfFateTimers();
@@ -1930,6 +2505,7 @@
     pendingInteraction = null;
     selectedCardUid = null;
     addLog("Undo: Reverted to previous state.");
+    invalidateHudCache();
     if (camera.mode === "follow") {
       focusCameraOnTile(getActivePlayer().tileId);
     }
@@ -2011,6 +2587,12 @@
     player.tc = Math.max(0, player.tc + amount);
     if (!isInitializingMatch && amount !== 0) {
       playSfx(amount > 0 ? "coin_gain" : "coin_loss");
+      if (player.tileId && window.EFT_WEBGL_VFX) {
+        window.EFT_WEBGL_VFX.burstAtTile(player.tileId, amount > 0 ? "coin_gain" : "coin_loss");
+      }
+      if (Math.abs(amount) >= 15) {
+        addCameraTrauma(amount < 0 ? 0.34 : 0.2);
+      }
     }
     return amount;
   }
@@ -2865,7 +3447,7 @@
       validTileIds,
       tileStepLabels
     };
-    addLog(`Passive [The Stage Is Mine]: ${player.name} mendarat di Normal Tile (${normalTile.id}) — pilih pindah +1 / +2 / -1 atau tetap.`);
+    addLog(`Passive [The Stage Is Mine]: ${player.name} mendarat di Normal Tile (${normalTile.id}), pilih pindah +1 / +2 / -1 atau tetap.`);
     triggerDramaticSkillEvent({
       charId: player.charId,
       cardId: "bocchi_uq",
@@ -2874,7 +3456,7 @@
       rarity: "Passive",
       cardImg: "assets/cards/characters/bocchi/uq.webp",
       description: "[Activate Block Effect] When land on Normal Tiles, choose to move (+1/+2/-1).",
-      outcomeText: `${player.name} mendarat di Normal Tile — Pilih pindah +1 / +2 / -1 di peta!`,
+      outcomeText: `${player.name} mendarat di Normal Tile: Pilih pindah +1 / +2 / -1 di peta!`,
       profile: { theme: "passive", tagline: "UNIQUE PASSIVE TRIGGERED · BOCCHI", accent: "#ec4899", accentRgb: "236, 72, 153" }
     });
     if (camera.mode !== "wide") {
@@ -3051,13 +3633,13 @@
       } else if (tok.type === "safe_zone" && isExactLanding) {
         player.safeZoneImmune = true;
         state.boardTokens.splice(i, 1);
-        addLog(`${player.name} mengaktifkan Safe Zone (Oak Cake Break) — kebal target kartu hingga Phase berikutnya!`);
+        addLog(`${player.name} mengaktifkan Safe Zone (Oak Cake Break): kebal target kartu hingga Phase berikutnya!`);
       } else if (tok.type === "restricted_zone" && isExactLanding && tok.ownerIndex !== player.index) {
         const owner = state.players[tok.ownerIndex];
         if (player.tc >= 20) {
           player.tc -= 20;
           if (owner) owner.tc += 20;
-          addLog(`${player.name} mendarat di Restricted Zone — membayar 20 TC medical fee ke ${owner ? owner.name : "Mao-Mao"}.`);
+          addLog(`${player.name} mendarat di Restricted Zone, membayar 20 TC medical fee ke ${owner ? owner.name : "Mao-Mao"}.`);
         } else {
           const giveIdx = player.hand.findIndex((c) => c && c.rarity !== "Ultimate");
           if (giveIdx !== -1) {
@@ -3068,7 +3650,7 @@
             const fee = Math.min(20, player.tc);
             player.tc -= fee;
             if (owner) owner.tc += fee;
-            addLog(`${player.name} mendarat di Restricted Zone — membayar sisa ${fee} TC ke ${owner ? owner.name : "Mao-Mao"}.`);
+            addLog(`${player.name} mendarat di Restricted Zone, membayar sisa ${fee} TC ke ${owner ? owner.name : "Mao-Mao"}.`);
           }
         }
       } else if (tok.type === "fire_tile" && isExactLanding) {
@@ -3592,7 +4174,7 @@
   function triggerGlobalEventCard(card, opts = {}) {
     const showToast = opts.showToast !== false;
     const deferMinigame = !!opts.deferMinigame;
-    addLog(`GLOBAL EVENT: [${card.name}] — ${card.description}`);
+    addLog(`GLOBAL EVENT: [${card.name}]: ${card.description}`);
     if (showToast) {
       showEffectSpotlight("Global Event", card.name, card.description, card.image);
     }
@@ -3818,8 +4400,8 @@
 
     player.rollsUsedThisTurn = Math.max(1, player.rollsUsedThisTurn || 1);
     state.phaseIndex = 5;
-    addLog(`Waktu giliran habis (180 detik) — Giliran ${player.name} otomatis berakhir!`);
-    showEffectSpotlight("Waktu Habis (180 Detik)", `${player.name} — Auto End Turn`, "Batas waktu 3 menit terlampaui, giliran otomatis diakhiri.", null);
+    addLog(`Waktu giliran habis (180 detik), giliran ${player.name} otomatis berakhir!`);
+    showEffectSpotlight("Waktu Habis (180 Detik)", `${player.name}: Auto End Turn`, "Batas waktu 3 menit terlampaui, giliran otomatis diakhiri.", null);
     endCurrentTurn({ forceTimeout: true });
   }
 
@@ -4419,7 +5001,7 @@
             ? `<img class="dof-portrait-img" src="${pt.src}" alt="${escapeHtml(entry.name)}" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
             : `<div class="ph-portrait-fallback"><div class="ph-fallback-icon" style="fill:${escapeHtml(entry.color)};">${getCharacterSvgIcon(entry.charId)}</div></div>`;
 
-        let numText = "—";
+        let numText = "-";
         let numCls = "is-pending";
         if (hasRolled) {
           numText = String(entry.total);
@@ -4834,6 +5416,12 @@
 
       skillPopupShownAt = Date.now();
       overlay.classList.add("visible");
+      const caster = state && state.players ? state.players.find((p) => p.name === payload.casterName) : null;
+      triggerGameFeedback(isUltimate ? "large" : "medium", {
+        tileId: caster ? caster.tileId : null,
+        vfxKind: "skill_cast",
+        color: isUltimate ? "#e5a93c" : "#ef4444"
+      });
       skillPopupTimerId = setTimeout(() => {
         dismissSkillPopup(true);
       }, autoMs);
@@ -4902,7 +5490,7 @@
 
   function openForcedAllInChoiceModal(player, targetPlayer, myRoll, oppRoll) {
     openInfoModal(
-      `Forced All-In — ${escapeHtml(player.name)} Menang (${myRoll} vs ${oppRoll})!`,
+      `Forced All-In: ${escapeHtml(player.name)} Menang (${myRoll} vs ${oppRoll})!`,
       `<div style="display:flex;flex-direction:column;gap:14px;">
         <div style="background:rgba(234,179,8,0.12);border:1px solid rgba(250,204,21,0.45);border-radius:10px;padding:12px;font-size:0.86rem;color:#fef08a;">
           <strong>${escapeHtml(player.name)}</strong> memenangkan Duel 1v1 melawan <strong>${escapeHtml(targetPlayer.name)}</strong>!
@@ -4993,7 +5581,7 @@
 
     if (canAfford) {
       openInfoModal(
-        `The Emperor's Favor — Bayar Pajak 💰 ${taxInfo.totalTax} TC?`,
+        `The Emperor's Favor: Bayar Pajak 💰 ${taxInfo.totalTax} TC?`,
         `<div style="display:flex;flex-direction:column;gap:14px;">
           <div style="display:flex;gap:14px;align-items:center;">
             <img src="${emperorImg}" alt="The Emperor's Favor" style="width:82px;border-radius:8px;border:1px solid rgba(16,185,129,0.5);flex-shrink:0;" />
@@ -5020,7 +5608,7 @@
       );
     } else {
       openInfoModal(
-        `The Emperor's Favor — TC Tidak Cukup`,
+        `The Emperor's Favor: TC Tidak Cukup`,
         `<div style="display:flex;flex-direction:column;gap:14px;">
           <div style="display:flex;gap:14px;align-items:center;">
             <img src="${emperorImg}" alt="The Emperor's Favor" style="width:82px;border-radius:8px;border:1px solid rgba(244,63,94,0.5);flex-shrink:0;" />
@@ -5264,7 +5852,7 @@
         return msg;
       }
       if (targetPlayer.safeZoneImmune) {
-        const msg = `${targetPlayer.name} dilindungi Safe Zone (Oak Cake Break) — tidak dapat ditarget kartu!`;
+        const msg = `${targetPlayer.name} dilindungi Safe Zone (Oak Cake Break), tidak dapat ditarget kartu!`;
         addLog(msg);
         return msg;
       }
@@ -5426,7 +6014,7 @@
           expiresOnCycleEnd: !isCopied
         });
         const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
-        const msg = `Passive The Stage Is Mine aktif (${durLabel} — hangus saat ganti Cycle)! Mendarat di Normal Tile memberi opsi pindah +1/+2/-1.`;
+        const msg = `Passive The Stage Is Mine aktif (${durLabel}, hangus saat ganti Cycle)! Mendarat di Normal Tile memberi opsi pindah +1/+2/-1.`;
         addLog(`Passive Active: [The Stage Is Mine] (${durLabel}).`);
         return msg;
       }
@@ -5530,7 +6118,7 @@
           expiresOnCycleEnd: !isCopied
         });
         const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
-        const msg = `IPC Gems aktif (${durLabel} — hangus saat ganti Cycle): semua perolehan TC di luar skill card x${mult}!`;
+        const msg = `IPC Gems aktif (${durLabel}, hangus saat ganti Cycle): semua perolehan TC di luar skill card x${mult}!`;
         addLog(`Passive Active: [IPC Gems] (${mult}x TC · ${durLabel}).`);
         return msg;
       }
@@ -5547,7 +6135,7 @@
               oppRoll
             };
             openForcedAllInChoiceModal(player, targetPlayer, myRoll, oppRoll);
-            const msg = `${player.name} menang Duel (${myRoll} vs ${oppRoll}) — pilih curi semua TC atau 1 Shard!`;
+            const msg = `${player.name} menang Duel (${myRoll} vs ${oppRoll}), pilih curi semua TC atau 1 Shard!`;
             addLog(`ULTIMATE [Forced All-In]: ${msg}`);
             return msg;
           } else {
@@ -5645,7 +6233,7 @@
             expiresOnCycleEnd: !isCopied
           });
           addLog(`Passive Active: [Daemonissa's Domain] (${durLabel}).`);
-          return `Passive Daemonissa's Domain aktif (${durLabel} — hangus saat ganti Cycle)!`;
+          return `Passive Daemonissa's Domain aktif (${durLabel}, hangus saat ganti Cycle)!`;
         } else {
           addOrRefreshPassive(player, {
             key: "passive_unpredictable_tricks",
@@ -5653,7 +6241,7 @@
             remainingTurns: turns,
             expiresOnCycleEnd: !isCopied
           });
-          const msg = `Unpredictable Tricks aktif (${durLabel} — hangus saat ganti Cycle): melewati/dilewati lawan -> lawan buang 1 kartu & beri 5 TC!`;
+          const msg = `Unpredictable Tricks aktif (${durLabel}, hangus saat ganti Cycle): melewati/dilewati lawan -> lawan buang 1 kartu & beri 5 TC!`;
           addLog(`Passive Active: [Unpredictable Tricks] (${durLabel}).`);
           return msg;
         }
@@ -5784,7 +6372,7 @@
           expiresOnCycleEnd: !isCopied
         });
         const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
-        const msg = `Awaken, Arsene! aktif (${durLabel} — hangus saat ganti Cycle): mendarat di Positive/Negative Effect tile beri +1 ekstra dadu (maks. 1/turn)!`;
+        const msg = `Awaken, Arsene! aktif (${durLabel}, hangus saat ganti Cycle): mendarat di Positive/Negative Effect tile beri +1 ekstra dadu (maks. 1/turn)!`;
         addLog(`Passive Active: [Awaken, Arsene!] (${durLabel}).`);
         return msg;
       }
@@ -5916,7 +6504,7 @@
       }
       case "scry_2_keep_1": {
         if (!Array.isArray(player.deck) || player.deck.length === 0) {
-          const msg = "Deck kosong — tidak ada kartu teratas untuk diperiksa.";
+          const msg = "Deck kosong, tidak ada kartu teratas untuk diperiksa.";
           addLog(`[${card.name}]: ${msg}`);
           return msg;
         }
@@ -5935,7 +6523,7 @@
           } else {
             if (isCardForeignToPlayer(onlyCard, player)) returnForeignCardToOwner(onlyCard, player);
             else player.discard.push(onlyCard);
-            const msg = `Tangan penuh — [${onlyCard.name}] dibuang ke discard.`;
+            const msg = `Tangan penuh, [${onlyCard.name}] dibuang ke discard.`;
             addLog(`[${card.name}]: ${msg}`);
             return msg;
           }
@@ -5947,7 +6535,7 @@
           cards: topCards,
           cardName: card.name
         };
-        const msg = `${player.name} memeriksa 2 kartu teratas deck — pilih 1 untuk disimpan ke tangan (1 lainnya dibuang)!`;
+        const msg = `${player.name} memeriksa 2 kartu teratas deck: pilih 1 untuk disimpan ke tangan (1 lainnya dibuang)!`;
         addLog(`[${card.name}]: ${msg}`);
         return msg;
       }
@@ -6168,8 +6756,18 @@
   function spawnLocalBoardVfx(tileIds, kind = "sam_fire_impact") {
     const ids = Array.isArray(tileIds) ? tileIds : [tileIds];
     const now = Date.now();
-    ids.forEach((tid) => {
+    const isHeavy = kind === "sam_fire_impact";
+    const isMedium = kind === "push_impact" || kind === "warp_burst";
+    if (isHeavy) {
+      triggerGameFeedback("large", { tileId: ids[0], vfxKind: kind });
+    } else if (isMedium) {
+      triggerGameFeedback("medium", { tileId: ids[0], vfxKind: kind });
+    }
+    ids.forEach((tid, idx) => {
       if (!tid || !TILE_MAP[tid]) return;
+      if (idx > 0 && window.EFT_WEBGL_VFX) {
+        window.EFT_WEBGL_VFX.burstAtTile(tid, kind);
+      }
       const vfxId = `vfx_${now}_${tid}_${Math.random().toString(36).slice(2, 5)}`;
       activeBoardVfxList.push({ id: vfxId, tileId: tid, kind });
       setTimeout(() => {
@@ -6211,7 +6809,13 @@
       let stepIdx = 0;
       const advance = () => {
         skillMoveAnimOverrides[pIdx] = path[stepIdx];
-        if (stepIdx > 0) playSfx("step");
+        if (stepIdx > 0) {
+          playSfx("step");
+          if (window.EFT_WEBGL_VFX) {
+            const actor = state && state.players && state.players[pIdx];
+            window.EFT_WEBGL_VFX.emitMoveTrail(path[stepIdx - 1], path[stepIdx], actor ? actor.color : "#9fd6be");
+          }
+        }
         if (camera.mode === "follow" && stepIdx === path.length - 1) {
           focusCameraOnTile(path[stepIdx]);
         }
@@ -6323,6 +6927,7 @@
 
   function triggerShardFadeOut(shardObj) {
     if (!shardObj || !shardObj.tileId) return;
+    triggerGameFeedback("large", { tileId: shardObj.tileId, vfxKind: "shard_claim" });
     const fadeId = shardObj.purchaseId || "fade_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
     fadingShards.push({
       fadeId,
@@ -6433,10 +7038,56 @@
     applyCameraTransform();
     scheduleAutoEndTurnIfReady();
     scheduleMultiplayerBotIfNeeded();
+    if (state.winner) {
+      clearLocalMatchAutosave();
+      clearActiveMpSession();
+    } else if (mp.mode === "local" && isMatchStarted && !isInitializingMatch) {
+      saveLocalMatchAutosave();
+    }
+  }
+
+  // Dirty-checked HUD render cache (game-ui-ux Pattern 5: avoid redundant DOM rebuilds)
+  const _hudCache = {
+    topStatus: "",
+    players: "",
+    hand: "",
+    log: ""
+  };
+
+  function invalidateHudCache() {
+    _hudCache.topStatus = "";
+    _hudCache.players = "";
+    _hudCache.hand = "";
+    _hudCache.log = "";
   }
 
   function renderTopStatusStrip() {
     const activeP = getActivePlayer();
+    const targetSlots = state.rules.activeShardsOnBoard || 3;
+    const shardSig = state.activeShards.map((s) => `${s.roman}:${s.tileId}`).join(",");
+    const geSig = state.activeGlobalEvent
+      ? `${state.activeGlobalEvent.card.id}:${state.activeGlobalEvent.remainingTurns}`
+      : "";
+    const lcuSig = state.lastSkillCardUsed ? `${state.lastSkillCardUsed.id}` : "";
+    const topSig = [
+      state.cycle,
+      state.roundInCycle,
+      state.rules.turnsPerCycle,
+      state.activePlayerIndex,
+      activeP.name,
+      activeP.color,
+      state.phaseIndex,
+      activeP.skillsUsedThisTurn,
+      activeP.maxSkillsThisTurn,
+      isAdminUnlocked && adminFreeSkillUse ? 1 : 0,
+      targetSlots,
+      shardSig,
+      geSig,
+      lcuSig
+    ].join("|");
+    if (_hudCache.topStatus === topSig) return;
+    _hudCache.topStatus = topSig;
+
     const phaseNames = ["Standby", "Main Phase 1", "Roll Dice 1", "Main Phase 2", "Roll Dice 2", "End Turn"];
     const turnEl = document.getElementById("turn-player-label");
     if (turnEl) {
@@ -6459,7 +7110,6 @@
           : `${activeP.skillsUsedThisTurn} / ${activeP.maxSkillsThisTurn}`;
     }
 
-    const targetSlots = state.rules.activeShardsOnBoard || 3;
     const romans = state.activeShards.map((s) => s.roman);
     while (romans.length < targetSlots) romans.push("-");
     const shardsEl = document.getElementById("metric-shards");
@@ -6514,7 +7164,7 @@
     playSfx("click");
     const lcu = state.lastSkillCardUsed;
     openInfoModal(
-      `Last Card Used — ${escapeHtml(lcu.cardName)}`,
+      `Last Card Used: ${escapeHtml(lcu.cardName)}`,
       `<div class="last-used-detail-layout">
         ${lcu.cardImg ? `<img class="last-used-detail-img" src="${lcu.cardImg}" alt="${escapeHtml(lcu.cardName)}" />` : ""}
         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -6560,7 +7210,7 @@
       .join("");
 
     openInfoModal(
-      `${escapeHtml(cardName || "Insect's Instinct")} — Pilih 1 dari 2 Kartu Teratas`,
+      `${escapeHtml(cardName || "Insect's Instinct")}: Pilih 1 dari 2 Kartu Teratas`,
       `<div style="display:flex;flex-direction:column;gap:12px;">
         <div style="font-size:0.8rem;color:#cbd5e1;">
           Pilih <strong>1 kartu</strong> untuk dimasukkan ke tangan <strong>${escapeHtml(player.name)}</strong>. Kartu yang tidak dipilih akan otomatis dibuang.
@@ -6650,7 +7300,7 @@
         const extra = preview.hitNextBranch ? ` · Belokan lagi (sisa ${preview.stepsLeftAtNextBranch})` : "";
         banner.innerHTML = `
           <span class="step-count-badge">Sisa ${pendingInteraction.stepsRemaining} Langkah</span>
-          <span>Preview: <strong>${escapeHtml(landTile.name)} (${preview.landingTileId})</strong>${extra} — ${
+          <span>Preview: <strong>${escapeHtml(landTile.name)} (${preview.landingTileId})</strong>${extra}: ${
             touchOnly ? "Ketuk lagi tile ini untuk jalan" : "Klik tile untuk belok"
           }</span>`;
       } else {
@@ -6667,7 +7317,7 @@
       banner.classList.add("visible", "branch-mode");
       banner.innerHTML = `
         <span class="step-count-badge">The Stage Is Mine</span>
-        <span>Mendarat di Normal Tile — Klik tile <strong>+1 / +2 / -1</strong> bercahaya di peta untuk berpindah &amp; aktifkan efek, atau Skip</span>`;
+        <span>Mendarat di Normal Tile: Klik tile <strong>+1 / +2 / -1</strong> bercahaya di peta untuk berpindah &amp; aktifkan efek, atau Skip</span>`;
       return;
     }
 
@@ -6687,6 +7337,38 @@
   function renderFloatingPlayerCards() {
     const listContainer = document.getElementById("hud-players-list");
     if (!listContainer) return;
+
+    const playersSig = [
+      state.activePlayerIndex,
+      isAdminUnlocked ? 1 : 0,
+      mp.mode,
+      mp.mySeat,
+      ...state.players.map((p) =>
+        [
+          p.name,
+          p.charId,
+          p.tc,
+          p.shards,
+          p.metaShard || 0,
+          (p.hand || []).length,
+          (p.deck || []).length,
+          p.inSpawn ? 1 : 0,
+          p.isSamMode ? 1 : 0,
+          p.turnTcMultiplier || 1,
+          p.nextTurnDiceMod || 0,
+          p.nextPhaseDiceMod || 0,
+          p.reverseNextRoll ? 1 : 0,
+          p.skipNextTurn ? 1 : 0,
+          p.silencedThisPhase ? 1 : 0,
+          p.safeZoneImmune ? 1 : 0,
+          p.maxDiceNextPhase1 || 0,
+          p.isBot ? 1 : 0,
+          (p.passives || []).map((ps) => `${ps.key}:${ps.remainingTurns}:${ps.expiresOnCycleEnd ? 1 : 0}`).join(",")
+        ].join("~")
+      )
+    ].join("|");
+    if (_hudCache.players === playersSig) return;
+    _hudCache.players = playersSig;
 
     const buildCard = (p, idx) => {
       const isTurn = idx === state.activePlayerIndex;
@@ -7435,6 +8117,9 @@
 
     nodesLayer.innerHTML = tilesHtml.join("") + shardHtml.join("") + fadingShardHtml.join("") + boardVfxHtml.join("") + pawnsHtml.join("");
     applyBranchPreviewTileClasses();
+    if (window.EFT_WEBGL_VFX) {
+      window.EFT_WEBGL_VFX.syncAmbientAnchors(state.activeShards, state.boardTokens);
+    }
   }
 
   function onTileHover(tileId, entering) {
@@ -7509,13 +8194,23 @@
     }
 
     const handContainer = document.getElementById("hand-cards-scroll");
+    const tuckY = isMobileLandscape() ? 48 : isMobilePortrait() ? 68 : 104;
+    const handSig = [
+      player.index,
+      player.charId,
+      selectedCardUid || "",
+      tuckY,
+      player.hand.map((c) => `${c.uid}:${c.id}`).join(",")
+    ].join("|");
+    if (_hudCache.hand === handSig) return;
+    _hudCache.hand = handSig;
+
     if (player.hand.length === 0) {
       handContainer.innerHTML = "";
       return;
     }
 
     const total = player.hand.length;
-    const tuckY = isMobilePortrait() ? 68 : 104;
     handContainer.innerHTML = player.hand
       .map((card, i) => {
         const imgUrl = getCardImage(card, player.charId);
@@ -7559,6 +8254,10 @@
   function renderActionLog() {
     const feed = document.getElementById("action-log-feed");
     if (!feed) return;
+    const topLog = state.logs[0];
+    const logSig = `${state.logs.length}|${topLog ? topLog.id : ""}`;
+    if (_hudCache.log === logSig) return;
+    _hudCache.log = logSig;
     feed.innerHTML = state.logs
       .map(
         (l) => `
@@ -7598,7 +8297,7 @@
     const bodyHtml =
       sortedEntries.length === 0
         ? `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:0.86rem;">
-             Draw Pile kosong — semua kartu sudah berada di tangan atau discard pile hingga reshuffle Cycle berikutnya.
+             Draw Pile kosong. Semua kartu sudah berada di tangan atau discard pile hingga reshuffle Cycle berikutnya.
            </div>`
         : `<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:10px;">
              Sisa <strong>${deck.length} kartu</strong> di Draw Pile milik <strong>${escapeHtml(player.name)}</strong> (diurutkan berdasarkan rarity, bukan urutan tarik acak):
@@ -7618,7 +8317,7 @@
                .join("")}
            </div>`;
 
-    openInfoModal(`Draw Pile — ${escapeHtml(player.name)} (${deck.length} Kartu)`, bodyHtml);
+    openInfoModal(`Draw Pile: ${escapeHtml(player.name)} (${deck.length} Kartu)`, bodyHtml);
   }
 
   function renderPromptBar() {
@@ -7632,13 +8331,13 @@
       bar.classList.add("visible");
       if (tm.type === "versus") {
         bar.innerHTML = `
-          <div><strong>Versus Duel Aktif (${escapeHtml(actor.name)})</strong> — ${isActor ? "Pilih lawan &amp; jumlah taruhan TC" : "Sedang memilih lawan duel..."}</div>
+          <div><strong>Versus Duel Aktif (${escapeHtml(actor.name)}):</strong> ${isActor ? "Pilih lawan &amp; jumlah taruhan TC" : "Sedang memilih lawan duel..."}</div>
           <div style="display:flex;gap:6px;">
             <button class="btn btn-gold btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Buka Pop-Up Versus</button>
           </div>`;
       } else {
         bar.innerHTML = `
-          <div><strong>Trading Post Aktif (${escapeHtml(actor.name)})</strong> — ${isActor ? "Pilih partner &amp; jenis barter kartu" : "Sedang memilih transaksi barter..."}</div>
+          <div><strong>Trading Post Aktif (${escapeHtml(actor.name)}):</strong> ${isActor ? "Pilih partner &amp; jenis barter kartu" : "Sedang memilih transaksi barter..."}</div>
           <div style="display:flex;gap:6px;">
             <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Buka Pop-Up Trade</button>
             ${isActor ? `<button class="btn btn-sm" onclick="window.EFT_APP.dismissSharedTileModal()">Lewati Trade</button>` : ""}
@@ -7671,21 +8370,21 @@
     if (pendingInteraction.type === "prompt_shard_buy") {
       const sh = pendingInteraction.shard;
       bar.innerHTML = `
-        <div><strong>Passing Tartarus Shard (Zone ${sh.roman})</strong> — Buy for <strong>💰 ${state.rules.shardCost} TC</strong>?</div>
+        <div><strong>Passing Tartarus Shard (Zone ${sh.roman}):</strong> Buy for <strong>💰 ${state.rules.shardCost} TC</strong>?</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.confirmShardPurchase(true)">Buy Shard (${state.rules.shardCost} TC)</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.confirmShardPurchase(false)">Skip</button>
         </div>`;
     } else if (pendingInteraction.type === "prompt_river") {
       bar.innerHTML = `
-        <div><strong>River Shortcut</strong> — Pay <strong>💰 ${state.rules.riverCost} TC</strong> to cross to [${pendingInteraction.targetTileId}]?</div>
+        <div><strong>River Shortcut:</strong> Pay <strong>💰 ${state.rules.riverCost} TC</strong> to cross to [${pendingInteraction.targetTileId}]?</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-primary btn-sm" onclick="window.EFT_APP.confirmRiverShortcut(true)">Take River (${state.rules.riverCost} TC)</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.confirmRiverShortcut(false)">Continue Normal Path</button>
         </div>`;
     } else if (pendingInteraction.type === "prompt_merchant_pass") {
       bar.innerHTML = `
-        <div><strong>Passing Merchant Shop ${pendingInteraction.shopId}</strong> — Open shop before continuing?</div>
+        <div><strong>Passing Merchant Shop ${pendingInteraction.shopId}:</strong> Open shop before continuing?</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-gold btn-sm" onclick="window.EFT_APP.openMerchantModal(${pendingInteraction.shopId})">Open Shop ${pendingInteraction.shopId}</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.resumeFromMerchantPrompt()">Continue (${pendingInteraction.stepsLeft} steps)</button>
@@ -7721,14 +8420,14 @@
         })
         .join("");
       bar.innerHTML = `
-        <div><strong>The Stage Is Mine (Passive)</strong> — Pindah +1 / +2 / -1 dari Normal Tile?</div>
+        <div><strong>The Stage Is Mine (Passive):</strong> Pindah +1 / +2 / -1 dari Normal Tile?</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
           ${btns}
           <button class="btn btn-sm" onclick="window.EFT_APP.resolveStageIsMineChoice(null)">Tetap di Sini</button>
         </div>`;
     } else if (pendingInteraction.type === "scry_2_keep_1") {
       bar.innerHTML = `
-        <div><strong>${escapeHtml(pendingInteraction.cardName || "Insect's Instinct")}</strong> — Pilih 1 dari 2 kartu teratas deck untuk disimpan ke tangan.</div>
+        <div><strong>${escapeHtml(pendingInteraction.cardName || "Insect's Instinct")}:</strong> Pilih 1 dari 2 kartu teratas deck untuk disimpan ke tangan.</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openScryPickModal()">Pilih Kartu</button>
         </div>`;
@@ -7893,7 +8592,7 @@
           const ch = DATA.CHARACTERS[cid];
           const label = ch.shortName || ch.name;
           return `
-            <div class="comp-char-card is-unavailable" title="${escapeHtml(ch.name)} — Saat ini belum tersedia">
+            <div class="comp-char-card is-unavailable" title="${escapeHtml(ch.name)} (Saat ini belum tersedia)">
               <div class="comp-unavailable-center">
                 <div class="comp-unavailable-crest">${getCharacterSvgIcon(cid)}</div>
                 <span class="comp-unavailable-tag">Unavailable</span>
@@ -7957,7 +8656,7 @@
     const samGalleryHtml =
       samModeCards.length > 0
         ? `<div class="comp-exp-sam-section">
-             <div class="comp-exp-cards-label" style="margin-bottom:8px;">Mode: SAM — Skill Cards &amp; Transformation</div>
+             <div class="comp-exp-cards-label" style="margin-bottom:8px;">Mode SAM: Skill Cards &amp; Transformation</div>
              <div class="comp-exp-cards-row">
                ${renderGalleryRow(samModeCards)}
              </div>
@@ -8010,7 +8709,7 @@
 
           <div>
             <div class="comp-exp-cards-label" style="margin-bottom:8px;">${
-              samModeCards.length > 0 ? "Mode: Firefly — Skill Cards &amp; Ultimate" : "Skill Cards &amp; Ultimate"
+              samModeCards.length > 0 ? "Mode Firefly: Skill Cards &amp; Ultimate" : "Skill Cards &amp; Ultimate"
             } (Klik kartu untuk detail)</div>
             <div class="comp-exp-cards-row">
               ${cardsGalleryHtml}
@@ -8144,16 +8843,23 @@
     if (mp.fbSeatsRef && mp.fbSeatsListener) {
       mp.fbSeatsRef.off("value", mp.fbSeatsListener);
     }
-    if (mp.fbSeatsRef && mp.mySeat !== undefined) {
-      mp.fbSeatsRef.child(String(mp.mySeat)).remove().catch(() => {});
+    if (mp.fbConnRef && mp.fbConnListener) {
+      mp.fbConnRef.off("value", mp.fbConnListener);
+    }
+    if (mp.fbSeatsRef && mp.clientId) {
+      mp.fbSeatsRef.child(mp.clientId).remove().catch(() => {});
     }
     mp.fbRoomRef = null;
     mp.fbActionsRef = null;
     mp.fbSeatsRef = null;
+    mp.fbConnRef = null;
     mp.fbStateListener = null;
     mp.fbActionListener = null;
     mp.fbSeatsListener = null;
+    mp.fbConnListener = null;
+    mp.isConnected = false;
     mp.onlineSeats = {};
+    updateMpConnectionPill("hidden", "");
   }
 
   function initHostLobbyPayload(code) {
@@ -8306,9 +9012,8 @@
           updatedAt: Date.now()
         })
         .then(() => {
-          const mySeatRef = seatsRef.child(mp.clientId);
-          mySeatRef.set({ clientId: mp.clientId, status: "Host Online", joinedAt: Date.now() });
-          mySeatRef.onDisconnect().remove();
+          attachFirebaseConnectionMonitor(seatsRef, "Host Online");
+          saveActiveMpSession("host", code);
 
           mp.fbSeatsListener = seatsRef.on("value", (snap) => {
             mp.onlineSeats = snap.val() || {};
@@ -8369,9 +9074,9 @@
           mp.fbActionsRef = roomRef.child("actions");
           mp.fbSeatsRef = roomRef.child("seats");
 
-          const mySeatRef = mp.fbSeatsRef.child(mp.clientId);
-          mySeatRef.set({ clientId: mp.clientId, status: "Player Online", joinedAt: Date.now() });
-          mySeatRef.onDisconnect().remove();
+          attachFirebaseConnectionMonitor(mp.fbSeatsRef, "Player Online");
+          saveActiveMpSession("client", code);
+          invalidateHudCache();
 
           if (data.lobbyJson) {
             mp.lobby = JSON.parse(data.lobbyJson);
@@ -8498,9 +9203,11 @@
 
   function disconnectMultiplayer() {
     detachFirebaseListeners();
+    clearActiveMpSession();
     mp.mode = "local";
     mp.roomCode = "";
     mp.mySeat = -1;
+    invalidateHudCache();
     mp.lobby = {
       status: "idle",
       hostClientId: "",
@@ -8963,7 +9670,7 @@
           (!e.cycle || e.cycle === state.cycle)
       );
       if (pool.length === 0) {
-        controlsHtml = `<div style="font-size:0.78rem;color:var(--mint-light);">Belum ada skill lawan non-Ultimate pada Cycle ${state.cycle} — memakai kartu ini akan memberi +15 TC.</div>`;
+        controlsHtml = `<div style="font-size:0.78rem;color:var(--mint-light);">Belum ada skill lawan non-Ultimate pada Cycle ${state.cycle}, memakai kartu ini akan memberi +15 TC.</div>`;
       } else {
         const firstBuilt = buildSkillControlsForModal(pool[0].card, player);
         missingValidTarget = firstBuilt.missingTarget;
@@ -8974,7 +9681,7 @@
               ${pool
                 .map(
                   (e) =>
-                    `<option value="${e.id}">${escapeHtml(e.card.name)} — ${escapeHtml(e.casterName)} (${escapeHtml(e.card.rarity)})</option>`
+                    `<option value="${e.id}">${escapeHtml(e.card.name)} oleh ${escapeHtml(e.casterName)} (${escapeHtml(e.card.rarity)})</option>`
                 )
                 .join("")}
             </select>
@@ -9003,7 +9710,7 @@
         ? `<div style="background:rgba(245,158,11,0.14);border:1px solid rgba(251,191,36,0.42);padding:8px 10px;border-radius:8px;color:#fde68a;font-size:0.76rem;line-height:1.4;">
             <strong>The Emperor's Favor (${escapeHtml(emperorTax.owners.map((o) => o.name).join(" & "))}):</strong>
             Aktivasi kartu ${escapeHtml(card.rarity)} ini meminta pajak <strong>💰 ${emperorTax.totalTax} TC</strong>.
-            ${player.tc < emperorTax.totalTax ? `<span style="color:#fda4af;">(TC kamu 💰 ${player.tc} TC — tidak cukup!)</span>` : ""}
+            ${player.tc < emperorTax.totalTax ? `<span style="color:#fda4af;">(TC kamu 💰 ${player.tc} TC, tidak cukup!)</span>` : ""}
           </div>`
         : "";
 
@@ -9208,12 +9915,12 @@
     else if (hasUltInHand) ultBtnLabel = "Sudah Pegang 1 Ultimate di Tangan";
 
     openInfoModal(
-      `Merchant Shop ${shopId} — (${player.name}: 💰 ${player.tc} TC)`,
+      `Merchant Shop ${shopId} (${player.name}: 💰 ${player.tc} TC)`,
       `<div style="display:flex;flex-direction:column;gap:14px;">
         <div style="font-size:0.76rem;color:var(--mint-light);background:rgba(245,158,11,0.12);border:1px solid rgba(251,191,36,0.36);border-radius:8px;padding:7px 11px;">
           ${
             state.rules.independentShops
-              ? `Akses khusus <strong>Merchant Shop ${shopId}</strong> (${shopId === 1 ? "Jalur Atas" : "Jalur Bawah"}) — Stok terpisah dari Shop ${shopId === 1 ? 2 : 1}.`
+              ? `Akses khusus <strong>Merchant Shop ${shopId}</strong> (${shopId === 1 ? "Jalur Atas" : "Jalur Bawah"}): Stok terpisah dari Shop ${shopId === 1 ? 2 : 1}.`
               : `Rulebook v0.1: Shared Global Merchant Shop Stock`
           }
         </div>
@@ -9351,7 +10058,7 @@
     if (tm.status === "resolved") {
       tileModalMinimizedForId = null;
       openInfoModal(
-        tm.type === "versus" ? `Hasil Versus Duel — ${escapeHtml(actor.name)}` : `Hasil Trading Post — ${escapeHtml(actor.name)}`,
+        tm.type === "versus" ? `Hasil Versus Duel: ${escapeHtml(actor.name)}` : `Hasil Trading Post: ${escapeHtml(actor.name)}`,
         `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
           <div style="background:rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);border-radius:12px;padding:14px;font-size:0.9rem;color:#ecfdf5;line-height:1.45;text-align:center;">
             ${escapeHtml(tm.summaryText || "Transaksi selesai.")}
@@ -9378,7 +10085,7 @@
       }
       if (isActor) {
         openInfoModal(
-          `Versus Duel — 1v1 Wager (${escapeHtml(actor.name)})`,
+          `Versus Duel: 1v1 Wager (${escapeHtml(actor.name)})`,
           `<div style="display:flex;flex-direction:column;gap:12px;">
             ${statsHtml}
             <div class="form-grid">
@@ -9418,7 +10125,7 @@
         );
       } else {
         openInfoModal(
-          `Versus Duel — ${escapeHtml(actor.name)}`,
+          `Versus Duel: ${escapeHtml(actor.name)}`,
           `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
             <div style="background:rgba(249,115,22,0.14);border:1px solid rgba(251,146,60,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ffedd5;line-height:1.45;text-align:center;">
               <strong>${escapeHtml(actor.name)}</strong> mendarat di <strong>Versus Tile</strong> dan sedang memilih lawan serta jumlah taruhan TC...
@@ -9432,7 +10139,7 @@
       const others = state.players.filter((p) => p.index !== actor.index);
       if (isActor) {
         openInfoModal(
-          `Trading Post — Barter Kartu (${escapeHtml(actor.name)})`,
+          `Trading Post: Barter Kartu (${escapeHtml(actor.name)})`,
           `<div style="display:flex;flex-direction:column;gap:12px;">
             ${statsHtml}
             <div class="form-grid">
@@ -9468,7 +10175,7 @@
         );
       } else {
         openInfoModal(
-          `Trading Post — ${escapeHtml(actor.name)}`,
+          `Trading Post: ${escapeHtml(actor.name)}`,
           `<div style="display:flex;flex-direction:column;gap:12px;padding:6px 4px;">
             <div style="background:rgba(132,204,22,0.14);border:1px solid rgba(163,230,53,0.45);border-radius:12px;padding:14px;font-size:0.88rem;color:#ecfccb;line-height:1.45;text-align:center;">
               <strong>${escapeHtml(actor.name)}</strong> mendarat di <strong>Trading Post</strong> dan sedang memilih partner serta jenis barter kartu...
@@ -9748,7 +10455,7 @@
       .join("");
 
     openInfoModal(
-      `Admin Edit Player — ${escapeHtml(p.name)}`,
+      `Admin Edit Player: ${escapeHtml(p.name)}`,
       `<div style="display:flex;flex-direction:column;gap:12px;">
         <div class="form-grid">
           <div class="form-field">
@@ -10244,7 +10951,7 @@
              <div class="ph-fallback-icon" style="fill:#64748b;">${getCharacterSvgIcon(cid)}</div>
            </div>`;
       return `
-      <div class="char-pick-card unavailable" title="${escapeHtml(ch.name)} — Coming Soon (Unavailable)">
+      <div class="char-pick-card unavailable" title="${escapeHtml(ch.name)} (Coming Soon)">
         <div class="char-pick-thumb" style="--char-glow:${escapeHtml(ch.color || "#64748b")};">
           ${teaseImg}
         </div>
@@ -10383,7 +11090,7 @@
         .join("");
 
       openInfoModal(
-        `Escape From Tartarus — Room [${escapeHtml(mp.roomCode)}]`,
+        `Escape From Tartarus: Room [${escapeHtml(mp.roomCode)}]`,
         `<div class="setup-modal-stack">
           <div class="panel-box" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <div>
@@ -10402,7 +11109,7 @@
               ${renderSetupCharPickerGrid(compId, me ? me.charId : setupDraft.charId, takenMap)}
             </div>
             <div class="setup-dev-disclaimer">
-              <strong>Disclaimer (Under Development):</strong> Karakter <strong>Mao-Mao</strong> dan <strong>Firefly / SAM</strong> sudah bisa dimainkan namun masih dalam tahap pengembangan — efek kartu &amp; keseimbangan masih dapat berubah.
+              <strong>Disclaimer (Under Development):</strong> Karakter <strong>Mao-Mao</strong> dan <strong>Firefly / SAM</strong> sudah bisa dimainkan namun masih dalam tahap pengembangan; efek kartu &amp; keseimbangan masih dapat berubah.
             </div>
           </div>
 
@@ -10520,7 +11227,7 @@
             ${renderSetupCharPickerGrid(compId, setupDraft.charId, {})}
           </div>
           <div class="setup-dev-disclaimer">
-            <strong>Disclaimer (Under Development):</strong> Karakter <strong>Mao-Mao</strong> dan <strong>Firefly / SAM</strong> sudah bisa dimainkan namun masih dalam tahap pengembangan — efek kartu &amp; keseimbangan masih dapat berubah.
+            <strong>Disclaimer (Under Development):</strong> Karakter <strong>Mao-Mao</strong> dan <strong>Firefly / SAM</strong> sudah bisa dimainkan namun masih dalam tahap pengembangan; efek kartu &amp; keseimbangan masih dapat berubah.
           </div>
         </div>
 
@@ -10663,7 +11370,12 @@
     toggleSoundMute,
     setSoundVolume,
     toggleAudioMixerPopover,
+    toggleScreenShake,
     toggleTurnSfx,
+    openQuickGuideModal,
+    resumeSavedLocalMatch,
+    reconnectSavedMultiplayerSession,
+    dismissSavedSessions,
     toggleSkillSfx,
     setSkillSfxVolume,
     toggleCharacterSkillSfx,
@@ -10804,7 +11516,17 @@
     syncAdminUiState();
     syncSoundControlUi();
     setupBoardDragAndZoom();
+    if (window.EFT_WEBGL_VFX && typeof window.EFT_WEBGL_VFX.init === "function") {
+      window.EFT_WEBGL_VFX.init(
+        document.getElementById("board-viewport"),
+        BOARD_W,
+        BOARD_H,
+        () => camera,
+        () => TILE_MAP
+      );
+    }
     initGame("alpha2", "comp_beta1", ["bocchi", "aventurine", "lilith", "joker"]);
+    renderTitleResumeSlot();
 
     document.addEventListener(
       "pointerdown",
@@ -10835,6 +11557,21 @@
         return;
       }
       if (e.key === "Escape") {
+        const audioPop = document.getElementById("audio-mixer-popover");
+        if (audioPop && audioPop.classList.contains("open")) {
+          audioPop.classList.remove("open");
+        }
+        document.querySelectorAll(".floating-drawer.open").forEach((dr) => dr.classList.remove("open"));
+        const sideFeed = document.getElementById("card-activated-feed");
+        if (sideFeed && sideFeed.classList.contains("visible")) {
+          dismissSideCardPopup();
+        }
+        const modal = document.getElementById("app-modal");
+        const titleEl = document.getElementById("modal-title");
+        const isLockedWelcome = titleEl && titleEl.dataset && titleEl.dataset.modalKind === "welcome_lobby" && !isMatchStarted;
+        if (modal && modal.classList.contains("open") && !isLockedWelcome) {
+          closeModal();
+        }
         const ov = document.getElementById("skill-dramatic-overlay");
         if (ov && ov.classList.contains("visible")) {
           dismissSkillPopup(true);
@@ -10847,9 +11584,11 @@
 
     const handleViewportReflow = () => {
       if (!state) return;
+      invalidateHudCache();
       renderTuckedHandAndDice();
       if (document.getElementById("comp-strip-track")) updateCompendiumScrollControls();
       if (camera.mode === "follow") focusCameraOnTile(getActivePlayer().tileId);
+      if (window.EFT_WEBGL_VFX) window.EFT_WEBGL_VFX.resize();
     };
 
     window.addEventListener("resize", handleViewportReflow);
