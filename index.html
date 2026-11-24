@@ -47,12 +47,45 @@
   </div>
 
   <!-- ========================================================================
-       INITIAL ASSET LOADING & MAIN TITLE SCREEN OVERLAY
+       INITIAL ASSET LOADING, USERNAME ENTRY & MAIN TITLE SCREEN OVERLAY
        ======================================================================== -->
-  <div id="main-title-screen" class="main-title-screen">
-    <div class="mts-center-content">
-      <h1 class="mts-logo-title">Escape From<br />Tartarus</h1>
+  <div id="main-title-screen" class="main-title-screen" data-stage="loading">
+    <!-- Dynamic Atmospheric Tartarus Backdrop -->
+    <div class="mts-bg-layer" aria-hidden="true">
+      <div class="mts-bg-nebula mts-bg-nebula-a"></div>
+      <div class="mts-bg-nebula mts-bg-nebula-b"></div>
+      <svg class="mts-bg-astrolabe" viewBox="0 0 1200 1200" fill="none">
+        <g class="mts-ring-outer">
+          <circle cx="600" cy="600" r="520" stroke="#9fd6be" stroke-opacity="0.11" stroke-width="1.6" stroke-dasharray="18 14" />
+          <circle cx="600" cy="600" r="445" stroke="#e5a93c" stroke-opacity="0.09" stroke-width="1.2" />
+          <line x1="600" y1="55" x2="600" y2="1145" stroke="#9fd6be" stroke-opacity="0.06" stroke-width="1" />
+          <line x1="55" y1="600" x2="1145" y2="600" stroke="#9fd6be" stroke-opacity="0.06" stroke-width="1" />
+        </g>
+        <g class="mts-ring-inner">
+          <circle cx="600" cy="600" r="320" stroke="#9fd6be" stroke-opacity="0.13" stroke-width="1.4" stroke-dasharray="6 10" />
+          <circle cx="600" cy="600" r="195" stroke="#e5a93c" stroke-opacity="0.11" stroke-width="1.4" />
+          <polygon points="600,452 618,582 748,600 618,618 600,748 582,618 452,600 582,582" fill="#e5a93c" fill-opacity="0.06" stroke="#e5a93c" stroke-opacity="0.16" stroke-width="1.2" />
+        </g>
+      </svg>
+      <div class="mts-bg-motes">
+        <span class="mts-mote" style="--mx:12%;--md:14s;--mdl:-2s;--ms:3px;"></span>
+        <span class="mts-mote" style="--mx:24%;--md:18s;--mdl:-9s;--ms:4px;"></span>
+        <span class="mts-mote" style="--mx:37%;--md:16s;--mdl:-5s;--ms:2.5px;"></span>
+        <span class="mts-mote" style="--mx:48%;--md:21s;--mdl:-13s;--ms:3.5px;"></span>
+        <span class="mts-mote" style="--mx:61%;--md:15s;--mdl:-4s;--ms:3px;"></span>
+        <span class="mts-mote" style="--mx:74%;--md:19s;--mdl:-11s;--ms:4.5px;"></span>
+        <span class="mts-mote" style="--mx:86%;--md:17s;--mdl:-7s;--ms:3px;"></span>
+        <span class="mts-mote is-gold" style="--mx:19%;--md:22s;--mdl:-15s;--ms:3px;"></span>
+        <span class="mts-mote is-gold" style="--mx:54%;--md:20s;--mdl:-8s;--ms:4px;"></span>
+        <span class="mts-mote is-gold" style="--mx:81%;--md:16s;--mdl:-3s;--ms:3px;"></span>
+      </div>
+    </div>
 
+    <!-- Animated Logo Title (glides softly from center -> top-left on menu stage) -->
+    <h1 id="mts-logo-title" class="mts-logo-title">Escape From<br />Tartarus</h1>
+
+    <!-- CENTER STAGE: STAGE 1 (LOADING) & STAGE 2 (ENTER USERNAME) -->
+    <div class="mts-center-stage">
       <!-- STAGE 1: LOADING ASSETS PROGRESS BAR -->
       <div id="mts-loading-section" class="mts-loading-section">
         <div id="mts-loading-label" class="mts-loading-label">Loading Assets</div>
@@ -61,26 +94,87 @@
         </div>
       </div>
 
-      <!-- STAGE 2: MODE SELECTION (SHOWN AFTER ASSETS LOADED) -->
-      <div id="mts-menu-section" class="mts-menu-section is-hidden">
-        <div class="mts-mode-buttons">
-          <button type="button" class="mts-mode-btn mts-btn-single" onclick="window.EFT_APP.openTitleSingleplayer()">
-            Singleplayer / Local
-          </button>
-          <button type="button" class="mts-mode-btn mts-btn-multi" onclick="window.EFT_APP.openTitleMultiplayer()">
-            Multiplayer
-          </button>
+      <!-- STAGE 2: ENTER USERNAME (SHOWN AFTER ASSETS LOADED) -->
+      <form id="mts-username-section" class="mts-username-section is-hidden" onsubmit="event.preventDefault();window.EFT_APP.submitTitleUsername();">
+        <label class="mts-username-prompt" for="mts-username-input">Enter Your Username</label>
+        <div class="mts-username-row">
+          <input
+            type="text"
+            id="mts-username-input"
+            class="mts-username-input"
+            maxlength="18"
+            autocomplete="nickname"
+            placeholder="Player Name"
+          />
+          <button type="submit" class="mts-username-submit-btn">Continue</button>
         </div>
-        <div class="mts-secondary-actions">
-          <button type="button" class="mts-guide-btn" onclick="window.EFT_APP.openQuickGuideModal(0)">
-            Quick Guide (45 Seconds)
-          </button>
+        <div id="mts-username-error" class="mts-username-error" aria-live="polite"></div>
+      </form>
+    </div>
+
+    <!-- STAGE 3: MAIN MENU CORNER (IMAGE 1, 2, 4) -->
+    <div id="mts-menu-section" class="mts-menu-corner is-hidden">
+      <!-- Left Sub-Options (Host Game / Join Game + 6-slot Room Code) -->
+      <div id="mts-play-subpanel" class="mts-play-subpanel" aria-hidden="true">
+        <button type="button" class="mts-pill-btn mts-sub-btn" onclick="window.EFT_APP.hostGameFromTitle()">
+          Host Game
+        </button>
+        <button type="button" id="mts-join-toggle-btn" class="mts-pill-btn mts-sub-btn" onclick="window.EFT_APP.toggleTitleJoinCode()">
+          Join Game
+        </button>
+        <div id="mts-join-code-wrap" class="mts-join-code-wrap" aria-hidden="true">
+          <form class="mts-join-code-form" onsubmit="event.preventDefault();window.EFT_APP.submitTitleJoinCode();">
+            <div class="mts-join-code-pill" onclick="document.getElementById('mts-join-code-input')?.focus()">
+              <input
+                type="text"
+                id="mts-join-code-input"
+                class="mts-join-code-real-input"
+                maxlength="6"
+                autocomplete="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                aria-label="Room Code"
+                oninput="window.EFT_APP.onTitleJoinCodeInput(this.value)"
+              />
+              <div id="mts-join-code-slots" class="mts-join-code-slots" aria-hidden="true">
+                <span class="mts-code-slot"></span>
+                <span class="mts-code-slot"></span>
+                <span class="mts-code-slot"></span>
+                <span class="mts-code-slot"></span>
+                <span class="mts-code-slot"></span>
+                <span class="mts-code-slot"></span>
+              </div>
+              <button type="submit" id="mts-join-go-btn" class="mts-join-go-btn" title="Join Room" aria-label="Join Room">&#8594;</button>
+            </div>
+          </form>
         </div>
-        <div id="mts-resume-slot" class="mts-resume-slot"></div>
+      </div>
+
+      <!-- Right Primary Menu Stack (Welcome, player-name + Play / Rules / Character Compendium / Settings) -->
+      <div class="mts-primary-menu-col">
+        <button type="button" class="mts-welcome-greeting" onclick="window.EFT_APP.editTitleUsername()" title="Click to change username">
+          Welcome, <span id="mts-welcome-name">player-name</span>
+        </button>
+        <button type="button" id="mts-play-btn" class="mts-pill-btn" onclick="window.EFT_APP.toggleTitlePlayMenu()" aria-expanded="false">
+          Play
+        </button>
+        <button type="button" class="mts-pill-btn" onclick="window.EFT_APP.openMenuPopup('rules')">
+          Rules
+        </button>
+        <button type="button" class="mts-pill-btn" onclick="window.EFT_APP.openMenuPopup('compendium')">
+          Character Compendium
+        </button>
+        <button type="button" class="mts-pill-btn" onclick="window.EFT_APP.openMenuPopup('sound')">
+          Settings
+        </button>
       </div>
     </div>
 
-    <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.6</div>
+    <!-- Bottom-Left Resume Slot & Version -->
+    <div class="mts-bottom-left-corner">
+      <div id="mts-resume-slot" class="mts-resume-slot"></div>
+      <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.7</div>
+    </div>
   </div>
 
   <!-- ========================================================================

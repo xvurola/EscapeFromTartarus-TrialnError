@@ -2000,7 +2000,6 @@
     const slot = document.getElementById("mts-resume-slot");
     if (!slot) return;
     const mpSess = loadActiveMpSession();
-    const localSave = loadLocalMatchAutosave();
 
     if (mpSess && window.EFT_IS_FIREBASE_READY && window.EFT_IS_FIREBASE_READY()) {
       const roleLabel = mpSess.role === "host" ? "Host" : "Player";
@@ -2015,27 +2014,6 @@
               Reconnect
             </button>
             <button type="button" class="btn btn-sm" onclick="window.EFT_APP.dismissSavedSessions('mp')">
-              Delete
-            </button>
-          </div>
-        </div>`;
-      return;
-    }
-
-    if (localSave && localSave.state) {
-      const st = localSave.state;
-      const activeName = st.players[st.activePlayerIndex] ? st.players[st.activePlayerIndex].name : "Player";
-      slot.innerHTML = `
-        <div class="mts-resume-card">
-          <div class="mts-resume-info">
-            <span class="mts-resume-tag">Saved Local Match</span>
-            <strong class="mts-resume-title">Cycle ${st.cycle} (${st.roundInCycle}/${st.rules ? st.rules.turnsPerCycle : 4}) · ${escapeHtml(activeName)}'s Turn</strong>
-          </div>
-          <div class="mts-resume-actions">
-            <button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.resumeSavedLocalMatch()">
-              Resume
-            </button>
-            <button type="button" class="btn btn-sm" onclick="window.EFT_APP.dismissSavedSessions('local')">
               Delete
             </button>
           </div>
@@ -3109,16 +3087,169 @@
     initGame("alpha2", "comp_beta1", ["bocchi", "aventurine", "lilith", "joker"]);
   }
 
+  let titleHasConfirmedUsername = false;
+  let pendingInviteRoomCode = "";
+
+  function setTitleScreenStage(stage) {
+    const screen = document.getElementById("main-title-screen");
+    const loadingSec = document.getElementById("mts-loading-section");
+    const userSec = document.getElementById("mts-username-section");
+    const menuSec = document.getElementById("mts-menu-section");
+    if (screen) screen.setAttribute("data-stage", stage);
+    if (loadingSec) loadingSec.classList.toggle("is-hidden", stage !== "loading");
+    if (userSec) userSec.classList.toggle("is-hidden", stage !== "username");
+    if (menuSec) menuSec.classList.toggle("is-hidden", stage !== "menu");
+
+    if (stage === "username") {
+      const inp = document.getElementById("mts-username-input");
+      const err = document.getElementById("mts-username-error");
+      if (err) err.textContent = "";
+      if (inp) {
+        inp.value = setupDraft.username || "";
+        setTimeout(() => {
+          try { inp.focus(); } catch (e) {}
+        }, 80);
+      }
+    } else if (stage === "menu") {
+      const nameEl = document.getElementById("mts-welcome-name");
+      if (nameEl) nameEl.textContent = (setupDraft.username || "Player").trim() || "Player";
+      renderTitleResumeSlot();
+    }
+  }
+
+  function submitTitleUsername() {
+    const inp = document.getElementById("mts-username-input");
+    const err = document.getElementById("mts-username-error");
+    const val = (inp ? inp.value : setupDraft.username || "").trim().slice(0, 18);
+    if (!val) {
+      if (err) err.textContent = "Please enter a username first.";
+      if (inp) inp.focus();
+      return;
+    }
+    playSfx("click");
+    setupDraft.username = val;
+    savePlayerProfile(val, setupDraft.charId);
+    titleHasConfirmedUsername = true;
+    setTitleScreenStage("menu");
+
+    if (pendingInviteRoomCode) {
+      const code = pendingInviteRoomCode;
+      pendingInviteRoomCode = "";
+      toggleTitlePlayMenu(true);
+      toggleTitleJoinCode(true);
+      const codeInp = document.getElementById("mts-join-code-input");
+      if (codeInp) codeInp.value = code;
+      onTitleJoinCodeInput(code);
+      setTimeout(() => {
+        joinFirebaseClientRoom(code);
+      }, 260);
+    }
+  }
+
+  function editTitleUsername() {
+    playSfx("click");
+    toggleTitlePlayMenu(false);
+    setTitleScreenStage("username");
+  }
+
+  function toggleTitlePlayMenu(forceOpen = null) {
+    const sub = document.getElementById("mts-play-subpanel");
+    const playBtn = document.getElementById("mts-play-btn");
+    if (!sub) return;
+    const nextOpen = forceOpen !== null ? !!forceOpen : !sub.classList.contains("is-open");
+    if (forceOpen === null) playSfx("click");
+    sub.classList.toggle("is-open", nextOpen);
+    sub.setAttribute("aria-hidden", nextOpen ? "false" : "true");
+    if (playBtn) {
+      playBtn.classList.toggle("is-active", nextOpen);
+      playBtn.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+    }
+    if (!nextOpen) {
+      toggleTitleJoinCode(false);
+    }
+  }
+
+  function toggleTitleJoinCode(forceOpen = null) {
+    const wrap = document.getElementById("mts-join-code-wrap");
+    const joinBtn = document.getElementById("mts-join-toggle-btn");
+    const inp = document.getElementById("mts-join-code-input");
+    if (!wrap) return;
+    const nextOpen = forceOpen !== null ? !!forceOpen : !wrap.classList.contains("is-open");
+    if (forceOpen === null) playSfx("click");
+    wrap.classList.toggle("is-open", nextOpen);
+    wrap.setAttribute("aria-hidden", nextOpen ? "false" : "true");
+    if (joinBtn) joinBtn.classList.toggle("is-active", nextOpen);
+    if (nextOpen && inp) {
+      onTitleJoinCodeInput(inp.value || "");
+      setTimeout(() => {
+        try { inp.focus(); } catch (e) {}
+      }, 90);
+    }
+  }
+
+  function onTitleJoinCodeInput(rawVal) {
+    const clean = String(rawVal || "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 6);
+    const inp = document.getElementById("mts-join-code-input");
+    if (inp && inp.value !== clean) inp.value = clean;
+    const slots = document.querySelectorAll("#mts-join-code-slots .mts-code-slot");
+    slots.forEach((slot, idx) => {
+      slot.textContent = clean[idx] || "";
+      slot.classList.toggle("is-caret", idx === clean.length);
+    });
+  }
+
+  function hostGameFromTitle() {
+    playSfx("click");
+    const uname = (setupDraft.username || "").trim();
+    if (!uname) {
+      setTitleScreenStage("username");
+      return;
+    }
+    savePlayerProfile(uname, setupDraft.charId);
+    startFirebaseHostRoom();
+  }
+
+  function submitTitleJoinCode() {
+    const inp = document.getElementById("mts-join-code-input");
+    const code = ((inp && inp.value) || "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 6);
+    if (code.length < 4) {
+      playSfx("card_drag_deny");
+      showHandDragToast("Enter a valid Room Code (e.g. EFT123).");
+      if (inp) inp.focus();
+      return;
+    }
+    playSfx("click");
+    const uname = (setupDraft.username || "").trim();
+    if (!uname) {
+      pendingInviteRoomCode = code;
+      setTitleScreenStage("username");
+      return;
+    }
+    mp.roomCode = code;
+    savePlayerProfile(uname, setupDraft.charId);
+    joinFirebaseClientRoom(code);
+  }
+
   function showMainTitleScreen() {
     isTitleScreenVisible = true;
     isMatchStarted = false;
     const screen = document.getElementById("main-title-screen");
-    const loadingSec = document.getElementById("mts-loading-section");
-    const menuSec = document.getElementById("mts-menu-section");
     if (screen) screen.classList.remove("is-hidden");
+    toggleTitlePlayMenu(false);
     if (hasPreloadedAssets) {
-      if (loadingSec) loadingSec.classList.add("is-hidden");
-      if (menuSec) menuSec.classList.remove("is-hidden");
+      if (titleHasConfirmedUsername && (setupDraft.username || "").trim()) {
+        setTitleScreenStage("menu");
+      } else {
+        setTitleScreenStage("username");
+      }
+    } else {
+      setTitleScreenStage("loading");
     }
   }
 
@@ -3130,13 +3261,12 @@
   }
 
   function openTitleSingleplayer() {
-    playSfx("click");
-    openWelcomeSetupModal("local");
+    openTitleMultiplayer();
   }
 
   function openTitleMultiplayer() {
     playSfx("click");
-    openWelcomeSetupModal("multiplayer");
+    toggleTitlePlayMenu(true);
   }
 
   function collectCriticalPreloadUrls() {
@@ -3246,8 +3376,7 @@
       hasPreloadedAssets = true;
       if (fillEl) fillEl.style.width = "100%";
       if (trackEl) trackEl.setAttribute("aria-valuenow", "100");
-      if (loadingSec) loadingSec.classList.add("is-hidden");
-      if (menuSec) menuSec.classList.remove("is-hidden");
+      setTitleScreenStage("username");
       preloadSecondaryAssetsInBackground();
       if (typeof onComplete === "function") onComplete();
     };
@@ -9972,6 +10101,8 @@
       if (!cardEl || !state || isTitleScreenVisible) return;
       if (document.body.classList.contains("modal-open")) return;
 
+      e.stopPropagation();
+
       const cardUid = cardEl.getAttribute("data-card-uid");
       const ownerIdx = Number(cardEl.getAttribute("data-owner-idx"));
       const player = state.players[ownerIdx];
@@ -9979,12 +10110,16 @@
       if (!player || !card) return;
 
       const rect = cardEl.getBoundingClientRect();
+      const cardW = cardEl.offsetWidth || rect.width || 112;
+      const cardH = cardEl.offsetHeight || rect.height || 160;
       const dockEl = document.getElementById("hand-cards-scroll");
       const dockRect = dockEl ? dockEl.getBoundingClientRect() : rect;
+      const isTouch = e.pointerType !== "mouse";
 
       dragState = {
         pointerId: e.pointerId,
         pointerType: e.pointerType,
+        isTouch,
         cardUid,
         ownerIdx,
         player,
@@ -9993,10 +10128,15 @@
         startX: e.clientX,
         startY: e.clientY,
         lastX: e.clientX,
+        lastClientX: e.clientX,
+        lastClientY: e.clientY,
         origRect: rect,
+        cardW,
+        cardH,
         dockTop: dockRect.top,
-        offsetX: e.clientX - rect.left,
-        offsetY: Math.min(rect.height * 0.48, Math.max(24, e.clientY - rect.top)),
+        offsetX: Math.max(14, Math.min(cardW - 14, e.clientX - rect.left)),
+        offsetY: Math.min(cardH * 0.48, Math.max(18, e.clientY - rect.top)),
+        touchLiftY: isTouch ? (isMobileLandscape() ? 38 : 54) : 0,
         started: false,
         inZone: false,
         evalRes: null,
@@ -10005,18 +10145,34 @@
       };
     });
 
+    // Prevent mobile browsers from scrolling/pull-refreshing while actively dragging a card
+    window.addEventListener(
+      "touchmove",
+      (te) => {
+        if (dragState && dragState.started) {
+          te.preventDefault();
+        }
+      },
+      { passive: false }
+    );
+
     window.addEventListener("pointermove", (e) => {
       if (!dragState || e.pointerId !== dragState.pointerId) return;
       const dx = e.clientX - dragState.startX;
       const dy = e.clientY - dragState.startY;
+      dragState.lastClientX = e.clientX;
+      dragState.lastClientY = e.clientY;
 
       if (!dragState.started) {
         const dist = Math.hypot(dx, dy);
-        if (dist < 11) return;
-        const isUpwardIntent = dy < -10 && Math.abs(dy) >= Math.abs(dx) * 0.72;
-        const isMousePull = dragState.pointerType === "mouse" && dy < -8 && dist >= 12;
+        const minStartDist = dragState.isTouch ? 8 : 11;
+        if (dist < minStartDist) return;
+        const isUpwardIntent = dragState.isTouch
+          ? dy < -7 && Math.abs(dy) >= Math.abs(dx) * 0.58
+          : dy < -9 && Math.abs(dy) >= Math.abs(dx) * 0.7;
+        const isMousePull = !dragState.isTouch && dy < -8 && dist >= 12;
         if (!isUpwardIntent && !isMousePull) {
-          if (dragState.pointerType !== "mouse" && Math.abs(dx) > 16) {
+          if (dragState.isTouch && Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.4) {
             dragState = null;
           }
           return;
@@ -10024,13 +10180,18 @@
 
         dragState.started = true;
         _suppressNextHandClick = true;
+        try {
+          if (dragState.sourceEl && typeof dragState.sourceEl.setPointerCapture === "function") {
+            dragState.sourceEl.setPointerCapture(e.pointerId);
+          }
+        } catch (err) {}
         dragState.evalRes = evaluateCardDragAction(dragState.player, dragState.card, dragState.ownerIdx);
         dragState.sourceEl.classList.add("is-dragging-source");
 
         const ghost = document.createElement("div");
         ghost.className = "hand-drag-ghost" + (dragState.card.rarity === "Ultimate" ? " is-ult" : "");
-        ghost.style.width = dragState.origRect.width + "px";
-        ghost.style.height = dragState.origRect.height + "px";
+        ghost.style.width = dragState.cardW + "px";
+        ghost.style.height = dragState.cardH + "px";
 
         const img = document.createElement("img");
         img.className = "hand-drag-ghost-art";
@@ -10058,13 +10219,16 @@
         const tilt = Math.max(-13, Math.min(13, vx * 0.65));
 
         const gx = e.clientX - dragState.offsetX;
-        const gy = e.clientY - dragState.offsetY;
-        const minPull = isMobileLandscape() ? -74 : -106;
-        const thresholdY = Math.min(dragState.dockTop - 18, window.innerHeight - (isMobileLandscape() ? 138 : 204));
+        const gy = e.clientY - dragState.offsetY - dragState.touchLiftY;
+        const minPull = isMobileLandscape() ? -44 : isMobilePortrait() ? -64 : -104;
+        const thresholdY = Math.min(
+          dragState.dockTop - (dragState.isTouch ? 6 : 18),
+          window.innerHeight - (isMobileLandscape() ? 102 : isMobilePortrait() ? 148 : 204)
+        );
         const inZone = e.clientY < thresholdY || dy < minPull;
         dragState.inZone = inZone;
 
-        const scale = inZone ? 1.07 : 1.03;
+        const scale = inZone ? (dragState.isTouch ? 1.12 : 1.07) : 1.03;
         dragState.ghostEl.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0) rotate(${tilt.toFixed(1)}deg) scale(${scale})`;
 
         if (inZone) {
@@ -10087,11 +10251,17 @@
       const st = dragState;
       dragState = null;
 
+      try {
+        if (st.sourceEl && typeof st.sourceEl.releasePointerCapture === "function") {
+          st.sourceEl.releasePointerCapture(e.pointerId);
+        }
+      } catch (err) {}
+
       if (!st.started) return;
 
       setTimeout(() => {
         _suppressNextHandClick = false;
-      }, 140);
+      }, 160);
 
       zoneLineEl.classList.remove("is-visible", "is-ready", "is-denied");
 
@@ -10100,14 +10270,18 @@
         const ghost = st.ghostEl;
         if (ghost) {
           ghost.classList.add("is-launching");
-          const curX = e.clientX - st.offsetX;
-          const curY = e.clientY - st.offsetY - 44;
+          const curX = (e.clientX || st.lastClientX) - st.offsetX;
+          const curY = (e.clientY || st.lastClientY) - st.offsetY - st.touchLiftY - 44;
           ghost.style.transform = `translate3d(${curX.toFixed(1)}px, ${curY.toFixed(1)}px, 0) scale(1.16)`;
           ghost.style.opacity = "0";
           setTimeout(() => {
             if (ghost.parentNode) ghost.remove();
           }, 250);
         }
+        if (st.sourceEl) st.sourceEl.classList.remove("is-dragging-source");
+        triggerDraggedCardActivation(st.cardUid, st.ownerIdx);
+        return;
+      }
         if (st.sourceEl) st.sourceEl.classList.remove("is-dragging-source");
         triggerDraggedCardActivation(st.cardUid, st.ownerIdx);
         return;
@@ -10819,6 +10993,8 @@
       patchId: setupDraft.patchId || (state ? state.patchId : "alpha2"),
       compendiumId: setupDraft.compendiumId || (state ? state.compendiumId : "comp_beta1"),
       fillWithBots: true,
+      kickedIds: [],
+      lastNotify: null,
       members: [
         {
           clientId: mp.clientId,
@@ -10831,6 +11007,55 @@
     };
     mp.roomCode = code;
     mp.mySeat = -1;
+  }
+
+  let lastProcessedLobbyNotifyId = null;
+
+  function kickLobbyPlayer(targetClientId) {
+    if (!isMultiplayerHost() || !targetClientId || targetClientId === mp.clientId) return;
+    playSfx("click");
+    const target = (mp.lobby.members || []).find((m) => m.clientId === targetClientId);
+    mp.lobby.members = (mp.lobby.members || []).filter((m) => m.clientId !== targetClientId);
+    if (!Array.isArray(mp.lobby.kickedIds)) mp.lobby.kickedIds = [];
+    if (!mp.lobby.kickedIds.includes(targetClientId)) {
+      mp.lobby.kickedIds.push(targetClientId);
+    }
+    markRoomRealPlayerActivity(true);
+    broadcastLobbyState();
+    refreshLobbyModalIfOpen();
+    if (target) {
+      showHandDragToast(`Removed ${target.username} from the room.`);
+    }
+  }
+
+  function notifyLobbyPlayer(targetClientId) {
+    if (!isMultiplayerHost() || !targetClientId || targetClientId === mp.clientId) return;
+    playSfx("click");
+    const target = (mp.lobby.members || []).find((m) => m.clientId === targetClientId);
+    if (!target) return;
+    mp.lobby.lastNotify = {
+      id: "ntf_" + Date.now() + "_" + Math.random().toString(36).slice(2, 5),
+      targetClientId,
+      byName: (setupDraft.username || "").trim() || "Room Master",
+      ts: Date.now()
+    };
+    markRoomRealPlayerActivity(true);
+    broadcastLobbyState();
+    showHandDragToast(`Notified ${target.username} to Ready up!`);
+  }
+
+  function copyRoomCodeQuick() {
+    if (!mp.roomCode) return;
+    playSfx("click");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(mp.roomCode).then(() => {
+        showHandDragToast(`Room code ${mp.roomCode} copied!`);
+      }).catch(() => {
+        showHandDragToast(`Room code: ${mp.roomCode}`);
+      });
+    } else {
+      showHandDragToast(`Room code: ${mp.roomCode}`);
+    }
   }
 
   function createLobbyRoom() {
@@ -10885,6 +11110,12 @@
 
   function startMultiplayerMatchFromLobby() {
     if (!isMultiplayerHost()) return;
+    const unreadyGuests = (mp.lobby.members || []).filter((m) => !m.isHost && !m.ready);
+    if (unreadyGuests.length > 0) {
+      playSfx("card_drag_deny");
+      showHandDragToast(`Waiting for ${unreadyGuests.map((u) => u.username).join(", ")} to press READY (use Notify!).`);
+      return;
+    }
     markRoomRealPlayerActivity(true);
     const allowed = getPlayableCharacterIds(mp.lobby.compendiumId);
     const roster = mp.lobby.members.map((m) => ({
@@ -10911,7 +11142,8 @@
     }
 
     if (roster.length < 2) {
-      alert("At least 2 players (or enable AI Fill In) are required to start the match.");
+      playSfx("card_drag_deny");
+      showHandDragToast("Enable 'AI fills in' or wait for at least 1 more player to start.");
       return;
     }
 
@@ -11085,6 +11317,40 @@
             const prevStatus = mp.lobby.status;
             if (val.lobbyJson) {
               mp.lobby = JSON.parse(val.lobbyJson);
+            }
+            if (mp.lobby && Array.isArray(mp.lobby.kickedIds) && mp.lobby.kickedIds.includes(mp.clientId)) {
+              stopMpInactivityMonitor();
+              clearActiveMpSession();
+              detachFirebaseListeners();
+              mp.mode = "local";
+              mp.roomCode = "";
+              mp.mySeat = -1;
+              syncLeaveRoomCornerBtn();
+              openRoomClosedNoticeModal(
+                "Removed from Room",
+                "You were kicked from the room by the Room Master."
+              );
+              return;
+            }
+            if (
+              mp.lobby &&
+              mp.lobby.lastNotify &&
+              mp.lobby.lastNotify.id &&
+              mp.lobby.lastNotify.id !== lastProcessedLobbyNotifyId
+            ) {
+              lastProcessedLobbyNotifyId = mp.lobby.lastNotify.id;
+              if (mp.lobby.lastNotify.targetClientId === mp.clientId) {
+                playSfx("turn_reminder", "my_turn");
+                showHandDragToast(`${mp.lobby.lastNotify.byName || "Room Master"} is asking you to press READY!`);
+                setTimeout(() => {
+                  const rBtn = document.getElementById("rl2-ready-btn");
+                  if (rBtn) {
+                    rBtn.classList.remove("is-notified");
+                    void rBtn.offsetWidth;
+                    rBtn.classList.add("is-notified");
+                  }
+                }, 80);
+              }
             }
             if (val.stateJson) {
               state = JSON.parse(val.stateJson);
@@ -11640,7 +11906,12 @@
       fillWithBots: true,
       members: []
     };
-    openWelcomeSetupModal("multiplayer");
+    if (isTitleScreenVisible) {
+      closeModal();
+      showMainTitleScreen();
+    } else {
+      openWelcomeSetupModal("multiplayer");
+    }
     renderAll();
   }
 
@@ -13623,7 +13894,7 @@
     closeFloatingMenu(false);
     playSfx("click");
     if (section === "room") {
-      openWelcomeSetupModal(mp.mode === "local" ? "local" : "multiplayer");
+      openWelcomeSetupModal("multiplayer");
     } else if (section === "compendium") {
       openCompendiumModal();
     } else if (section === "rules") {
@@ -13792,41 +14063,78 @@
     openWelcomeSetupModal(tab);
   }
 
-  function openWelcomeSetupModal(activeTab = "local", prefillRoomCode = "") {
-    if (activeTab) setupDraft.tab = activeTab;
+  function hexColorToRgbTuple(hex) {
+    const clean = String(hex || "#34d399").replace("#", "").trim();
+    const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return "52, 211, 153";
+    const num = parseInt(full, 16);
+    return `${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}`;
+  }
+
+  function renderRoomLobbyV2CharGrid(compId, selectedCharId, takenMap = {}) {
+    const compDef = DATA.COMPENDIUM_VERSIONS[compId] || DATA.COMPENDIUM_VERSIONS.comp_beta1;
+    const playableIds = getPlayableCharacterIds(compId);
+    const unavailableIds = (compDef.unavailableCharacters || []).filter((cid) => DATA.CHARACTERS[cid]);
+
+    const activeTiles = playableIds.map((cid) => {
+      const ch = getCharacterForCompendium(cid, compId);
+      const base = DATA.CHARACTERS[cid] || {};
+      const imgSrc = (base.portrait && base.portrait.src) || base.menuPortrait || "";
+      const takenBy = takenMap[cid] || "";
+      const isTaken = !!takenBy;
+      const isSel = !isTaken && selectedCharId === cid;
+      const color = ch.color || "#34d399";
+      const rgb = hexColorToRgbTuple(color);
+      const clickAttr = isTaken ? "" : `onclick="window.EFT_APP.selectSetupChar('${cid}')"`;
+      const tagHtml = isTaken
+        ? `<span class="rl2-char-tile-tag is-taken">${escapeHtml(takenBy)}</span>`
+        : base.underDevelopment
+        ? `<span class="rl2-char-tile-tag">Dev</span>`
+        : "";
+      const mediaHtml = imgSrc
+        ? `<img class="rl2-char-tile-img" src="${escapeHtml(imgSrc)}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" />`
+        : `<div class="ph-portrait-fallback" style="width:100%;height:100%;background:radial-gradient(circle at 50% 42%, ${color}55 0%, #07191a 82%);"><div class="ph-fallback-icon" style="fill:${color};">${getCharacterSvgIcon(cid)}</div></div>`;
+
+      return `
+        <div class="rl2-char-tile ${isSel ? "is-selected" : ""} ${isTaken ? "is-locked" : ""}"
+             style="--char-color:${escapeHtml(color)};--char-rgb:${rgb};"
+             ${clickAttr}
+             title="${escapeHtml(base.devDisclaimer || ch.name)}">
+          ${mediaHtml}
+          ${tagHtml}
+          <div class="rl2-char-tile-bar">${escapeHtml(ch.shortName || ch.name)}</div>
+        </div>`;
+    });
+
+    const lockedTiles = unavailableIds.map((cid) => {
+      const ch = DATA.CHARACTERS[cid];
+      const imgSrc = ch.menuPortrait || (ch.portrait && ch.portrait.src) || "";
+      const badge = ch.tba ? "TBA" : "Soon";
+      const mediaHtml = imgSrc
+        ? `<img class="rl2-char-tile-img" src="${escapeHtml(imgSrc)}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" />`
+        : `<div class="ph-portrait-fallback" style="width:100%;height:100%;"><div class="ph-fallback-icon" style="fill:#64748b;">${getCharacterSvgIcon(cid)}</div></div>`;
+
+      return `
+        <div class="rl2-char-tile is-tba" title="${escapeHtml(ch.name)} (${escapeHtml(ch.origin ? ch.origin + " · " : "")}${badge})">
+          ${mediaHtml}
+          <span class="rl2-char-tile-tag">${badge}</span>
+          <div class="rl2-char-tile-bar">${escapeHtml(ch.shortName || ch.name)}</div>
+        </div>`;
+    });
+
+    return [...activeTiles, ...lockedTiles].join("");
+  }
+
+  function openWelcomeSetupModal(activeTab = "multiplayer", prefillRoomCode = "") {
+    setupDraft.tab = "multiplayer";
     if (prefillRoomCode) mp.roomCode = prefillRoomCode.trim().toUpperCase();
 
     const inLobbyWaiting = mp.mode !== "local" && mp.lobby && mp.lobby.status === "waiting";
-    if (inLobbyWaiting) {
-      setupDraft.tab = "multiplayer";
-    }
-
     const compId = inLobbyWaiting ? mp.lobby.compendiumId : setupDraft.compendiumId;
-    const patchId = inLobbyWaiting ? mp.lobby.patchId : setupDraft.patchId;
     const playableIds = getPlayableCharacterIds(compId);
     if (!playableIds.includes(setupDraft.charId)) {
       setupDraft.charId = playableIds[0];
     }
-
-    const patchSelectHtml = `
-      <div class="form-field">
-        <label>Rulebook Patch Version:</label>
-        <select id="setup-patch" onchange="window.EFT_APP.updateSetupDraft('patchId', this.value)">
-          ${Object.values(DATA.RULE_PATCHES)
-            .map((p) => `<option value="${p.id}" ${p.id === patchId ? "selected" : ""}>${p.name}</option>`)
-            .join("")}
-        </select>
-      </div>`;
-
-    const compSelectHtml = `
-      <div class="form-field">
-        <label>Character Compendium Version:</label>
-        <select id="setup-compendium" onchange="window.EFT_APP.updateSetupDraft('compendiumId', this.value)">
-          ${Object.values(DATA.COMPENDIUM_VERSIONS)
-            .map((c) => `<option value="${c.id}" ${c.id === compId ? "selected" : ""}>${c.name}</option>`)
-            .join("")}
-        </select>
-      </div>`;
 
     if (inLobbyWaiting) {
       const takenMap = {};
@@ -13835,167 +14143,136 @@
       });
       const me = mp.lobby.members.find((m) => m.clientId === mp.clientId);
       const isHost = isMultiplayerHost();
+      const myName = (me && me.username) || (setupDraft.username || "").trim() || "Player";
+
       const rosterHtml = mp.lobby.members
         .map((m) => {
           const ch = getCharacterForCompendium(m.charId, compId);
+          const base = DATA.CHARACTERS[m.charId] || {};
+          const pColor = (ch && ch.color) || "#34d399";
+          const pRgb = hexColorToRgbTuple(pColor);
+          const imgSrc = (base.portrait && base.portrait.src) || base.menuPortrait || "";
+          const orbClass = m.isHost ? "is-host" : m.ready ? "is-ready" : "is-not-ready";
+          const orbTitle = m.isHost ? "Room Master" : m.ready ? "Ready" : "Not Ready";
+
+          let rmControls = "";
+          if (isHost && !m.isHost) {
+            const notifyBtn = !m.ready
+              ? `<button type="button" class="rl2-rm-btn rl2-rm-notify" onclick="window.EFT_APP.notifyLobbyPlayer('${escapeHtml(m.clientId)}')" title="Notify player to Ready up">Notify</button>`
+              : "";
+            const kickBtn = `<button type="button" class="rl2-rm-btn rl2-rm-kick" onclick="window.EFT_APP.kickLobbyPlayer('${escapeHtml(m.clientId)}')" title="Kick player from room">Kick</button>`;
+            rmControls = `<span class="rl2-rm-actions">${notifyBtn}${kickBtn}</span>`;
+          }
+
           return `
-          <div class="lobby-roster-row">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span class="ph-icon-badge" style="background:${ch ? ch.color : "#38bdf8"};">${getCharacterSvgIcon(m.charId)}</span>
-              <div>
-                <strong style="color:#fff;">${escapeHtml(m.username)}</strong>
-                <span style="font-size:0.72rem;color:var(--mint-light);margin-left:6px;">${ch ? escapeHtml(ch.name) : m.charId}</span>
+            <div class="rl2-player-capsule" style="--p-color:${escapeHtml(pColor)};--p-rgb:${pRgb};">
+              <div class="rl2-capsule-portrait">
+                ${imgSrc ? `<img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(ch ? ch.name : m.charId)}" />` : ""}
               </div>
-            </div>
-            <span class="tag-badge">${m.isHost ? "Host" : m.ready ? "Ready" : "Waiting"}</span>
-          </div>`;
+              <div class="rl2-capsule-right">
+                ${rmControls}
+                <span class="rl2-capsule-name" title="${escapeHtml(m.username)} · ${escapeHtml(ch ? ch.name : m.charId)}">${escapeHtml(m.username)}</span>
+                <span class="rl2-status-orb ${orbClass}" title="${orbTitle}" aria-label="${orbTitle}"></span>
+              </div>
+            </div>`;
         })
         .join("");
 
+      const footerRightHtml = isHost
+        ? `<label class="rl2-ai-check" title="Automatically fill empty slots with AI bots up to 4 players">
+             <input type="checkbox" ${mp.lobby.fillWithBots ? "checked" : ""} onchange="window.EFT_APP.toggleLobbyFillBots(this.checked)" />
+             <span>AI fills in</span>
+           </label>
+           <button type="button" class="rl2-start-btn" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">START</button>`
+        : `<div class="rl2-wait-hint">${me && me.ready ? "Ready! Waiting for Room Master..." : "Press READY when you are set"}</div>
+           <button type="button" id="rl2-ready-btn" class="rl2-start-btn ${me && me.ready ? "is-ready-active" : ""}" onclick="window.EFT_APP.toggleLobbyReady()">${
+             me && me.ready ? "CANCEL READY" : "READY"
+           }</button>`;
+
       openInfoModal(
-        `Escape From Tartarus: Room [${escapeHtml(mp.roomCode)}]`,
-        `<div class="setup-modal-stack">
-          <div class="panel-box" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <div>
-              <div style="font-size:0.72rem;color:var(--text-muted);">Mode: <strong>${mp.mode.toUpperCase()}</strong></div>
-              <div style="font-size:0.95rem;font-weight:800;color:var(--mint-light);">Room Code: ${escapeHtml(mp.roomCode)}</div>
-            </div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.copyInviteLink()">Copy Invite Link</button>
-              <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.disconnectMultiplayer()">Leave Room</button>
+        `Room ${escapeHtml(mp.roomCode)}`,
+        `<div class="rl2-wrap">
+          <div class="rl2-header">
+            <div class="rl2-greeting">Hi, ${escapeHtml(myName)}</div>
+            <button type="button" class="rl2-room-code-btn" onclick="window.EFT_APP.copyRoomCodeQuick()" title="Click to copy Room Code">
+              Room: ${escapeHtml(mp.roomCode)}
+            </button>
+          </div>
+
+          <div>
+            <div class="rl2-section-label">Choose Character :</div>
+            <div class="rl2-char-grid">
+              ${renderRoomLobbyV2CharGrid(compId, me ? me.charId : setupDraft.charId, takenMap)}
             </div>
           </div>
 
-          <div class="setup-char-box">
-            <div class="setup-char-box-label">Choose Your Character (locked automatically once picked by another player):</div>
-            <div class="char-picker-grid">
-              ${renderSetupCharPickerGrid(compId, me ? me.charId : setupDraft.charId, takenMap)}
-            </div>
-            <div class="setup-dev-disclaimer">
-              <strong>Disclaimer (Under Development):</strong> <strong>Mao-Mao</strong> and <strong>Firefly / SAM</strong> are playable but still in active development; card effects &amp; balance are subject to change.
+          <div class="rl2-dev-note">
+            <strong>Note:</strong> Mao-Mao and Firefly / SAM are playable but still under development.
+          </div>
+
+          <div>
+            <div class="rl2-section-label">Players :</div>
+            <div class="rl2-players-list">
+              ${rosterHtml}
             </div>
           </div>
 
-          <div class="panel-box" style="display:flex;flex-direction:column;gap:8px;">
-            <div class="panel-header" style="margin-bottom:4px;">Players in Lobby (${mp.lobby.members.length}/4)</div>
-            ${rosterHtml}
+          <div class="rl2-footer">
+            <div class="rl2-footer-left">
+              <button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.copyInviteLink()">Copy Invite Link</button>
+              <button type="button" class="btn btn-danger btn-sm" onclick="window.EFT_APP.disconnectMultiplayer()">Leave Room</button>
+            </div>
+            <div class="rl2-footer-right">
+              ${footerRightHtml}
+            </div>
           </div>
-
-          ${
-            isHost
-              ? `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;color:#e2e8f0;cursor:pointer;" title="Automatically fill empty slots with AI bots up to 4 players">
-                   <input type="checkbox" ${mp.lobby.fillWithBots ? "checked" : ""} onchange="window.EFT_APP.toggleLobbyFillBots(this.checked)" />
-                   AI Fill In
-                 </label>
-                 <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">Shuffle Order &amp; Start Match</button>`
-              : `<button class="btn ${me && me.ready ? "btn-gold" : "btn-emerald"} setup-action-btn" onclick="window.EFT_APP.toggleLobbyReady()">${
-                  me && me.ready ? "Cancel Ready" : "Ready"
-                }</button>
-                 <div style="font-size:0.74rem;color:var(--text-muted);text-align:center;">Waiting for Host to start the match &amp; shuffle turn order...</div>`
-          }
         </div>`,
         "welcome_lobby"
       );
       return;
     }
 
-    const allowedChars = playableIds.map((cid) => getCharacterForCompendium(cid, compId));
-
-    let tabBodyHtml = "";
-    if (setupDraft.tab === "local") {
-      const otherCount = Math.max(1, (setupDraft.playerCount || 4) - 1);
-      const freeDefaults = playableIds.filter((cid) => cid !== setupDraft.charId);
-      let extraRows = "";
-      for (let i = 0; i < otherCount; i++) {
-        const ext = setupDraft.extraPlayers[i] || { username: "", charId: freeDefaults[i % freeDefaults.length], controlType: "bot" };
-        const ctrlType = ext.controlType || "bot";
-        const chosenId = playableIds.includes(ext.charId)
-          ? ext.charId
-          : freeDefaults[i % freeDefaults.length] || playableIds[0];
-        extraRows += `
-          <div class="setup-extra-row-3col">
-            <div class="form-field">
-              <label>Player ${i + 2} Username (optional):</label>
-              <input type="text" value="${escapeHtml(ext.username)}" placeholder="${ctrlType === "bot" ? `Bot ${i + 2}` : `Player ${i + 2}`}" oninput="window.EFT_APP.updateSetupExtraPlayer(${i}, 'username', this.value)" />
-            </div>
-            <div class="form-field">
-              <label>Player ${i + 2} Character:</label>
-              <select onchange="window.EFT_APP.updateSetupExtraPlayer(${i}, 'charId', this.value)">
-                ${allowedChars
-                  .map((c) => `<option value="${c.id}" ${c.id === chosenId ? "selected" : ""}>${c.name}</option>`)
-                  .join("")}
-              </select>
-            </div>
-            <div class="form-field">
-              <label>Control:</label>
-              <select onchange="window.EFT_APP.updateSetupExtraPlayer(${i}, 'controlType', this.value)">
-                <option value="bot" ${ctrlType === "bot" ? "selected" : ""}>Bot (AI)</option>
-                <option value="human" ${ctrlType === "human" ? "selected" : ""}>Player</option>
-              </select>
-            </div>
-          </div>`;
-      }
-
-      tabBodyHtml = `
-        <div class="panel-box setup-bottom-panel">
-          <div class="panel-header" style="margin-bottom:4px;">Local / Solo Match Settings</div>
-          <div class="form-field">
-            <label>Player Count:</label>
-            <select onchange="window.EFT_APP.updateSetupDraft('playerCount', this.value)">
-              <option value="2" ${setupDraft.playerCount === 2 ? "selected" : ""}>2 Players</option>
-              <option value="3" ${setupDraft.playerCount === 3 ? "selected" : ""}>3 Players</option>
-              <option value="4" ${setupDraft.playerCount === 4 ? "selected" : ""}>4 Players (Standard)</option>
-            </select>
-          </div>
-          ${extraRows}
-          <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.startLocalRandomizedMatch()">Shuffle Order &amp; Start Match</button>
-        </div>`;
-    } else {
-      tabBodyHtml = `
-        <div class="grid-2col setup-mp-cards">
-          <div class="panel-box setup-bottom-panel">
-            <div class="panel-header" style="margin-bottom:2px;">Create Online Room (Host)</div>
-            <p style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin:0 0 6px;">
-              Create an online room and share the room code or invite link to play with friends.
-            </p>
-            <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.createLobbyRoom()">Create Room</button>
-          </div>
-          <div class="panel-box setup-bottom-panel">
-            <div class="panel-header" style="margin-bottom:2px;">Join Room</div>
-            <div class="form-field">
-              <label>Room Code:</label>
-              <input type="text" id="setup-join-code" placeholder="EFT456" value="${escapeHtml(mp.roomCode)}" style="text-transform:uppercase;font-weight:800;" />
-            </div>
-            <button class="btn btn-gold setup-action-btn" onclick="window.EFT_APP.joinLobbyRoom()">Join Room</button>
-          </div>
-        </div>`;
-    }
+    // In-match Room Info popup (Multiplayer-only)
+    const activeRoomInfoHtml =
+      mp.mode !== "local" && mp.roomCode
+        ? `<div class="rl2-header">
+             <div class="rl2-greeting">Hi, ${escapeHtml((setupDraft.username || "Player").trim() || "Player")}</div>
+             <button type="button" class="rl2-room-code-btn" onclick="window.EFT_APP.copyRoomCodeQuick()" title="Click to copy Room Code">
+               Room: ${escapeHtml(mp.roomCode)}
+             </button>
+           </div>
+           <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
+             <div style="display:flex;gap:8px;flex-wrap:wrap;">
+               <button type="button" class="btn btn-emerald btn-sm" onclick="window.EFT_APP.copyInviteLink()">Copy Invite Link</button>
+               <button type="button" class="btn btn-danger btn-sm" onclick="window.EFT_APP.requestLeaveRoom()">Leave Room</button>
+             </div>
+             <button type="button" class="btn btn-sm" onclick="window.EFT_APP.closeModal()">Close</button>
+           </div>`
+        : `<div class="rl2-header">
+             <div class="rl2-greeting">Multiplayer Room</div>
+             <button type="button" class="btn btn-sm" onclick="window.EFT_APP.closeModal()">Close</button>
+           </div>
+           <div class="grid-2col setup-mp-cards">
+             <div class="panel-box setup-bottom-panel">
+               <div class="panel-header" style="margin-bottom:2px;">Host Game</div>
+               <p style="font-size:0.76rem;color:var(--text-muted);line-height:1.45;margin:0 0 8px;">
+                 Create an online room and share the room code or invite link with friends.
+               </p>
+               <button class="btn btn-emerald setup-action-btn" onclick="window.EFT_APP.createLobbyRoom()">Host Game</button>
+             </div>
+             <div class="panel-box setup-bottom-panel">
+               <div class="panel-header" style="margin-bottom:2px;">Join Game</div>
+               <div class="form-field">
+                 <label>Room Code:</label>
+                 <input type="text" id="setup-join-code" placeholder="EFT456" maxlength="6" value="${escapeHtml(mp.roomCode)}" style="text-transform:uppercase;font-weight:800;" />
+               </div>
+               <button class="btn btn-gold setup-action-btn" onclick="window.EFT_APP.joinLobbyRoom()">Join Room</button>
+             </div>
+           </div>`;
 
     openInfoModal(
-      "Escape From Tartarus",
-      `<div class="setup-modal-stack">
-        <div class="setup-mode-pills">
-          <button type="button" class="setup-mode-pill-btn ${setupDraft.tab === "local" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('local')">Local / Solo Play</button>
-          <button type="button" class="setup-mode-pill-btn ${setupDraft.tab === "multiplayer" ? "active" : ""}" onclick="window.EFT_APP.switchSetupTab('multiplayer')">Multiplayer</button>
-        </div>
-
-        <div class="setup-username-inline">
-          <label class="setup-username-label" for="setup-username-input">Username:</label>
-          <input type="text" id="setup-username-input" class="setup-username-pill-input" maxlength="18" placeholder="" value="${escapeHtml(setupDraft.username)}" oninput="window.EFT_APP.updateSetupDraft('username', this.value)" />
-        </div>
-
-        <div class="setup-char-box">
-          <div class="setup-char-box-label">Choose Your Character:</div>
-          <div class="char-picker-grid">
-            ${renderSetupCharPickerGrid(compId, setupDraft.charId, {})}
-          </div>
-          <div class="setup-dev-disclaimer">
-            <strong>Disclaimer (Under Development):</strong> <strong>Mao-Mao</strong> and <strong>Firefly / SAM</strong> are playable but still in active development; card effects &amp; balance are subject to change.
-          </div>
-        </div>
-
-        ${tabBodyHtml}
-      </div>`,
+      "Multiplayer Room",
+      `<div class="rl2-wrap">${activeRoomInfoHtml}</div>`,
       "welcome_lobby"
     );
   }
@@ -14249,7 +14526,17 @@
     },
     startRandomMinigame,
     requestLeaveRoom,
-    confirmLeaveRoom
+    confirmLeaveRoom,
+    submitTitleUsername,
+    editTitleUsername,
+    toggleTitlePlayMenu,
+    toggleTitleJoinCode,
+    onTitleJoinCodeInput,
+    hostGameFromTitle,
+    submitTitleJoinCode,
+    kickLobbyPlayer,
+    notifyLobbyPlayer,
+    copyRoomCodeQuick
   };
 
   window.addEventListener("DOMContentLoaded", () => {
@@ -14391,8 +14678,10 @@
         const params = new URLSearchParams(window.location.search);
         const roomParam = params.get("room");
         if (roomParam) {
-          const cleanRoom = roomParam.trim().toUpperCase();
-          openWelcomeSetupModal("multiplayer", cleanRoom);
+          const cleanRoom = roomParam.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+          if (cleanRoom) {
+            pendingInviteRoomCode = cleanRoom;
+          }
         }
       } catch (e) {}
     });
