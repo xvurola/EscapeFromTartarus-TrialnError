@@ -14075,7 +14075,7 @@
     const activeTiles = playableIds.map((cid) => {
       const ch = getCharacterForCompendium(cid, compId);
       const base = DATA.CHARACTERS[cid] || {};
-      const imgSrc = (base.portrait && base.portrait.src) || base.menuPortrait || "";
+      const imgSrc = base.menuPortrait || (base.portrait && base.portrait.src) || "";
       const takenBy = takenMap[cid] || "";
       const isTaken = !!takenBy;
       const isSel = !isTaken && selectedCharId === cid;
@@ -14147,7 +14147,7 @@
           const base = DATA.CHARACTERS[m.charId] || {};
           const pColor = (ch && ch.color) || "#34d399";
           const pRgb = hexColorToRgbTuple(pColor);
-          const imgSrc = (base.portrait && base.portrait.src) || base.menuPortrait || "";
+          const imgSrc = base.menuPortrait || (base.portrait && base.portrait.src) || "";
           const orbClass = m.isHost ? "is-host" : m.ready ? "is-ready" : "is-not-ready";
           const orbTitle = m.isHost ? "Room Master" : m.ready ? "Ready" : "Not Ready";
 
