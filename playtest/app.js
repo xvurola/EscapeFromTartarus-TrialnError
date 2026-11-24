@@ -2113,6 +2113,14 @@
             alert(`Room [${cleanCode}] is no longer active.`);
             return;
           }
+          const lastActTs = Number(data.lastActivityAt || data.updatedAt || (data.meta && data.meta.createdAt) || 0);
+          if (lastActTs > 0 && Date.now() - lastActTs >= ROOM_INACTIVITY_LIMIT_MS) {
+            roomRef.remove().catch(() => {});
+            clearActiveMpSession();
+            renderTitleResumeSlot();
+            alert(`Room [${cleanCode}] expired after 10 minutes of inactivity and has been removed.`);
+            return;
+          }
           mp.mode = "firebase_host";
           mp.roomCode = cleanCode;
           mp.fbRoomRef = roomRef;
@@ -2141,8 +2149,11 @@
             processRemoteClientAction(act);
           });
 
+          startMpInactivityMonitor(lastActTs || Date.now());
+          markRoomRealPlayerActivity(true);
           saveActiveMpSession("host", cleanCode);
           invalidateHudCache();
+          syncLeaveRoomCornerBtn();
           if (mp.lobby.status === "playing") {
             isMatchStarted = true;
             hideMainTitleScreen();
@@ -3031,6 +3042,9 @@
       .join("");
 
     const totalShards = (w.shards || 0) + (w.metaShard || 0);
+    const victorySubtitle = w.victoryReason
+      ? escapeHtml(w.victoryReason)
+      : `Collected ${totalShards} Tartarus Shards in Cycle ${w.cycle || state.cycle}.`;
     overlay.innerHTML = `
       <div class="victory-stage-card">
         <div class="victory-eyebrow">ESCAPED FROM TARTARUS · VICTORY</div>
@@ -3038,7 +3052,7 @@
           <div class="victory-portrait-frame">${portraitHtml}</div>
           <div class="victory-hero-info">
             <div class="victory-winner-name">${escapeHtml(w.name)} Wins!</div>
-            <div class="victory-subtitle">Collected ${totalShards} Tartarus Shards in Cycle ${w.cycle || state.cycle}.</div>
+            <div class="victory-subtitle">${victorySubtitle}</div>
             <div class="victory-stats-pills">
               <span class="victory-stat-pill">💎 ${w.shards} Shard${w.metaShard ? ` + ${w.metaShard} Meta` : ""}</span>
               <span class="victory-stat-pill">💰 ${w.tc} TC</span>
@@ -3056,7 +3070,7 @@
     overlay.classList.add("visible");
   }
 
-  function resetGameToMainMenu() {
+  function resetGameToMainMenu(opts = {}) {
     playSfx("click");
     clearTimeout(stepTimerId);
     clearDiceOverlay();
@@ -3064,8 +3078,15 @@
     cancelTileEffectShuffle(true);
     dismissSkillPopup(true, true);
     closeModal();
+    stopMpInactivityMonitor();
     if (mp.mode !== "local") {
+      const prevRoomRef = mp.fbRoomRef;
+      const shouldDeleteFinishedRoom = !opts.preservePendingDelete && mp.mode === "firebase_host" && prevRoomRef && state && state.winner;
       detachFirebaseListeners();
+      clearActiveMpSession();
+      if (shouldDeleteFinishedRoom) {
+        deleteFirebaseRoomNow(prevRoomRef);
+      }
       mp.mode = "local";
       mp.roomCode = "";
       mp.mySeat = -1;
@@ -3078,6 +3099,7 @@
         members: []
       };
     }
+    syncLeaveRoomCornerBtn();
     const vOv = document.getElementById("victory-screen-overlay");
     if (vOv) {
       vOv.classList.remove("visible");
@@ -3338,6 +3360,7 @@
       alert(`It is currently ${getActivePlayer().name}'s turn.`);
       return;
     }
+    markRoomRealPlayerActivity();
     if (state.phaseIndex === 1 || state.phaseIndex === 3) {
       rollMovementDice();
     }
@@ -3354,6 +3377,7 @@
       alert("You must roll the dice at least once before ending your turn.");
       return;
     }
+    markRoomRealPlayerActivity();
     endCurrentTurn();
   }
 
@@ -3762,6 +3786,7 @@
 
   function resolveStageIsMineChoice(tileId = null) {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     if (isRemoteClient()) {
       sendClientActionToHost("stage_is_mine_choice", { tileId });
       return;
@@ -3803,6 +3828,7 @@
 
   function resolveForcedAllInChoice(choice = "shard") {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     if (isRemoteClient()) {
       sendClientActionToHost("forced_all_in_choice", { choice });
       return;
@@ -6276,6 +6302,10 @@
 
   function playSkillCardFromHand(cardUid, options = {}) {
     if (!canLocalPlayerAct()) return;
+    const actP = getActivePlayer();
+    if (actP && !actP.isBot) {
+      markRoomRealPlayerActivity();
+    }
     if (isRemoteClient()) {
       sendClientActionToHost("play_card", { cardUid, options });
       closeModal();
@@ -6436,6 +6466,7 @@
 
   function resolveHasteReaction(hasteCardUid = null) {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     if (isRemoteClient()) {
       sendClientActionToHost("haste_react", { hasteCardUid: hasteCardUid || null });
       closeModal();
@@ -7866,12 +7897,17 @@
     applyCameraTransform();
     scheduleAutoEndTurnIfReady();
     scheduleMultiplayerBotIfNeeded();
-    if (state.winner) {
-      clearLocalMatchAutosave();
-      clearActiveMpSession();
-    } else if (mp.mode === "local" && isMatchStarted && !isInitializingMatch) {
-      scheduleLocalMatchAutosave();
-    }
+      if (state.winner) {
+        clearLocalMatchAutosave();
+        clearActiveMpSession();
+        stopMpInactivityMonitor();
+        if (mp.mode === "firebase_host" && mp.fbRoomRef && !mpPendingRoomDeleteTimerId) {
+          scheduleFirebaseRoomDelete(mp.fbRoomRef, 12000);
+        }
+      } else if (mp.mode === "local" && isMatchStarted && !isInitializingMatch) {
+        scheduleLocalMatchAutosave();
+      }
+      syncLeaveRoomCornerBtn();
   }
 
   // Dirty-checked HUD & Board render cache (avoid redundant DOM rebuilds)
@@ -8386,6 +8422,7 @@
 
   function resolveScryKeepChoice(chosenUid) {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     if (isRemoteClient()) {
       sendClientActionToHost("scry_keep_choice", { chosenUid });
       closeModal();
@@ -10848,6 +10885,7 @@
 
   function startMultiplayerMatchFromLobby() {
     if (!isMultiplayerHost()) return;
+    markRoomRealPlayerActivity(true);
     const allowed = getPlayableCharacterIds(mp.lobby.compendiumId);
     const roster = mp.lobby.members.map((m) => ({
       charId: allowed.includes(m.charId) ? m.charId : allowed[0],
@@ -10922,11 +10960,14 @@
           lobbyJson: JSON.stringify(mp.lobby),
           stateJson: JSON.stringify(state),
           pendingJson: JSON.stringify(serializePendingInteraction()),
+          lastActivityAt: Date.now(),
           updatedAt: Date.now()
         })
         .then(() => {
           attachFirebaseConnectionMonitor(seatsRef, "Host Online");
           saveActiveMpSession("host", code);
+          startMpInactivityMonitor(Date.now());
+          syncLeaveRoomCornerBtn();
 
           mp.fbSeatsListener = seatsRef.on("value", (snap) => {
             mp.onlineSeats = snap.val() || {};
@@ -10947,6 +10988,8 @@
           mp.mode = "local";
           mp.roomCode = "";
           mp.lobby.status = "idle";
+          stopMpInactivityMonitor();
+          syncLeaveRoomCornerBtn();
           alert("Failed to write to Firebase Database: " + err.message);
         });
     } catch (e) {
@@ -10979,6 +11022,13 @@
             alert(`Room [${code}] was not found.`);
             return;
           }
+          const lastActTs = Number(data.lastActivityAt || data.updatedAt || (data.meta && data.meta.createdAt) || 0);
+          if (lastActTs > 0 && Date.now() - lastActTs >= ROOM_INACTIVITY_LIMIT_MS) {
+            roomRef.remove().catch(() => {});
+            clearActiveMpSession();
+            alert(`Room [${code}] expired after 10 minutes of inactivity and has been removed.`);
+            return;
+          }
 
           mp.mode = "firebase_client";
           mp.roomCode = code;
@@ -10989,7 +11039,9 @@
 
           attachFirebaseConnectionMonitor(mp.fbSeatsRef, "Player Online");
           saveActiveMpSession("client", code);
+          startMpInactivityMonitor(lastActTs || Date.now());
           invalidateHudCache();
+          syncLeaveRoomCornerBtn();
 
           if (data.lobbyJson) {
             mp.lobby = JSON.parse(data.lobbyJson);
@@ -11004,7 +11056,32 @@
 
           mp.fbStateListener = roomRef.on("value", (updateSnap) => {
             const val = updateSnap.val();
-            if (!val) return;
+            if (!val) {
+              // Room has been deleted from Firebase
+              stopMpInactivityMonitor();
+              clearActiveMpSession();
+              detachFirebaseListeners();
+              mp.mode = "local";
+              mp.roomCode = "";
+              mp.mySeat = -1;
+              syncLeaveRoomCornerBtn();
+              if (state && state.winner) {
+                renderVictoryScreenOverlay();
+                return;
+              }
+              openRoomClosedNoticeModal(
+                "Room Closed",
+                "This multiplayer room has been closed and removed from the server."
+              );
+              return;
+            }
+            if (val.lastActivityAt) {
+              const remoteAct = Number(val.lastActivityAt) || 0;
+              if (remoteAct > mpLastRealActionAt) {
+                mpLastRealActionAt = remoteAct;
+                mpInactivityWarnShown = false;
+              }
+            }
             const prevStatus = mp.lobby.status;
             if (val.lobbyJson) {
               mp.lobby = JSON.parse(val.lobbyJson);
@@ -11017,6 +11094,52 @@
               }
             }
             mp.onlineSeats = val.seats || {};
+
+            if (val.roomClosedReason === "last_player_victory" && state && state.winner) {
+              hideMainTitleScreen();
+              closeModal();
+              renderAll();
+              stopMpInactivityMonitor();
+              clearActiveMpSession();
+              const refToClean = mp.fbRoomRef;
+              detachFirebaseListeners();
+              mp.mode = "local";
+              mp.roomCode = "";
+              mp.mySeat = -1;
+              syncLeaveRoomCornerBtn();
+              if (refToClean) {
+                setTimeout(() => deleteFirebaseRoomNow(refToClean), 450);
+              }
+              return;
+            }
+            if (val.roomClosedReason === "inactivity_timeout") {
+              stopMpInactivityMonitor();
+              clearActiveMpSession();
+              detachFirebaseListeners();
+              mp.mode = "local";
+              mp.roomCode = "";
+              mp.mySeat = -1;
+              syncLeaveRoomCornerBtn();
+              openRoomClosedNoticeModal(
+                "Room Closed (Inactivity)",
+                "No player actions were taken for 10 minutes. This room has been automatically removed to optimize database usage."
+              );
+              return;
+            }
+            if (val.roomClosedReason === "host_left") {
+              stopMpInactivityMonitor();
+              clearActiveMpSession();
+              detachFirebaseListeners();
+              mp.mode = "local";
+              mp.roomCode = "";
+              mp.mySeat = -1;
+              syncLeaveRoomCornerBtn();
+              openRoomClosedNoticeModal(
+                "Room Closed",
+                "The Host left the room. This session has ended and the room has been removed."
+              );
+              return;
+            }
 
             if (mp.lobby.status === "playing") {
               hideMainTitleScreen();
@@ -11056,6 +11179,376 @@
     }
   }
 
+  // ============================================================================
+  // ROOM LIFECYCLE: LEAVE ROOM, WALKOVER VICTORY & 10-MINUTE INACTIVITY CLEANUP
+  // ============================================================================
+  const ROOM_INACTIVITY_LIMIT_MS = 10 * 60 * 1000;
+  const ROOM_INACTIVITY_WARN_MS = 9 * 60 * 1000;
+  let mpLastRealActionAt = Date.now();
+  let mpLastActivityFirebaseWriteAt = 0;
+  let mpInactivityWarnShown = false;
+  let mpInactivityCheckTimerId = null;
+  let mpPendingRoomDeleteTimerId = null;
+
+  function syncLeaveRoomCornerBtn() {
+    const wrap = document.getElementById("hud-bottom-right-utils");
+    if (!wrap) return;
+    const show =
+      mp.mode !== "local" &&
+      isMatchStarted &&
+      !isTitleScreenVisible &&
+      !(state && state.winner);
+    wrap.classList.toggle("is-hidden", !show);
+  }
+
+  function deleteFirebaseRoomNow(roomRefToDelete = null) {
+    const targetRef = roomRefToDelete || mp.fbRoomRef;
+    if (!targetRef) return;
+    if (mpPendingRoomDeleteTimerId) {
+      clearTimeout(mpPendingRoomDeleteTimerId);
+      mpPendingRoomDeleteTimerId = null;
+    }
+    try {
+      targetRef.remove().catch(() => {});
+    } catch (e) {}
+  }
+
+  function scheduleFirebaseRoomDelete(roomRefToDelete, delayMs = 1200) {
+    if (!roomRefToDelete) return;
+    if (mpPendingRoomDeleteTimerId) {
+      clearTimeout(mpPendingRoomDeleteTimerId);
+      mpPendingRoomDeleteTimerId = null;
+    }
+    mpPendingRoomDeleteTimerId = setTimeout(() => {
+      mpPendingRoomDeleteTimerId = null;
+      deleteFirebaseRoomNow(roomRefToDelete);
+    }, Math.max(0, delayMs));
+  }
+
+  function markRoomRealPlayerActivity(syncToFirebase = true) {
+    if (mp.mode === "local") return;
+    const now = Date.now();
+    mpLastRealActionAt = now;
+    mpInactivityWarnShown = false;
+    if (syncToFirebase && mp.mode === "firebase_host" && mp.fbRoomRef && now - mpLastActivityFirebaseWriteAt >= 4500) {
+      mpLastActivityFirebaseWriteAt = now;
+      mp.fbRoomRef.update({ lastActivityAt: now }).catch(() => {});
+    }
+  }
+
+  function openRoomClosedNoticeModal(title, message) {
+    closeModal();
+    openInfoModal(
+      escapeHtml(title),
+      `<div style="display:flex;flex-direction:column;gap:12px;">
+        <p style="margin:0;font-size:0.86rem;color:#e2e8f0;line-height:1.5;">${escapeHtml(message)}</p>
+        <button type="button" class="btn btn-emerald" onclick="window.EFT_APP.resetGameToMainMenu()">Back to Main Menu</button>
+      </div>`
+    );
+  }
+
+  function stopMpInactivityMonitor() {
+    if (mpInactivityCheckTimerId) {
+      clearInterval(mpInactivityCheckTimerId);
+      mpInactivityCheckTimerId = null;
+    }
+    mpInactivityWarnShown = false;
+  }
+
+  function handleRoomInactivityExpired() {
+    if (mp.mode === "local") {
+      stopMpInactivityMonitor();
+      return;
+    }
+    const roomRef = mp.fbRoomRef;
+    const wasHost = mp.mode === "firebase_host";
+    stopMpInactivityMonitor();
+    clearActiveMpSession();
+
+    if (roomRef) {
+      if (wasHost) {
+        roomRef
+          .update({
+            roomClosedReason: "inactivity_timeout",
+            closedAt: Date.now()
+          })
+          .catch(() => {});
+        scheduleFirebaseRoomDelete(roomRef, 550);
+      } else {
+        deleteFirebaseRoomNow(roomRef);
+      }
+    }
+
+    detachFirebaseListeners();
+    mp.mode = "local";
+    mp.roomCode = "";
+    mp.mySeat = -1;
+    syncLeaveRoomCornerBtn();
+    openRoomClosedNoticeModal(
+      "Room Closed (Inactivity)",
+      "No player actions were recorded for 10 minutes. This room has been automatically deleted to optimize database usage."
+    );
+  }
+
+  function startMpInactivityMonitor(initialTimestamp = null) {
+    stopMpInactivityMonitor();
+    mpLastRealActionAt = Number(initialTimestamp) || Date.now();
+    mpInactivityWarnShown = false;
+    mpInactivityCheckTimerId = setInterval(() => {
+      if (mp.mode === "local" || !mp.fbRoomRef) {
+        stopMpInactivityMonitor();
+        return;
+      }
+      if (state && state.winner) {
+        stopMpInactivityMonitor();
+        return;
+      }
+      const idleMs = Date.now() - mpLastRealActionAt;
+      if (idleMs >= ROOM_INACTIVITY_WARN_MS && !mpInactivityWarnShown) {
+        mpInactivityWarnShown = true;
+        showHandDragToast("No player actions for 9 min. Room will auto-close in 1 min.");
+      }
+      const graceMs = mp.mode === "firebase_client" ? 5000 : 0;
+      if (idleMs >= ROOM_INACTIVITY_LIMIT_MS + graceMs) {
+        handleRoomInactivityExpired();
+      }
+    }, 10000);
+  }
+
+  function getActiveHumanPlayersInRoom() {
+    if (!state || !Array.isArray(state.players)) return [];
+    return state.players.filter((p) => p && !p.isBot && !p.hasLeftRoom);
+  }
+
+  function declareWalkoverVictoryAndDeleteRoom(winnerPlayer, reasonText, roomRef, deleteDelayMs = 1500) {
+    if (!state || !winnerPlayer) return;
+    clearTimeout(stepTimerId);
+    clearTimeout(autoEndTurnTimerId);
+    clearTimeout(tileModalAutoCloseTimerId);
+    isWalkingAnim = false;
+    activeStepsRemaining = 0;
+    pendingInteraction = null;
+    state.activeTileModal = null;
+    state.activeMinigame = null;
+    state.winner = {
+      index: winnerPlayer.index,
+      id: winnerPlayer.id,
+      name: winnerPlayer.name,
+      charId: winnerPlayer.charId,
+      charName: winnerPlayer.charName || winnerPlayer.name,
+      color: winnerPlayer.color,
+      shards: winnerPlayer.shards,
+      metaShard: winnerPlayer.metaShard,
+      tc: winnerPlayer.tc,
+      cycle: state.cycle,
+      victoryReason: reasonText
+    };
+    addLog(`VICTORY! ${winnerPlayer.name} wins: ${reasonText}`);
+    stopMpInactivityMonitor();
+    clearActiveMpSession();
+
+    if (roomRef) {
+      roomRef
+        .update({
+          lobbyJson: JSON.stringify(mp.lobby),
+          stateJson: JSON.stringify(state),
+          pendingJson: JSON.stringify(null),
+          roomClosedReason: "last_player_victory",
+          closedAt: Date.now(),
+          updatedAt: Date.now()
+        })
+        .catch(() => {});
+      scheduleFirebaseRoomDelete(roomRef, deleteDelayMs);
+    }
+  }
+
+  function handlePlayerLeftRoom(leaverClientId, leaverSeat = -1) {
+    if (mp.mode !== "firebase_host") return;
+
+    if (mp.lobby && Array.isArray(mp.lobby.members)) {
+      mp.lobby.members = mp.lobby.members.filter((m) => m.clientId !== leaverClientId);
+    }
+
+    if (mp.lobby.status !== "playing") {
+      if (!mp.lobby.members || mp.lobby.members.length === 0) {
+        const ref = mp.fbRoomRef;
+        detachFirebaseListeners();
+        deleteFirebaseRoomNow(ref);
+        stopMpInactivityMonitor();
+        clearActiveMpSession();
+        mp.mode = "local";
+        mp.roomCode = "";
+        syncLeaveRoomCornerBtn();
+      } else {
+        broadcastLobbyState();
+        refreshLobbyModalIfOpen();
+      }
+      return;
+    }
+
+    if (!state || state.winner) return;
+
+    let seatIdx = -1;
+    if (leaverClientId && state.seatMap && typeof state.seatMap[leaverClientId] === "number") {
+      seatIdx = state.seatMap[leaverClientId];
+      delete state.seatMap[leaverClientId];
+    } else if (typeof leaverSeat === "number" && leaverSeat >= 0) {
+      seatIdx = leaverSeat;
+    }
+
+    const leaver = seatIdx >= 0 && state.players[seatIdx] ? state.players[seatIdx] : null;
+    if (leaver && !leaver.hasLeftRoom) {
+      leaver.hasLeftRoom = true;
+      leaver.isBot = true;
+      addLog(`${leaver.name} left the room.`);
+    }
+
+    const remainingHumans = getActiveHumanPlayersInRoom();
+    if (remainingHumans.length === 1) {
+      const soleWinner = remainingHumans[0];
+      const hostIsWinner = soleWinner.index === mp.mySeat;
+      const ref = mp.fbRoomRef;
+      declareWalkoverVictoryAndDeleteRoom(
+        soleWinner,
+        "All other players left the room. Victory by walkover!",
+        ref,
+        hostIsWinner ? 450 : 1600
+      );
+      if (hostIsWinner) {
+        renderAll();
+        detachFirebaseListeners();
+        mp.mode = "local";
+        mp.roomCode = "";
+        mp.mySeat = -1;
+        syncLeaveRoomCornerBtn();
+      }
+      return;
+    }
+
+    if (remainingHumans.length === 0) {
+      const ref = mp.fbRoomRef;
+      stopMpInactivityMonitor();
+      clearActiveMpSession();
+      detachFirebaseListeners();
+      deleteFirebaseRoomNow(ref);
+      mp.mode = "local";
+      mp.roomCode = "";
+      mp.mySeat = -1;
+      syncLeaveRoomCornerBtn();
+      return;
+    }
+
+    // 2+ human players still remain: keep match moving smoothly
+    if (leaver && state.activePlayerIndex === leaver.index && !state.winner) {
+      pendingInteraction = null;
+      state.activeTileModal = null;
+      endCurrentTurn({ forceTimeout: true });
+      return;
+    }
+    broadcastMultiplayerState();
+    renderAll();
+  }
+
+  function requestLeaveRoom() {
+    if (mp.mode === "local") return;
+    playSfx("click");
+    const remainingCount = Math.max(0, getActiveHumanPlayersInRoom().length - 1);
+    const extraNote =
+      mp.lobby.status === "playing" && remainingCount === 1
+        ? "Only 1 other player will remain in this room, so they will be declared the winner and the room will be automatically deleted."
+        : "Leaving will end your participation in this room.";
+
+    openInfoModal(
+      `Leave Room [${escapeHtml(mp.roomCode || "")}]?`,
+      `<div style="display:flex;flex-direction:column;gap:12px;">
+        <p style="margin:0;font-size:0.84rem;color:#e2e8f0;line-height:1.5;">
+          Are you sure you want to leave this multiplayer room?
+        </p>
+        <div style="background:rgba(225,29,72,0.14);border:1px solid rgba(248,113,113,0.38);border-radius:9px;padding:9px 11px;font-size:0.78rem;color:#fecaca;line-height:1.45;">
+          ${escapeHtml(extraNote)}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-danger" style="flex:1;" onclick="window.EFT_APP.confirmLeaveRoom()">Confirm Leave Room</button>
+          <button type="button" class="btn" style="flex:1;" onclick="window.EFT_APP.closeModal()">Stay</button>
+        </div>
+      </div>`
+    );
+  }
+
+  function confirmLeaveRoom() {
+    if (mp.mode === "local") {
+      closeModal();
+      return;
+    }
+    playSfx("click");
+    closeModal();
+
+    if (mp.mode === "firebase_client") {
+      sendClientActionToHost("leave_room", {
+        clientId: mp.clientId,
+        seatIndex: mp.mySeat
+      });
+      stopMpInactivityMonitor();
+      clearActiveMpSession();
+      setTimeout(() => {
+        resetGameToMainMenu();
+      }, 180);
+      return;
+    }
+
+    if (mp.mode === "firebase_host") {
+      const roomRef = mp.fbRoomRef;
+      stopMpInactivityMonitor();
+      clearActiveMpSession();
+
+      if (mp.lobby.status !== "playing") {
+        if (roomRef) {
+          roomRef.update({ roomClosedReason: "host_left", closedAt: Date.now() }).catch(() => {});
+          scheduleFirebaseRoomDelete(roomRef, 450);
+        }
+        resetGameToMainMenu({ preservePendingDelete: true });
+        return;
+      }
+
+      const hostSeat =
+        state && state.seatMap && typeof state.seatMap[mp.clientId] === "number"
+          ? state.seatMap[mp.clientId]
+          : mp.mySeat;
+      if (state && state.players && state.players[hostSeat]) {
+        state.players[hostSeat].hasLeftRoom = true;
+        addLog(`${state.players[hostSeat].name} (Host) left the room.`);
+      }
+      if (state && state.seatMap) delete state.seatMap[mp.clientId];
+      if (mp.lobby && Array.isArray(mp.lobby.members)) {
+        mp.lobby.members = mp.lobby.members.filter((m) => m.clientId !== mp.clientId);
+      }
+
+      const remainingHumans = getActiveHumanPlayersInRoom();
+      if (remainingHumans.length === 1) {
+        declareWalkoverVictoryAndDeleteRoom(
+          remainingHumans[0],
+          "Opponent left the room. Victory by walkover!",
+          roomRef,
+          1600
+        );
+        resetGameToMainMenu({ preservePendingDelete: true });
+        return;
+      }
+
+      if (remainingHumans.length === 0) {
+        deleteFirebaseRoomNow(roomRef);
+        resetGameToMainMenu({ preservePendingDelete: true });
+        return;
+      }
+
+      if (roomRef) {
+        roomRef.update({ roomClosedReason: "host_left", closedAt: Date.now() }).catch(() => {});
+        scheduleFirebaseRoomDelete(roomRef, 900);
+      }
+      resetGameToMainMenu({ preservePendingDelete: true });
+    }
+  }
+
   function processRemoteClientAction(act) {
     if (!act) return;
     const aid = act.actionId || act.id;
@@ -11064,6 +11557,13 @@
     mp.processedActionIds.add(aid);
 
     const d = act.data || {};
+    if (act.action === "leave_room") {
+      handlePlayerLeftRoom(d.clientId || act.senderId, d.seatIndex !== undefined ? d.seatIndex : act.seat);
+      return;
+    }
+
+    markRoomRealPlayerActivity(true);
+
     if (act.action === "lobby_join") {
       processLobbyJoinAction(d);
       return;
@@ -11116,12 +11616,22 @@
   }
 
   function disconnectMultiplayer() {
+    const prevMode = mp.mode;
+    const prevRoomRef = mp.fbRoomRef;
+    if (prevMode === "firebase_client") {
+      sendClientActionToHost("leave_room", { clientId: mp.clientId, seatIndex: mp.mySeat });
+    } else if (prevMode === "firebase_host" && prevRoomRef) {
+      prevRoomRef.update({ roomClosedReason: "host_left", closedAt: Date.now() }).catch(() => {});
+      scheduleFirebaseRoomDelete(prevRoomRef, 450);
+    }
+    stopMpInactivityMonitor();
     detachFirebaseListeners();
     clearActiveMpSession();
     mp.mode = "local";
     mp.roomCode = "";
     mp.mySeat = -1;
     invalidateHudCache();
+    syncLeaveRoomCornerBtn();
     mp.lobby = {
       status: "idle",
       hostClientId: "",
@@ -11141,6 +11651,7 @@
         lobbyJson: JSON.stringify(mp.lobby),
         stateJson: JSON.stringify(state),
         pendingJson: JSON.stringify(serializePendingInteraction()),
+        lastActivityAt: mpLastRealActionAt,
         updatedAt: Date.now()
       })
       .catch(() => {});
@@ -11148,6 +11659,9 @@
 
   function sendClientActionToHost(actionName, data) {
     if (mp.mode !== "firebase_client" || !mp.fbActionsRef) return;
+    if (actionName !== "leave_room") {
+      markRoomRealPlayerActivity(false);
+    }
     const msg = {
       type: "client_action",
       roomCode: mp.roomCode,
@@ -11168,6 +11682,7 @@
   // ============================================================================
   function confirmShardPurchase(buy) {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     if (isRemoteClient()) {
       sendClientActionToHost("buy_shard", { buy });
       return;
@@ -11205,6 +11720,7 @@
 
   function confirmRiverShortcut(useRiver) {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     if (isRemoteClient()) {
       sendClientActionToHost("use_river", { useRiver });
       return;
@@ -11239,6 +11755,7 @@
 
   function buyShopItem(shopId, itemType, closeAfter = false) {
     if (!canLocalPlayerAct() && !isAdminUnlocked) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     if (pendingInteraction && pendingInteraction.type === "prompt_merchant_pass" && pendingInteraction.shopId !== shopId && !isAdminUnlocked) {
       alert(`You are currently at Shop ${pendingInteraction.shopId} and cannot access Shop ${shopId}.`);
       return;
@@ -11471,6 +11988,7 @@
 
   function chooseBranchTile(tileId) {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     if (isRemoteClient()) {
       sendClientActionToHost("choose_branch", { tileId });
       return;
@@ -12224,6 +12742,7 @@
 
   function resolveVersusDuel(forcedOppIdx = null, forcedBet = null) {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     const oppEl = document.getElementById("versus-opponent-select");
     const betEl = document.getElementById("versus-bet-input") || document.getElementById("versus-bet-select");
     const oppIdx = forcedOppIdx !== null ? Number(forcedOppIdx) : oppEl ? Number(oppEl.value) : -1;
@@ -12279,6 +12798,7 @@
 
   function executeTradeAction(forcedPartnerIdx = null, forcedTradeType = null) {
     if (!canLocalPlayerAct()) return;
+    if (!isProcessingRemoteAction) markRoomRealPlayerActivity();
     const partEl = document.getElementById("trade-partner-select");
     const typeEl = document.getElementById("trade-type-select");
     const partnerIdx = forcedPartnerIdx !== null ? Number(forcedPartnerIdx) : partEl ? Number(partEl.value) : -1;
@@ -13727,7 +14247,9 @@
         wager: 15
       });
     },
-    startRandomMinigame
+    startRandomMinigame,
+    requestLeaveRoom,
+    confirmLeaveRoom
   };
 
   window.addEventListener("DOMContentLoaded", () => {
@@ -13762,7 +14284,8 @@
         renderAll,
         broadcastMultiplayerState,
         sendClientActionToHost,
-        onMinigameClosed
+        onMinigameClosed,
+        onRealPlayerAction: () => markRoomRealPlayerActivity(true)
       });
     }
     const verCorner = document.getElementById("mts-version-corner");

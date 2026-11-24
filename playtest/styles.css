@@ -2300,6 +2300,40 @@ body {
   gap: 6px;
 }
 
+/* Bottom-Right Multiplayer Leave Room Control */
+.hud-bottom-right-utils {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 38;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-bottom-right-utils.is-hidden {
+  display: none !important;
+}
+
+.util-pill-btn.util-leave-room-btn {
+  background: rgba(69, 10, 10, 0.88);
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.55);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+
+.util-pill-btn.util-leave-room-btn:hover {
+  background: rgba(127, 29, 29, 0.96);
+  color: #ffffff;
+  border-color: #f87171;
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.38);
+}
+
+.util-pill-btn.util-leave-room-btn:focus-visible {
+  outline: 2px solid #f87171;
+  outline-offset: 2px;
+}
+
 .util-pill-btn {
   background: var(--bg-hud);
   color: var(--text-muted);
@@ -6189,6 +6223,11 @@ body:not(.modal-open) .tucked-card:hover,
     flex-wrap: wrap;
   }
 
+  .hud-bottom-right-utils {
+    bottom: 204px;
+    right: 6px;
+  }
+
   .util-pill-btn {
     padding: 4px 6px;
     font-size: 0.58rem;
@@ -7316,6 +7355,11 @@ body:not(.modal-open) .tucked-card:hover,
     gap: 4px;
     max-width: 170px;
     flex-wrap: nowrap;
+  }
+
+  .hud-bottom-right-utils {
+    bottom: 112px;
+    right: max(8px, env(safe-area-inset-right));
   }
 
   .util-pill-btn {

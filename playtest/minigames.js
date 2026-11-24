@@ -647,6 +647,11 @@
     const isParticipant = mg.entries.some((e) => e.playerIndex === seatIdx);
     if (!isParticipant) return;
 
+    const actingPlayer = state.players && state.players[seatIdx];
+    if (actingPlayer && !actingPlayer.isBot && hostApi && typeof hostApi.onRealPlayerAction === "function") {
+      hostApi.onRealPlayerAction();
+    }
+
     const def = getMinigameDef(mg.gameId);
     if (def && typeof def.onAction === "function") {
       def.onAction(mg, seatIdx, actionType, payload);

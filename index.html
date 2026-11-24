@@ -80,7 +80,7 @@
       </div>
     </div>
 
-    <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.5</div>
+    <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.6</div>
   </div>
 
   <!-- ========================================================================
@@ -196,6 +196,13 @@
           Focus Player
         </button>
         <button class="util-pill-btn" onclick="window.EFT_APP.toggleDrawer('drawer-log')">Log</button>
+      </div>
+
+      <!-- BOTTOM-RIGHT MULTIPLAYER LEAVE ROOM CONTROL -->
+      <div id="hud-bottom-right-utils" class="hud-bottom-right-utils is-hidden">
+        <button id="btn-leave-room-corner" class="util-pill-btn util-leave-room-btn" type="button" onclick="window.EFT_APP.requestLeaveRoom()" title="Leave current multiplayer room">
+          Leave Room
+        </button>
       </div>
 
       <!-- COLLAPSIBLE DRAWER 1: EVENT LOG -->
