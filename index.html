@@ -173,7 +173,7 @@
     <!-- Bottom-Left Resume Slot & Version -->
     <div class="mts-bottom-left-corner">
       <div id="mts-resume-slot" class="mts-resume-slot"></div>
-      <div id="mts-version-corner" class="mts-version-corner">Beta V.1.3.9</div>
+      <div id="mts-version-corner" class="mts-version-corner">Beta V.1.4.0</div>
     </div>
   </div>
 
@@ -240,6 +240,7 @@
         <div class="status-info-card">
           <div class="status-cycle-row">
             <span class="status-cycle-main">Cycle <span id="metric-cycle">I</span></span>
+            <span id="cycle-time-badge" class="cycle-time-badge is-day" title="Odd Cycles = Day · Even Cycles = Night">Day</span>
             <div id="round-progress-ring" class="round-progress-ring" title="Round Progress"></div>
           </div>
           <div class="status-turn-pill">
@@ -284,11 +285,26 @@
       <!-- PLAYER LIST HUD (ACTIVE HIGHLIGHTED, FACE-CROPPED PORTRAITS) -->
       <div id="hud-players-list" class="hud-players-list"></div>
 
+      <!-- COMPACT BORDERLESS LEFT-SIDE CHAT LOG & ENTER-TRIGGERED CHAT INPUT -->
+      <div id="hud-chat-log" class="hud-chat-log" aria-live="polite"></div>
+      <form id="hud-chat-input-bar" class="hud-chat-input-bar is-hidden" onsubmit="event.preventDefault();window.EFT_APP.submitInGameChat();">
+        <input
+          id="hud-chat-input"
+          class="hud-chat-input"
+          type="text"
+          maxlength="120"
+          autocomplete="off"
+          placeholder="Say something... (Enter to send, Esc to close)"
+        />
+        <button type="submit" class="hud-chat-send-btn">Send</button>
+      </form>
+
       <!-- BOTTOM-LEFT UTILITY & CAMERA CONTROLS -->
       <div class="hud-bottom-left-utils">
         <button id="btn-cam-follow" class="util-pill-btn active-cam" onclick="window.EFT_APP.setCameraMode('follow')">
           Focus Player
         </button>
+        <button class="util-pill-btn" onclick="window.EFT_APP.openInGameChatInput()" title="Open in-game chat (or press Enter)">Chat</button>
         <button class="util-pill-btn" onclick="window.EFT_APP.toggleDrawer('drawer-log')">Log</button>
       </div>
 
@@ -418,8 +434,12 @@
           </div>
           <svg id="map-svg-overlay" class="board-connections-svg" viewBox="0 0 2970 1998"></svg>
           <div id="map-nodes-layer" style="position:absolute;inset:0;width:100%;height:100%;"></div>
+          <div id="board-chat-bubbles-layer" class="board-chat-bubbles-layer" aria-hidden="true"></div>
         </div>
       </div>
+
+      <!-- SHARD DIRECTION COMPASS ARROWS (SHOWN WHEN FOCUS PLAYER IS ACTIVE) -->
+      <div id="shard-compass-layer" class="shard-compass-layer" aria-hidden="true"></div>
 
       <!-- INTERACTIVE PROMPT BAR (Branch Choice / Buy Shard / River / Target Tile) -->
       <div id="action-prompt-bar" class="action-prompt-bar"></div>
@@ -427,6 +447,16 @@
       <!-- BOTTOM TUCKED CARD HAND + DRAW PILE + ROLL / END TURN DOCK -->
       <div class="bottom-hand-stage">
         <div class="draw-pile-dock">
+          <button id="btn-sort-hand" class="eft-sort-hand-btn" type="button" onclick="window.EFT_APP.sortMyHand()" title="Sort hand by rarity: Common -> Uncommon -> Rare -> Epic -> Unique -> Ultimate">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6h13"></path>
+              <path d="M3 12h9"></path>
+              <path d="M3 18h5"></path>
+              <path d="M17 8v10"></path>
+              <path d="M14 15l3 3 3-3"></path>
+            </svg>
+            <span>Sort Hand</span>
+          </button>
           <button id="btn-draw-pile" class="eft-draw-pile-btn" type="button" onclick="window.EFT_APP.openDrawPileModal()" title="View remaining cards in your Draw Pile">
             <span class="draw-pile-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

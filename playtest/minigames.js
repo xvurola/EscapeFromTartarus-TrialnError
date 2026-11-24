@@ -368,6 +368,7 @@
       wheelChosenIdx: chosenIdx,
       wheelTargetDeg,
       wheelDurationMs: WHEEL_DURATION_MS,
+      wheelStartedAt: Date.now(),
       wheelLanded: false,
       timerToken: "",
       timerDurationMs: 0,
@@ -456,6 +457,56 @@
           : baseBet;
 
       if (winnerP && loserP) {
+        if (mg.afterAction === "forced_all_in") {
+          if (challengerWon) {
+            winnerEntry.isWinner = true;
+            winnerEntry.rank = 1;
+            loserEntry.isWinner = false;
+            loserEntry.rank = 2;
+            if (loserP.shards > 0) {
+              mg.data = mg.data || {};
+              mg.data.forcedAllInChoice = {
+                challengerIndex: winnerP.index,
+                opponentIndex: loserP.index
+              };
+              winnerEntry.rewardDelta = 0;
+              winnerEntry.rewardNote = "Choose: All TC or 1 Shard!";
+              loserEntry.rewardDelta = 0;
+              loserEntry.rewardNote = "Awaiting Winner's Claim";
+              mg.resultHeadline = `${winnerP.name} Won Forced All-In!`;
+              mg.resultSub = `${winnerP.name} defeated ${loserP.name} in ${mg.name} and may choose to steal all TC or 1 Tartarus Shard!`;
+              hostApi.addLog(`ULTIMATE [Forced All-In] (${mg.name}): ${winnerP.name} defeated ${loserP.name} - choosing All TC or 1 Shard!`);
+            } else {
+              const allTc = loserP.tc;
+              loserP.tc = 0;
+              winnerP.tc += allTc;
+              winnerEntry.rewardDelta = allTc;
+              winnerEntry.rewardNote = `Seized All TC (+${allTc} TC)`;
+              loserEntry.rewardDelta = -allTc;
+              loserEntry.rewardNote = `Lost All TC (-${allTc} TC)`;
+              mg.resultHeadline = `${winnerP.name} Won Forced All-In!`;
+              mg.resultSub = `${winnerP.name} defeated ${loserP.name} in ${mg.name} and seized all 💰 ${allTc} TC!`;
+              hostApi.addLog(`ULTIMATE [Forced All-In] (${mg.name}): ${winnerP.name} defeated ${loserP.name} and seized all 💰 ${allTc} TC!`);
+            }
+          } else {
+            const taken = Math.min(effectiveBet, loserP.tc);
+            loserP.tc = Math.max(0, loserP.tc - taken);
+            const gained = taken > 0 ? hostApi.modifyPlayerTC(winnerP, taken, "versus") : 0;
+            winnerEntry.isWinner = true;
+            winnerEntry.rank = 1;
+            winnerEntry.rewardDelta = gained;
+            winnerEntry.rewardNote = `Won 25% Bet (+${gained} TC)`;
+            loserEntry.isWinner = false;
+            loserEntry.rank = 2;
+            loserEntry.rewardDelta = -taken;
+            loserEntry.rewardNote = `Lost 25% Bet (-${taken} TC)`;
+            mg.resultHeadline = `${winnerP.name} Survived Forced All-In!`;
+            mg.resultSub = `${winnerP.name} defeated ${loserP.name} in ${mg.name} and claimed 💰 ${gained} TC!`;
+            hostApi.addLog(`ULTIMATE [Forced All-In] (${mg.name}): ${winnerP.name} defeated ${loserP.name} and claimed 💰 ${gained} TC!`);
+          }
+          return;
+        }
+
         const taken = Math.min(effectiveBet, loserP.tc);
         loserP.tc = Math.max(0, loserP.tc - taken);
         const gained = taken > 0 ? hostApi.modifyPlayerTC(winnerP, taken, "versus") : 0;
@@ -470,13 +521,13 @@
         loserEntry.rewardDelta = -taken;
         loserEntry.rewardNote = taken > 0 ? `Lost Wager (-${taken} TC)` : "Lost Duel (0 TC)";
 
-        mg.resultHeadline = `${winnerP.name} Memenangkan Duel!`;
+        mg.resultHeadline = `${winnerP.name} Won the Duel!`;
         mg.resultSub =
           gained > 0
-            ? `${winnerP.name} mengalahkan ${loserP.name} di ${mg.name} & merebut 💰 ${gained} TC!`
-            : `${winnerP.name} mengalahkan ${loserP.name} di ${mg.name} (Entry Fee 0 TC)!`;
+            ? `${winnerP.name} defeated ${loserP.name} in ${mg.name} & claimed 💰 ${gained} TC!`
+            : `${winnerP.name} defeated ${loserP.name} in ${mg.name} (Free Entry · 0 TC)!`;
         hostApi.addLog(
-          `Versus (${mg.name}): ${winnerP.name} mengalahkan ${loserP.name}${gained > 0 ? ` & merebut 💰 ${gained} TC` : " (0 TC)"}!`
+          `Versus (${mg.name}): ${winnerP.name} defeated ${loserP.name}${gained > 0 ? ` & claimed 💰 ${gained} TC` : " (0 TC)"}!`
         );
       }
       return;
@@ -527,11 +578,12 @@
     }
 
     const afterAction = mg.afterAction;
+    const closedMg = mg;
     clearAllTimers();
     state.activeMinigame = null;
 
     if (hostApi && hostApi.onMinigameClosed) {
-      hostApi.onMinigameClosed(afterAction);
+      hostApi.onMinigameClosed(afterAction, closedMg);
     }
   }
 
@@ -556,6 +608,7 @@
       if (!mg.wheelLanded && remMs <= WHEEL_SETTLE_MS) {
         mg.wheelLanded = true;
         updateWheelLandedVisual(mg);
+        syncAndBroadcast(mg, true);
       }
       if (remMs <= 0) {
         transitionToIntro(mg);
@@ -2800,7 +2853,7 @@
       <div class="mg-shell">
         <div class="mg-wheel-stage">
           <div class="mg-wheel-eyebrow">${esc(modeLabel)}</div>
-          <div class="mg-wheel-heading">Memutar Roda Minigame...</div>
+          <div class="mg-wheel-heading">Spinning Minigame Wheel...</div>
           <div style="font-size:0.84rem;color:#cbd5e1;margin-top:-10px;">${esc(subLabel)}</div>
 
           <div class="mg-wheel-arena">
@@ -2838,15 +2891,21 @@
     const pointer = document.getElementById(`mg-wheel-pointer-${mg.id}`);
     if (rotor) {
       if (mg.wheelLanded) {
+        rotor.style.transition = "none";
         rotor.style.transform = `rotate(${mg.wheelTargetDeg}deg)`;
       } else {
+        const remainingSpinMs = mg.wheelStartedAt
+          ? Math.max(650, Math.min(mg.wheelDurationMs, mg.wheelStartedAt + mg.wheelDurationMs - Date.now()))
+          : mg.wheelDurationMs;
+        rotor.style.transition = "none";
         rotor.style.transform = "rotate(0deg)";
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            rotor.style.transition = `transform ${mg.wheelDurationMs}ms cubic-bezier(0.11, 0.86, 0.16, 1)`;
-            rotor.style.transform = `rotate(${mg.wheelTargetDeg}deg)`;
-          });
-        });
+        void rotor.offsetWidth;
+        setTimeout(() => {
+          const liveRotor = document.getElementById(`mg-wheel-rotor-${mg.id}`);
+          if (!liveRotor) return;
+          liveRotor.style.transition = `transform ${remainingSpinMs}ms cubic-bezier(0.11, 0.86, 0.16, 1)`;
+          liveRotor.style.transform = `rotate(${mg.wheelTargetDeg}deg)`;
+        }, 32);
 
         // Decelerating tick SFX synced to wheel slowdown
         wheelAudioTimers.forEach((t) => clearTimeout(t));

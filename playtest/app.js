@@ -513,6 +513,8 @@
             skillSfxEnabled: p.skillSfxEnabled !== false,
             screenShakeEnabled: p.screenShakeEnabled !== false,
             skillSfxVolume: skillVol,
+            bgmEnabled: p.bgmEnabled !== false,
+            bgmVolume: Number.isFinite(Number(p.bgmVolume)) ? Math.max(0, Math.min(1, Number(p.bgmVolume))) : 0.42,
             charSkillSfx: charMap
           };
         }
@@ -525,6 +527,8 @@
       skillSfxEnabled: true,
       screenShakeEnabled: true,
       skillSfxVolume: 0.75,
+      bgmEnabled: true,
+      bgmVolume: 0.42,
       charSkillSfx: defaultChars
     };
   }
@@ -545,11 +549,16 @@
     const mGain = mSlider <= 0.005 ? 0 : mSlider * mSlider;
     const skSlider = soundPrefs.skillSfxEnabled === false ? 0 : Math.max(0, Math.min(1, Number(soundPrefs.skillSfxVolume ?? 0.75)));
     const skGain = skSlider <= 0.005 ? 0 : skSlider * skSlider;
+    const bgmSlider = soundPrefs.bgmEnabled === false ? 0 : Math.max(0, Math.min(1, Number(soundPrefs.bgmVolume ?? 0.42)));
+    const bgmGain = bgmSlider <= 0.005 ? 0 : bgmSlider * bgmSlider;
     audioBuses.master.gain.setTargetAtTime(mGain, now, 0.015);
     audioBuses.sfx.gain.setTargetAtTime(0.46, now, 0.015);
     audioBuses.skill.gain.setTargetAtTime(skGain * 0.62, now, 0.015);
     audioBuses.turn.gain.setTargetAtTime(soundPrefs.turnSfxEnabled === false ? 0 : 0.48, now, 0.015);
     audioBuses.ui.gain.setTargetAtTime(0.38, now, 0.015);
+    if (audioBuses.bgm) {
+      audioBuses.bgm.gain.setTargetAtTime(bgmGain * 0.34, now, 0.08);
+    }
   }
 
   function ensureAudioCtx(allowCreate = false) {
@@ -580,16 +589,19 @@
         const skill = audioCtx.createGain();
         const turn = audioCtx.createGain();
         const ui = audioCtx.createGain();
+        const bgm = audioCtx.createGain();
 
         sfx.connect(limiter);
         skill.connect(limiter);
         turn.connect(limiter);
         ui.connect(limiter);
+        bgm.connect(limiter);
         limiter.connect(master);
         master.connect(audioCtx.destination);
 
-        audioBuses = { master, limiter, sfx, skill, turn, ui };
+        audioBuses = { master, limiter, sfx, skill, turn, ui, bgm };
         syncAudioBusGains();
+        ensureAmbientBgmLoop();
       } catch (e) {
         audioBuses = null;
       }
@@ -1099,12 +1111,113 @@
     if (skillToggle) skillToggle.checked = soundPrefs.skillSfxEnabled !== false;
     if (skillSlider) skillSlider.value = String(skillPct);
     if (skillLabel) skillLabel.textContent = soundPrefs.skillSfxEnabled === false ? "Off" : `${skillPct}%`;
+    const bgmToggle = document.getElementById("bgm-toggle");
+    const bgmSlider = document.getElementById("bgm-volume-slider");
+    const bgmLabel = document.getElementById("bgm-volume-label");
+    const bgmPct = Math.round((soundPrefs.bgmVolume !== undefined ? soundPrefs.bgmVolume : 0.42) * 100);
+    if (bgmToggle) bgmToggle.checked = soundPrefs.bgmEnabled !== false;
+    if (bgmSlider) bgmSlider.value = String(bgmPct);
+    if (bgmLabel) bgmLabel.textContent = soundPrefs.bgmEnabled === false ? "Off" : `${bgmPct}%`;
     syncAudioBusGains();
+  }
 
-    ["bocchi", "aventurine", "joker", "lilith", "maomao", "firefly"].forEach((cid) => {
-      const cb = document.getElementById(`char-sfx-${cid}`);
-      if (cb) cb.checked = !soundPrefs.charSkillSfx || soundPrefs.charSkillSfx[cid] !== false;
+  let ambientBgmIntervalId = null;
+  let ambientBgmStepIdx = 0;
+
+  function playAmbientBgmPhrase() {
+    if (!audioCtx || !audioBuses || !audioBuses.bgm || audioCtx.state !== "running") return;
+    if (!state || !isMatchStarted || isTitleScreenVisible || state.winner) return;
+    if (soundPrefs.muted || soundPrefs.bgmEnabled === false || (soundPrefs.bgmVolume ?? 0.42) <= 0.005) return;
+
+    const cycleNum = Math.max(1, Number(state.cycle) || 1);
+    const isNight = cycleNum % 2 === 0;
+    const cycleVariant = Math.floor((cycleNum - 1) / 2) % 3;
+    const transpose = [1.0, 1.05946, 0.94387][cycleVariant]; // subtle harmonic shift each Day/Night pair
+
+    // Odd Cycles (DAY): warm sunlit Lydian/Major chords; Even Cycles (NIGHT): serene nocturnal Dorian/Minor chords
+    const dayChords = [
+      [261.63, 329.63, 392.0, 493.88], // Cmaj7
+      [293.66, 369.99, 440.0, 523.25], // D6/9 shimmer
+      [246.94, 329.63, 392.0, 493.88], // Em7
+      [220.0, 261.63, 329.63, 392.0]   // Am7
+    ];
+    const nightChords = [
+      [196.0, 233.08, 293.66, 349.23], // Gm7
+      [174.61, 220.0, 261.63, 329.63], // Fmaj7
+      [146.83, 174.61, 220.0, 293.66], // Dm9
+      [164.81, 220.0, 246.94, 329.63]  // Asus4/E
+    ];
+
+    const palette = isNight ? nightChords : dayChords;
+    const chord = palette[ambientBgmStepIdx % palette.length];
+    ambientBgmStepIdx++;
+
+    const now = audioCtx.currentTime;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(isNight ? 820 : 1420, now);
+    filter.Q.setValueAtTime(0.6, now);
+    filter.connect(audioBuses.bgm);
+
+    // Warm soft pad chord
+    chord.forEach((baseHz, i) => {
+      const hz = baseHz * transpose;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = isNight ? "sine" : i % 2 === 0 ? "sine" : "triangle";
+      osc.frequency.setValueAtTime(hz, now);
+      const peak = (isNight ? 0.095 : 0.082) / (1 + i * 0.25);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(peak, now + 0.55 + i * 0.08);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 3.15);
+      osc.connect(g);
+      g.connect(filter);
+      osc.start(now + i * 0.06);
+      osc.stop(now + 3.25);
     });
+
+    // Gentle melodic arpeggio droplet (soft harp for Day, distant celesta chime for Night)
+    const melodyNote = chord[(ambientBgmStepIdx + 1) % chord.length] * transpose * 2;
+    const mOsc = audioCtx.createOscillator();
+    const mGain = audioCtx.createGain();
+    mOsc.type = "sine";
+    mOsc.frequency.setValueAtTime(melodyNote, now + 0.85);
+    mGain.gain.setValueAtTime(0.0001, now + 0.85);
+    mGain.gain.linearRampToValueAtTime(isNight ? 0.048 : 0.056, now + 0.96);
+    mGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.35);
+    mOsc.connect(mGain);
+    mGain.connect(filter);
+    mOsc.start(now + 0.85);
+    mOsc.stop(now + 2.45);
+  }
+
+  function ensureAmbientBgmLoop() {
+    if (ambientBgmIntervalId) return;
+    ambientBgmIntervalId = setInterval(() => {
+      playAmbientBgmPhrase();
+    }, 2800);
+    setTimeout(() => playAmbientBgmPhrase(), 400);
+  }
+
+  function toggleBgm(enabled) {
+    soundPrefs.bgmEnabled = !!enabled;
+    saveSoundPrefs();
+    syncSoundControlUi();
+    if (soundPrefs.bgmEnabled) {
+      ensureAudioCtx(true);
+      ensureAmbientBgmLoop();
+      playAmbientBgmPhrase();
+    }
+  }
+
+  function setBgmVolume(valPct) {
+    const num = Math.max(0, Math.min(100, Number(valPct) || 0));
+    soundPrefs.bgmVolume = num / 100;
+    if (num > 0 && soundPrefs.bgmEnabled === false) soundPrefs.bgmEnabled = true;
+    saveSoundPrefs();
+    syncSoundControlUi();
+    ensureAudioCtx(true);
+    ensureAmbientBgmLoop();
   }
 
   function toggleScreenShake(enabled) {
@@ -1479,6 +1592,74 @@
     }
   }
 
+  function updateShardDirectionArrows() {
+    const layer = document.getElementById("shard-compass-layer");
+    if (!layer) return;
+    if (
+      !state ||
+      camera.mode !== "follow" ||
+      isTitleScreenVisible ||
+      !isMatchStarted ||
+      !Array.isArray(state.activeShards) ||
+      state.activeShards.length === 0
+    ) {
+      if (layer.innerHTML !== "") layer.innerHTML = "";
+      return;
+    }
+
+    const viewport = document.getElementById("board-viewport");
+    if (!viewport) return;
+    const vw = viewport.clientWidth || window.innerWidth;
+    const vh = viewport.clientHeight || window.innerHeight;
+    const activeP = getActivePlayer();
+    const pTile = activeP ? TILE_MAP[skillMoveAnimOverrides[state.activePlayerIndex] || activeP.tileId] : null;
+    if (!pTile) {
+      if (layer.innerHTML !== "") layer.innerHTML = "";
+      return;
+    }
+
+    const boardW = 2970;
+    const boardH = 1998;
+    const toScreen = (tile) => ({
+      x: vw / 2 + camera.panX + (tile.x / 100 - 0.5) * boardW * camera.zoom,
+      y: vh / 2 + camera.panY + (tile.y / 100 - 0.5) * boardH * camera.zoom
+    });
+
+    const pScreen = toScreen(pTile);
+    const mobile = isMobileLandscape() || isMobilePortrait();
+    const orbitR = mobile ? 86 : 122;
+
+    const pointersHtml = state.activeShards
+      .map((sh) => {
+        const sTile = TILE_MAP[sh.tileId];
+        if (!sTile) return "";
+        const sScreen = toScreen(sTile);
+        const dx = sScreen.x - pScreen.x;
+        const dy = sScreen.y - pScreen.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < orbitR + 24) return "";
+
+        const angleRad = Math.atan2(dy, dx);
+        const angleDeg = (angleRad * 180) / Math.PI;
+        const ax = Math.max(48, Math.min(vw - 48, pScreen.x + Math.cos(angleRad) * orbitR));
+        const ay = Math.max(66, Math.min(vh - 126, pScreen.y + Math.sin(angleRad) * orbitR));
+
+        return `
+          <div class="shard-dir-pointer" style="left:${ax.toFixed(1)}px;top:${ay.toFixed(1)}px;">
+            <span class="shard-dir-arrow" style="transform:rotate(${angleDeg.toFixed(1)}deg);" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M5 12h13" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path>
+                <path d="M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </span>
+            <span class="shard-dir-tag">💎 ${escapeHtml(sh.roman || "")}</span>
+          </div>`;
+      })
+      .join("");
+
+    layer.innerHTML = pointersHtml;
+  }
+
   function applyCameraTransform() {
     const surface = document.getElementById("map-canvas-wrap");
     if (!surface) return;
@@ -1491,6 +1672,7 @@
     if (followBtn) {
       followBtn.classList.toggle("active-cam", camera.mode === "follow");
     }
+    updateShardDirectionArrows();
   }
 
   function isMobileLandscape() {
@@ -2191,7 +2373,7 @@
       title: "Global Events, Map Controls & Mobile Mode",
       lead: "Use the board controls and HUD indicators to track every opponent action.",
       points: [
-        "Duration-based Global Events last for 2 Turns and are displayed in the top-right corner.",
+        "Duration-based Global Events last for 2 Rounds and are displayed in the top-right corner.",
         "Click the Last Card Used panel in the top-right at any time to review the most recent card effect and outcome.",
         "On mobile, rotate your device to Landscape mode. Pan the map with 1 finger, pinch to zoom with 2 fingers, and tap Focus Player to center on the active player."
       ]
@@ -2489,7 +2671,9 @@
       lastPurchasedShard: null,
       lastBoardVfxEvent: null,
       lastSkillMoveAnim: null,
+      lastWalkStepEvent: null,
       recentCardLosses: [],
+      chatMessages: [],
       activeMinigame: null,
       minigameHistory: { versus: null, ffa: null },
       activeTileModal: null,
@@ -2503,8 +2687,16 @@
     lastShownDiceRollEventId = null;
     lastShownDofRollEventId = null;
     lastShownTileEffectRevealId = null;
+    lastProcessedWalkStepId = null;
     _playedCardLossEventIds.clear();
     _lastRenderedHandCardRects.clear();
+    if (typeof processedChatMsgIds !== "undefined") processedChatMsgIds.clear();
+    if (typeof lastChatLogSig !== "undefined") lastChatLogSig = "";
+    const chatLogEl = document.getElementById("hud-chat-log");
+    if (chatLogEl) chatLogEl.innerHTML = "";
+    const chatBubblesEl = document.getElementById("board-chat-bubbles-layer");
+    if (chatBubblesEl) chatBubblesEl.innerHTML = "";
+    ensureAmbientBgmLoop();
     lastProcessedBoardVfxId = null;
     lastProcessedSkillMoveAnimId = null;
     activeBoardVfxList = [];
@@ -3258,6 +3450,7 @@
     isMatchStarted = true;
     const screen = document.getElementById("main-title-screen");
     if (screen) screen.classList.add("is-hidden");
+    ensureAmbientBgmLoop();
   }
 
   function openTitleSingleplayer() {
@@ -3985,6 +4178,8 @@
     broadcastMultiplayerState();
   }
 
+  let lastProcessedWalkStepId = null;
+
   function executeSingleStep(player, nextTileId, stepsLeft, direction, activateFinalTile, viaSplitId = null) {
     const prevTileId = player.tileId;
     player.lastTileId = viaSplitId || prevTileId;
@@ -3992,11 +4187,22 @@
     activeStepsRemaining = stepsLeft;
     playSfx("step");
 
+    const stepEvId = "ws_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+    state.lastWalkStepEvent = {
+      id: stepEvId,
+      playerIndex: player.index,
+      tileId: nextTileId,
+      stepsLeft,
+      ts: Date.now()
+    };
+    lastProcessedWalkStepId = stepEvId;
+
     // Dynamically track player with camera on every step!
     if (camera.mode === "follow") {
       focusCameraOnTile(nextTileId);
     }
     renderAll();
+    broadcastMultiplayerState();
 
     // Check Lilith Unpredictable Tricks (both directions)
     triggerUnpredictableTricksOnTile(player, nextTileId);
@@ -4351,9 +4557,15 @@
       if (tileShuffleShownAt && Date.now() - tileShuffleShownAt < 180) return;
     }
     const postDismiss = tileShuffleState.onPostDismiss;
+    const dismissedId = tileShuffleState.id;
+    const wasVisualOnly = !!tileShuffleState.visualOnly;
     clearTileShuffleTimers();
     tileShuffleState = null;
     tileShuffleShownAt = 0;
+    if (!wasVisualOnly && state && state.lastTileEffectReveal && state.lastTileEffectReveal.id === dismissedId) {
+      state.lastTileEffectReveal.dismissed = true;
+      broadcastMultiplayerState();
+    }
     const overlay = document.getElementById("tile-effect-shuffle-overlay");
     if (overlay) {
       overlay.classList.remove("visible", "is-revealed");
@@ -4453,7 +4665,7 @@
       <div id="tef-stage-box" class="tef-stage theme-${meta.theme} phase-shuffling">
         <div class="tef-header">
           <div class="tef-deck-eyebrow">${escapeHtml(meta.eyebrow)}</div>
-          <div class="tef-deck-sub"><strong>${escapeHtml(playerName)}</strong> memasuki <strong>${escapeHtml(tileName)}</strong></div>
+          <div class="tef-deck-sub"><strong>${escapeHtml(playerName)}</strong> entered <strong>${escapeHtml(tileName)}</strong></div>
         </div>
 
         <div class="tef-deck-arena">
@@ -4778,12 +4990,12 @@
     let needsMinigame = false;
 
     if (card.effectType === "global_buff") {
-      const eventTurns = card.durationTurns || 2;
+      const eventRounds = card.durationRounds || card.durationTurns || 2;
       state.activeGlobalEvent = {
         card,
-        remainingTurns: eventTurns
+        remainingRounds: eventRounds
       };
-      outcomeText = `Global Event active for ${eventTurns} Turns!`;
+      outcomeText = `Global Event active for ${eventRounds} ${eventRounds === 1 ? "Round" : "Rounds"}!`;
     } else if (card.effectType === "instant_all_tc") {
       state.players.forEach((p) => modifyPlayerTC(p, card.value, "tile"));
       const sign = card.value >= 0 ? "+" : "";
@@ -5041,14 +5253,6 @@
       }
     });
 
-    if (state.activeGlobalEvent) {
-      state.activeGlobalEvent.remainingTurns--;
-      if (state.activeGlobalEvent.remainingTurns <= 0) {
-        addLog(`Global Event [${state.activeGlobalEvent.card.name}] expired.`);
-        state.activeGlobalEvent = null;
-      }
-    }
-
     state.players.forEach((p) => {
       p.passives = p.passives.filter((pas) => {
         if (pas.expiresOnCycleEnd) {
@@ -5189,9 +5393,21 @@
     startDiceOfFateMinigame(opts.reasonTitle || "Minigame", opts.afterAction || "none");
   }
 
-  function onMinigameClosed(afterAction) {
+  function onMinigameClosed(afterAction, closedMg = null) {
     if (!state) return;
     if (afterAction === "advance_round") {
+      if (state.activeGlobalEvent) {
+        const curRem =
+          typeof state.activeGlobalEvent.remainingRounds === "number"
+            ? state.activeGlobalEvent.remainingRounds
+            : Number(state.activeGlobalEvent.remainingTurns || 1);
+        const nextRem = curRem - 1;
+        state.activeGlobalEvent.remainingRounds = nextRem;
+        if (nextRem <= 0) {
+          addLog(`Global Event [${state.activeGlobalEvent.card.name}] expired after 2 rounds.`);
+          state.activeGlobalEvent = null;
+        }
+      }
       state.activePlayerIndex = 0;
       if (state.roundInCycle < state.rules.turnsPerCycle) {
         state.roundInCycle++;
@@ -5202,6 +5418,22 @@
       if (camera.mode !== "wide") {
         camera.mode = "follow";
         focusCameraOnTile(getActivePlayer().tileId);
+      }
+    } else if (afterAction === "forced_all_in" && closedMg && closedMg.data && closedMg.data.forcedAllInChoice) {
+      const { challengerIndex, opponentIndex } = closedMg.data.forcedAllInChoice;
+      const winnerP = state.players[challengerIndex];
+      const oppP = state.players[opponentIndex];
+      if (winnerP && oppP && oppP.shards > 0) {
+        pendingInteraction = {
+          type: "forced_all_in_reward",
+          player: winnerP,
+          targetPlayerIndex: oppP.index,
+          myRoll: "WIN",
+          oppRoll: closedMg.name || "Versus"
+        };
+        if (isLocalHumanTurnForPlayer(winnerP)) {
+          openForcedAllInChoiceModal(winnerP, oppP, "WIN", closedMg.name || "Versus");
+        }
       }
     }
     playSfx("click");
@@ -6111,8 +6343,25 @@
             Steal 1 Tartarus Shard (💎 ${targetPlayer.shards} -> -1)
           </button>
         </div>
-      </div>`
+      </div>`,
+      "forced_all_in"
     );
+  }
+
+  function syncForcedAllInModal() {
+    const modal = document.getElementById("app-modal");
+    const titleEl = document.getElementById("modal-title");
+    const isAlreadyOpen = modal && modal.classList.contains("open") && titleEl && titleEl.dataset.modalKind === "forced_all_in";
+    if (!pendingInteraction || pendingInteraction.type !== "forced_all_in_reward") {
+      if (isAlreadyOpen) closeModal();
+      return;
+    }
+    const winnerP = pendingInteraction.player || getActivePlayer();
+    const targetP = state && state.players[pendingInteraction.targetPlayerIndex];
+    if (!winnerP || !targetP || !isLocalHumanTurnForPlayer(winnerP)) return;
+    if (!isAlreadyOpen) {
+      openForcedAllInChoiceModal(winnerP, targetP, pendingInteraction.myRoll || "WIN", pendingInteraction.oppRoll || "Versus");
+    }
   }
 
   function resolveDirectTileEffectForPull(p, destTile) {
@@ -7056,38 +7305,24 @@
         return msg;
       }
       case "duel_forced_all_in": {
-        const myRoll = Math.floor(Math.random() * 12) + 1;
-        const oppRoll = Math.floor(Math.random() * 12) + 1;
-        if (myRoll >= oppRoll) {
-          if (targetPlayer.shards > 0) {
-            pendingInteraction = {
-              type: "forced_all_in_reward",
-              player,
-              targetPlayerIndex: targetPlayer.index,
-              myRoll,
-              oppRoll
-            };
-            openForcedAllInChoiceModal(player, targetPlayer, myRoll, oppRoll);
-            const msg = `${player.name} won the Duel (${myRoll} vs ${oppRoll}), choose to steal all TC or 1 Shard!`;
-            addLog(`ULTIMATE [Forced All-In]: ${msg}`);
-            return msg;
-          } else {
-            const allTc = targetPlayer.tc;
-            targetPlayer.tc = 0;
-            player.tc += allTc;
-            const msg = `${player.name} won (${myRoll} vs ${oppRoll}) & seized all ${allTc} TC from ${targetPlayer.name}!`;
-            addLog(`ULTIMATE [Forced All-In]: ${msg}`);
-            return msg;
-          }
-        } else {
-          const bet = applyRounding(targetPlayer.tc * 0.25, state.rules);
-          const loss = Math.min(bet, player.tc);
-          player.tc -= loss;
-          targetPlayer.tc += loss;
-          const msg = `${player.name} lost (${myRoll} vs ${oppRoll}) & paid ${loss} TC!`;
-          addLog(`ULTIMATE [Forced All-In]: ${msg}`);
-          return msg;
-        }
+        const riskBet = applyRounding(targetPlayer.tc * 0.25, state.rules);
+        const challengerIdx = player.index;
+        const opponentIdx = targetPlayer.index;
+        addLog(`ULTIMATE [Forced All-In]: ${player.name} challenged ${targetPlayer.name} to a 1v1 Versus Duel (Risk: ${riskBet} TC vs All TC / 1 Shard)!`);
+        setTimeout(() => {
+          if (!state || state.winner || state.activeMinigame) return;
+          dismissSkillPopup(true, true);
+          startRandomMinigame("versus", {
+            reasonTitle: `ULTIMATE: Forced All-In · Risk 💰 ${riskBet} TC vs All TC / 1 Shard`,
+            afterAction: "forced_all_in",
+            challengerIndex: challengerIdx,
+            opponentIndex: opponentIdx,
+            wager: riskBet,
+            challengerRisk: riskBet,
+            opponentRisk: targetPlayer.tc
+          });
+        }, 950);
+        return `${player.name} forced ${targetPlayer.name} into a Forced All-In Versus Duel!`;
       }
       case "discard_1_or_minus3_steps": {
         const hasDiscardable = targetPlayer.hand.some((c) => c && c.rarity !== "Ultimate");
@@ -7658,7 +7893,7 @@
             opponentRisk: oppBet
           });
         }, 950);
-        return `${player.name} memaksa ${targetPlayer.name} duel Versus (${stakeLabel})!`;
+        return `${player.name} forced ${targetPlayer.name} into a Versus Duel (${stakeLabel})!`;
       }
       case "sam_fire_tiles": {
         let fireIds = [];
@@ -7934,6 +8169,10 @@
     ) {
       lastShownDiceRollEventId = state.lastDiceRollEvent.id;
       const ev = state.lastDiceRollEvent;
+      if (camera.mode !== "wide" && !camera.isDragging && state.players[state.activePlayerIndex]) {
+        camera.mode = "follow";
+        focusCameraOnTile(getActivePlayer().tileId, Math.max(camera.zoom, isMobilePortrait() ? 0.72 : 0.96));
+      }
       playDiceRollAnimation(
         {
           player: { name: ev.playerName || getActivePlayer().name },
@@ -7947,13 +8186,29 @@
         () => {}
       );
     }
+    if (
+      state.lastWalkStepEvent &&
+      state.lastWalkStepEvent.id &&
+      state.lastWalkStepEvent.id !== lastProcessedWalkStepId
+    ) {
+      lastProcessedWalkStepId = state.lastWalkStepEvent.id;
+      const ws = state.lastWalkStepEvent;
+      activeStepsRemaining = Math.max(0, Number(ws.stepsLeft) || 0);
+      isWalkingAnim = activeStepsRemaining > 0;
+      playSfx("step");
+      if (camera.mode === "follow" && !camera.isDragging && ws.tileId && TILE_MAP[ws.tileId]) {
+        focusCameraOnTile(ws.tileId);
+      }
+    }
     if (state.lastSkillEvent && state.lastSkillEvent.id && state.lastSkillEvent.id !== lastShownSkillEventId) {
       lastShownSkillEventId = state.lastSkillEvent.id;
       showDramaticSkillPopup(state.lastSkillEvent);
     }
     if (state.lastTileEffectReveal && state.lastTileEffectReveal.id) {
       const rev = state.lastTileEffectReveal;
-      if (rev.id !== lastShownTileEffectRevealId) {
+      if (rev.dismissed && tileShuffleState && tileShuffleState.id === rev.id) {
+        dismissTileEffectOverlay(true);
+      } else if (rev.id !== lastShownTileEffectRevealId && !rev.dismissed) {
         lastShownTileEffectRevealId = rev.id;
         startTileEffectCardShuffle({
           revealId: rev.id,
@@ -7980,6 +8235,7 @@
       lastProcessedPurchasedShardId = state.lastPurchasedShard.purchaseId;
       triggerShardFadeOut(state.lastPurchasedShard);
     }
+    syncInGameChatFromState();
     if (state.lastBoardVfxEvent && state.lastBoardVfxEvent.id && state.lastBoardVfxEvent.id !== lastProcessedBoardVfxId) {
       lastProcessedBoardVfxId = state.lastBoardVfxEvent.id;
       spawnLocalBoardVfx(state.lastBoardVfxEvent.tileIds, state.lastBoardVfxEvent.kind);
@@ -8006,6 +8262,10 @@
       lastTurnTimerTickAt = Date.now();
       lastTimerWarnSec = -1;
       triggerTurnStartReminder(getActivePlayer());
+      if (camera.mode !== "wide" && !camera.isDragging && state.players[state.activePlayerIndex]) {
+        camera.mode = "follow";
+        focusCameraOnTile(getActivePlayer().tileId);
+      }
     }
     syncRemoteActivityFeed();
     renderTopStatusStrip();
@@ -8021,6 +8281,7 @@
     syncSharedTileModal();
     syncScryPickModal();
     syncHasteReactionModal();
+    syncForcedAllInModal();
     detectAndTriggerPlayerFeedback();
     processPendingCardLossAnimations();
     applyCameraTransform();
@@ -8377,7 +8638,7 @@
     const targetSlots = state.rules.activeShardsOnBoard || 3;
     const shardSig = state.activeShards.map((s) => `${s.roman}:${s.tileId}`).join(",");
     const geSig = state.activeGlobalEvent
-      ? `${state.activeGlobalEvent.card.id}:${state.activeGlobalEvent.remainingTurns}`
+      ? `${state.activeGlobalEvent.card.id}:${state.activeGlobalEvent.remainingRounds ?? state.activeGlobalEvent.remainingTurns ?? 0}`
       : "";
     const lcuSig = state.lastSkillCardUsed ? `${state.lastSkillCardUsed.id}` : "";
     const topSig = [
@@ -8406,6 +8667,23 @@
     }
     const cycleEl = document.getElementById("metric-cycle");
     if (cycleEl) cycleEl.textContent = toRomanNumeral(state.cycle);
+
+    const isNightCycle = state.cycle % 2 === 0;
+    const arenaEl = document.querySelector(".arena-stage");
+    if (arenaEl) {
+      arenaEl.setAttribute("data-cycle-time", isNightCycle ? "night" : "day");
+    }
+    const timeBadgeEl = document.getElementById("cycle-time-badge");
+    if (timeBadgeEl) {
+      timeBadgeEl.classList.toggle("is-night", isNightCycle);
+      timeBadgeEl.classList.toggle("is-day", !isNightCycle);
+      timeBadgeEl.title = isNightCycle
+        ? `Cycle ${toRomanNumeral(state.cycle)} · Night (Even Cycle)`
+        : `Cycle ${toRomanNumeral(state.cycle)} · Day (Odd Cycle)`;
+      timeBadgeEl.innerHTML = isNightCycle
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg><span>Night</span>`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"></circle><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"></path></svg><span>Day</span>`;
+    }
 
     const ringEl = document.getElementById("round-progress-ring");
     if (ringEl) {
@@ -8442,11 +8720,10 @@
     if (weSlot) {
       if (state.activeGlobalEvent) {
         const ge = state.activeGlobalEvent.card;
+        const geRem = state.activeGlobalEvent.remainingRounds ?? state.activeGlobalEvent.remainingTurns ?? 1;
         weSlot.innerHTML = `<div class="world-event-active-chip" onclick="window.EFT_APP.showEffectSpotlight('Active World Event', '${escapeHtml(
           ge.name
-        )}', '${escapeHtml(ge.description)}', '${ge.image || ""}')">Event: ${escapeHtml(ge.name)} (${
-          state.activeGlobalEvent.remainingTurns
-        }T)</div>`;
+        )}', '${escapeHtml(ge.description)}', '${ge.image || ""}')">Event: ${escapeHtml(ge.name)} (${geRem}R)</div>`;
       } else {
         weSlot.innerHTML = "";
       }
@@ -8715,7 +8992,7 @@
     if (!listContainer) return;
 
     const geSig = state.activeGlobalEvent
-      ? `${state.activeGlobalEvent.card.id}:${state.activeGlobalEvent.remainingTurns}`
+      ? `${state.activeGlobalEvent.card.id}:${state.activeGlobalEvent.remainingRounds ?? state.activeGlobalEvent.remainingTurns ?? 0}`
       : "";
 
     const playersSig = [
@@ -9600,6 +9877,10 @@
     }
 
     applyBranchPreviewTileClasses();
+    updateShardDirectionArrows();
+    if (typeof syncChibiChatBubblePositions === "function") {
+      syncChibiChatBubblePositions();
+    }
   }
 
   function onTileHover(tileId, entering) {
@@ -10318,6 +10599,43 @@
     }
   }
 
+  const HAND_RARITY_SORT_RANK = {
+    Common: 1,
+    Uncommon: 2,
+    Rare: 3,
+    Epic: 4,
+    Unique: 5,
+    Ultimate: 6
+  };
+
+  function sortHandArrayInPlace(handArr) {
+    if (!Array.isArray(handArr)) return;
+    handArr.sort((a, b) => {
+      const ra = HAND_RARITY_SORT_RANK[a && a.rarity] || 99;
+      const rb = HAND_RARITY_SORT_RANK[b && b.rarity] || 99;
+      if (ra !== rb) return ra - rb;
+      return String((a && a.name) || "").localeCompare(String((b && b.name) || ""));
+    });
+  }
+
+  function sortMyHand(explicitSeat = null) {
+    if (!state || !Array.isArray(state.players)) return;
+    const seatIdx = explicitSeat !== null && explicitSeat !== undefined ? explicitSeat : getViewedHandPlayerIndex();
+    const p = state.players[seatIdx];
+    if (!p || !Array.isArray(p.hand) || p.hand.length <= 1) return;
+    sortHandArrayInPlace(p.hand);
+    if (explicitSeat === null || explicitSeat === undefined) {
+      playSfx("card_shuffle");
+      if (isRemoteClient()) {
+        sendClientActionToHost("sort_hand", { seat: seatIdx });
+      } else if (isMultiplayerHost()) {
+        broadcastMultiplayerState();
+      }
+      _hudCache.hand = "";
+      renderTuckedHandAndDice();
+    }
+  }
+
   function selectHandCard(cardUid) {
     selectedCardUid = cardUid;
     renderTuckedHandAndDice();
@@ -10392,6 +10710,28 @@
     openInfoModal(`Draw Pile: ${escapeHtml(player.name)} (${deck.length} Cards)`, bodyHtml);
   }
 
+  let _lastPromptBarAlertKey = "";
+
+  function setPromptBarContent(bar, tone, eyebrow, headline, actionsHtml = "", alertKey = "") {
+    bar.setAttribute("data-prompt-tone", tone || "default");
+    bar.classList.add("visible");
+    bar.innerHTML = `
+      <div class="apb-copy">
+        <div class="apb-eyebrow">${eyebrow}</div>
+        <div class="apb-headline">${headline}</div>
+      </div>
+      ${actionsHtml ? `<div class="apb-actions">${actionsHtml}</div>` : ""}`;
+    if (alertKey && alertKey !== _lastPromptBarAlertKey) {
+      _lastPromptBarAlertKey = alertKey;
+      bar.classList.remove("is-entering");
+      void bar.offsetWidth;
+      bar.classList.add("is-entering");
+      if (tone === "shop" || tone === "haste" || tone === "shard" || tone === "river") {
+        playSfx("branch");
+      }
+    }
+  }
+
   function renderPromptBar() {
     const bar = document.getElementById("action-prompt-bar");
     if (!bar) return;
@@ -10400,145 +10740,201 @@
       const tm = state.activeTileModal;
       const actor = state.players[tm.actorIndex] || getActivePlayer();
       const isActor = isLocalHumanTurnForPlayer(actor);
-      bar.classList.add("visible");
       if (tm.type === "versus") {
-        bar.innerHTML = isActor
-          ? `
-          <div><strong>Versus Duel Active (${escapeHtml(actor.name)}):</strong> Choose an opponent &amp; TC wager</div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-gold btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Open Versus Pop-Up</button>
-          </div>`
-          : `<div><strong>Versus Duel (${escapeHtml(actor.name)}):</strong> Waiting for ${escapeHtml(actor.name)} to choose an opponent...</div>`;
+        if (isActor) {
+          setPromptBarContent(
+            bar,
+            "duel",
+            "ACTION REQUIRED · VERSUS DUEL",
+            `${escapeHtml(actor.name)}: Choose an opponent &amp; TC wager`,
+            `<button class="btn btn-gold" onclick="window.EFT_APP.reopenSharedTileModal()">Open Versus Duel</button>`,
+            `tm_versus_${tm.id}`
+          );
+        } else {
+          setPromptBarContent(
+            bar,
+            "wait",
+            "VERSUS DUEL",
+            `Waiting for ${escapeHtml(actor.name)} to select an opponent...`
+          );
+        }
       } else {
-        bar.innerHTML = isActor
-          ? `
-          <div><strong>Trading Post Active (${escapeHtml(actor.name)}):</strong> Choose a partner &amp; trade option</div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.reopenSharedTileModal()">Open Trade Pop-Up</button>
-            <button class="btn btn-sm" onclick="window.EFT_APP.dismissSharedTileModal()">Skip Trade</button>
-          </div>`
-          : `<div><strong>Trading Post (${escapeHtml(actor.name)}):</strong> Waiting for ${escapeHtml(actor.name)} to complete a trade...</div>`;
+        if (isActor) {
+          setPromptBarContent(
+            bar,
+            "shop",
+            "ACTION REQUIRED · TRADING POST",
+            `${escapeHtml(actor.name)}: Choose a trade partner &amp; barter option`,
+            `<button class="btn btn-emerald" onclick="window.EFT_APP.reopenSharedTileModal()">Open Trading Post</button>
+             <button class="btn" onclick="window.EFT_APP.dismissSharedTileModal()">Skip Trade</button>`,
+            `tm_trade_${tm.id}`
+          );
+        } else {
+          setPromptBarContent(
+            bar,
+            "wait",
+            "TRADING POST",
+            `Waiting for ${escapeHtml(actor.name)} to finish trading...`
+          );
+        }
       }
       return;
     }
 
     if (!pendingInteraction || pendingInteraction.type === "choose_branch") {
-      bar.classList.remove("visible");
+      bar.classList.remove("visible", "is-entering");
+      bar.removeAttribute("data-prompt-tone");
       bar.innerHTML = "";
+      _lastPromptBarAlertKey = "";
       return;
     }
     if (pendingInteraction.type === "prompt_merchant_pass" && !isLocalHumanTurnForPlayer(pendingInteraction.player)) {
-      bar.classList.remove("visible");
+      bar.classList.remove("visible", "is-entering");
+      bar.removeAttribute("data-prompt-tone");
       bar.innerHTML = "";
       return;
     }
-    bar.classList.add("visible");
 
     if (!canLocalPlayerAct()) {
       const actorName =
         pendingInteraction.player && pendingInteraction.player.name
           ? pendingInteraction.player.name
           : getActivePlayer().name;
-      bar.innerHTML = `<div>Waiting for <strong>${escapeHtml(actorName)}</strong> to decide...</div>`;
+      setPromptBarContent(
+        bar,
+        "wait",
+        "IN PROGRESS",
+        `Waiting for ${escapeHtml(actorName)} to decide...`
+      );
       return;
     }
 
     if (pendingInteraction.type === "prompt_shard_buy") {
       const sh = pendingInteraction.shard;
-      bar.innerHTML = `
-        <div><strong>Passing Tartarus Shard (Zone ${sh.roman}):</strong> Buy for <strong>💰 ${state.rules.shardCost} TC</strong>?</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.confirmShardPurchase(true)">Buy Shard (${state.rules.shardCost} TC)</button>
-          <button class="btn btn-sm" onclick="window.EFT_APP.confirmShardPurchase(false)">Skip</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "shard",
+        `ACTION REQUIRED · TARTARUS SHARD (ZONE ${escapeHtml(sh.roman)})`,
+        `Claim this Tartarus Shard for 💰 ${state.rules.shardCost} TC?`,
+        `<button class="btn btn-emerald" onclick="window.EFT_APP.confirmShardPurchase(true)">Buy Shard (💰 ${state.rules.shardCost} TC)</button>
+         <button class="btn" onclick="window.EFT_APP.confirmShardPurchase(false)">Skip</button>`,
+        `shard_${sh.tileId}_${pendingInteraction.stepsLeft}`
+      );
     } else if (pendingInteraction.type === "prompt_river") {
-      bar.innerHTML = `
-        <div><strong>River Shortcut:</strong> Pay <strong>💰 ${state.rules.riverCost} TC</strong> to cross to [${pendingInteraction.targetTileId}]?</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-primary btn-sm" onclick="window.EFT_APP.confirmRiverShortcut(true)">Take River (${state.rules.riverCost} TC)</button>
-          <button class="btn btn-sm" onclick="window.EFT_APP.confirmRiverShortcut(false)">Continue Normal Path</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "river",
+        "ACTION REQUIRED · RIVER SHORTCUT",
+        `Pay 💰 ${state.rules.riverCost} TC to cross directly to [${escapeHtml(pendingInteraction.targetTileId)}]?`,
+        `<button class="btn btn-primary" onclick="window.EFT_APP.confirmRiverShortcut(true)">Take Shortcut (💰 ${state.rules.riverCost} TC)</button>
+         <button class="btn" onclick="window.EFT_APP.confirmRiverShortcut(false)">Stay on Road</button>`,
+        `river_${pendingInteraction.targetTileId}_${pendingInteraction.stepsLeft}`
+      );
     } else if (pendingInteraction.type === "prompt_merchant_pass") {
-      bar.innerHTML = `
-        <div><strong>Passing Merchant Shop ${pendingInteraction.shopId}:</strong> Open shop before continuing?</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-gold btn-sm" onclick="window.EFT_APP.openMerchantModal(${pendingInteraction.shopId})">Open Shop ${pendingInteraction.shopId}</button>
-          <button class="btn btn-sm" onclick="window.EFT_APP.resumeFromMerchantPrompt()">Continue (${pendingInteraction.stepsLeft} steps)</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "shop",
+        `MERCHANT SHOP ${pendingInteraction.shopId} AVAILABLE`,
+        `You are passing Merchant Shop ${pendingInteraction.shopId}. Open shop before continuing?`,
+        `<button class="btn btn-gold" onclick="window.EFT_APP.openMerchantModal(${pendingInteraction.shopId})">Open Shop ${pendingInteraction.shopId}</button>
+         <button class="btn" onclick="window.EFT_APP.resumeFromMerchantPrompt()">Continue (${pendingInteraction.stepsLeft} steps)</button>`,
+        `shop_${pendingInteraction.shopId}_${pendingInteraction.stepsLeft}`
+      );
     } else if (pendingInteraction.type === "select_tile_target") {
       const mover =
         pendingInteraction.movingPlayerIndex !== undefined && state.players[pendingInteraction.movingPlayerIndex]
           ? state.players[pendingInteraction.movingPlayerIndex]
           : getActivePlayer();
       const changeBtn = pendingInteraction.canChangeTarget
-        ? `<button class="btn btn-sm" onclick="window.EFT_APP.reopenPendingCardModal()">Ganti Target</button>`
+        ? `<button class="btn" onclick="window.EFT_APP.reopenPendingCardModal()">Change Target</button>`
         : "";
       const isBocchiPull =
         pendingInteraction.card &&
         pendingInteraction.card.effectKey === "pull_all_players" &&
         pendingInteraction.validTileIds.includes(pendingInteraction.player.tileId);
       const selfPullBtn = isBocchiPull
-        ? `<button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.onTileClicked('${pendingInteraction.player.tileId}')">Pull to Bocchi's Tile</button>`
+        ? `<button class="btn btn-emerald" onclick="window.EFT_APP.onTileClicked('${pendingInteraction.player.tileId}')">Pull to Bocchi's Tile</button>`
         : "";
-      bar.innerHTML = `
-        <div><strong>Select Target Tile on Map</strong> (${escapeHtml(mover.name)} · <strong>${escapeHtml(pendingInteraction.card.name)}</strong>)</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
-          ${selfPullBtn}
-          ${changeBtn}
-          <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "tile",
+        `SELECT TILE · ${escapeHtml(pendingInteraction.card.name).toUpperCase()}`,
+        `Choose a glowing destination tile for ${escapeHtml(mover.name)}`,
+        `${selfPullBtn}${changeBtn}<button class="btn btn-danger" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>`,
+        `tile_${pendingInteraction.cardUid}`
+      );
     } else if (pendingInteraction.type === "select_sam_fire_1") {
-      bar.innerHTML = `
-        <div><strong>Deathstar Destruction (Tile 1/2):</strong> Pick the <strong>first tile</strong> anywhere on the map to ignite</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "tile",
+        "DEATHSTAR DESTRUCTION · TILE 1 / 2",
+        "Pick the first tile anywhere on the map to ignite",
+        `<button class="btn btn-danger" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>`,
+        `sam_fire_1_${pendingInteraction.cardUid}`
+      );
     } else if (pendingInteraction.type === "select_sam_fire_2") {
-      bar.innerHTML = `
-        <div><strong>Deathstar Destruction (Tile 2/2):</strong> Tile 1 (<strong>${escapeHtml(pendingInteraction.firstTileId || "")}</strong>) selected · Pick the <strong>second tile</strong> anywhere on the map</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "tile",
+        `DEATHSTAR DESTRUCTION · TILE 2 / 2 (${escapeHtml(pendingInteraction.firstTileId || "")} SET)`,
+        "Pick the second tile anywhere on the map to ignite",
+        `<button class="btn btn-danger" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>`,
+        `sam_fire_2_${pendingInteraction.firstTileId}`
+      );
     } else if (pendingInteraction.type === "select_token_source") {
-      bar.innerHTML = `
-        <div><strong>Entrusted Dream (Step 1/2):</strong> Select a tile with an active <strong>Token / Trap</strong> to relocate</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "tile",
+        "ENTRUSTED DREAM · STEP 1 / 2",
+        "Select a tile containing an active Token or Trap to relocate",
+        `<button class="btn btn-danger" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>`,
+        `tok_src_${pendingInteraction.cardUid}`
+      );
     } else if (pendingInteraction.type === "select_token_dest") {
-      bar.innerHTML = `
-        <div><strong>Entrusted Dream (Step 2/2):</strong> Pick any destination tile to relocate <strong>${escapeHtml(pendingInteraction.tokenName || "Token")}</strong> &amp; trigger its effect</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "tile",
+        "ENTRUSTED DREAM · STEP 2 / 2",
+        `Pick any tile to relocate ${escapeHtml(pendingInteraction.tokenName || "Token")} &amp; trigger its effect`,
+        `<button class="btn btn-danger" onclick="window.EFT_APP.cancelPendingInteraction()">Cancel</button>`,
+        `tok_dst_${pendingInteraction.tokenId}`
+      );
     } else if (pendingInteraction.type === "haste_reaction") {
       const def = pendingInteraction.player || getActivePlayer();
-      bar.innerHTML = `
-        <div><strong>[Haste] Reaction Window (${escapeHtml(def.name)}):</strong> Respond to <strong>${escapeHtml(pendingInteraction.card?.name || "Skill")}</strong> out of turn!</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openHasteReactionModal()">Open Haste Options</button>
-          <button class="btn btn-sm" onclick="window.EFT_APP.resolveHasteReaction(null)">Skip</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "haste",
+        `OUT-OF-TURN REACTION · [HASTE] (${escapeHtml(def.name).toUpperCase()})`,
+        `Respond to ${escapeHtml(pendingInteraction.card?.name || "Skill")} before it resolves!`,
+        `<button class="btn btn-emerald" onclick="window.EFT_APP.openHasteReactionModal()">Activate [Haste] Card</button>
+         <button class="btn" onclick="window.EFT_APP.resolveHasteReaction(null)">Pass</button>`,
+        `haste_${pendingInteraction.card?.id || "s"}_${def.index}`
+      );
     } else if (pendingInteraction.type === "stage_is_mine") {
       const btns = pendingInteraction.validTileIds
         .map((tid) => {
           const stepLbl = pendingInteraction.tileStepLabels[tid] || "";
           const tName = TILE_MAP[tid] ? TILE_MAP[tid].name : tid;
-          return `<button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.resolveStageIsMineChoice('${tid}')">${escapeHtml(stepLbl)} (${escapeHtml(tName)})</button>`;
+          return `<button class="btn btn-emerald" onclick="window.EFT_APP.resolveStageIsMineChoice('${tid}')">${escapeHtml(stepLbl)} (${escapeHtml(tName)})</button>`;
         })
         .join("");
-      bar.innerHTML = `
-        <div><strong>The Stage Is Mine (Passive):</strong> Move +1 / +2 / -1 from this Normal Tile?</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
-          ${btns}
-          <button class="btn btn-sm" onclick="window.EFT_APP.resolveStageIsMineChoice(null)">Tetap di Sini</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "tile",
+        "PASSIVE TRIGGER · THE STAGE IS MINE",
+        "Move +1 / +2 / -1 from this Normal Tile and trigger its block effect?",
+        `${btns}<button class="btn" onclick="window.EFT_APP.resolveStageIsMineChoice(null)">Stay Here</button>`,
+        `stage_${pendingInteraction.originTileId || "n"}`
+      );
     } else if (pendingInteraction.type === "scry_2_keep_1") {
-      bar.innerHTML = `
-        <div><strong>${escapeHtml(pendingInteraction.cardName || "Insect's Instinct")}:</strong> Choose 1 of the top 2 deck cards to keep in hand.</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-emerald btn-sm" onclick="window.EFT_APP.openScryPickModal()">Pick Card</button>
-        </div>`;
+      setPromptBarContent(
+        bar,
+        "tile",
+        `DECK INSPECTION · ${escapeHtml(pendingInteraction.cardName || "Insect's Instinct").toUpperCase()}`,
+        "Choose 1 of the top 2 deck cards to keep in hand",
+        `<button class="btn btn-emerald" onclick="window.EFT_APP.openScryPickModal()">Pick Card</button>`,
+        `scry_${pendingInteraction.cardName}`
+      );
     }
   }
 
@@ -11839,6 +12235,22 @@
       senderSeat = act.seat;
     } else if (typeof act.slot === "number") {
       senderSeat = act.slot;
+    }
+
+    if (act.action === "sort_hand") {
+      if (senderSeat >= 0 && state.players[senderSeat]) {
+        sortMyHand(senderSeat);
+        broadcastMultiplayerState();
+      }
+      return;
+    }
+
+    if (act.action === "chat_message") {
+      if (senderSeat >= 0 && state.players[senderSeat] && d && typeof d.text === "string") {
+        recordInGameChatMessage(senderSeat, d.text);
+        broadcastMultiplayerState();
+      }
+      return;
     }
 
     const expectedSeat = getExpectedActingSeat();
@@ -13822,26 +14234,7 @@
   function openSoundSettingsModal() {
     const pct = Math.round((soundPrefs.volume || 0) * 100);
     const skillPct = Math.round((soundPrefs.skillSfxVolume !== undefined ? soundPrefs.skillSfxVolume : 0.75) * 100);
-    const chars = [
-      { id: "bocchi", name: "Bocchi", tag: "Guitar" },
-      { id: "aventurine", name: "Aventurine", tag: "Casino" },
-      { id: "joker", name: "Joker", tag: "Jazz" },
-      { id: "lilith", name: "Lilith", tag: "Music Box" },
-      { id: "maomao", name: "Mao-Mao", tag: "Herbal Chime" },
-      { id: "firefly", name: "Firefly / SAM", tag: "Stellaron" }
-    ];
-    const charRowsHtml = chars
-      .map(
-        (c) => `
-          <div class="am-char-row">
-            <label class="am-char-check">
-              <input id="char-sfx-${c.id}" type="checkbox" checked onchange="window.EFT_APP.toggleCharacterSkillSfx('${c.id}', this.checked)" />
-              <span>${c.name} <small>${c.tag}</small></span>
-            </label>
-            <button type="button" class="am-mini-test-btn" onclick="window.EFT_APP.previewCharacterSkillSfx('${c.id}')">Test</button>
-          </div>`
-      )
-      .join("");
+    const bgmPct = Math.round((soundPrefs.bgmVolume !== undefined ? soundPrefs.bgmVolume : 0.42) * 100);
 
     openInfoModal(
       "Sound Settings &amp; Game Feel",
@@ -13849,13 +14242,22 @@
         <div class="sound-modal-master-row" id="sound-control-pill">
           <button id="btn-sound-mute" class="sound-mute-btn" type="button" onclick="window.EFT_APP.toggleSoundMute()" aria-label="Mute or unmute sound"></button>
           <div class="sound-modal-slider-col">
-            <span class="sound-modal-label">Master Sound Effect</span>
-            <input id="sound-volume-slider" class="sound-volume-slider sound-modal-range" type="range" min="0" max="100" value="${pct}" aria-label="Sound Effect Volume" oninput="window.EFT_APP.setSoundVolume(this.value)" />
+            <span class="sound-modal-label">Master Sound Volume</span>
+            <input id="sound-volume-slider" class="sound-volume-slider sound-modal-range" type="range" min="0" max="100" value="${pct}" aria-label="Master Sound Volume" oninput="window.EFT_APP.setSoundVolume(this.value)" />
           </div>
           <span id="sound-volume-label" class="sound-volume-label">${pct}%</span>
         </div>
 
         <div class="sound-modal-section">
+          <label class="am-toggle-row">
+            <span>Background Music (Day / Night Cycle)</span>
+            <input id="bgm-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleBgm(this.checked)" />
+          </label>
+          <div class="am-slider-row">
+            <span>Music Volume</span>
+            <input id="bgm-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="${bgmPct}" oninput="window.EFT_APP.setBgmVolume(this.value)" />
+            <span id="bgm-volume-label" class="sound-volume-label">${bgmPct}%</span>
+          </div>
           <label class="am-toggle-row">
             <span>Camera Shake (Screen Shake)</span>
             <input id="screen-shake-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleScreenShake(this.checked)" />
@@ -13877,9 +14279,6 @@
             <span id="skill-sfx-volume-label" class="sound-volume-label">${skillPct}%</span>
           </div>
         </div>
-
-        <div class="am-test-label">Skill SFX by Character:</div>
-        <div class="sound-modal-char-grid">${charRowsHtml}</div>
       </div>`,
       "sound_settings"
     );
@@ -14330,6 +14729,177 @@
     focusCameraOnTile(p.tileId, isMobilePortrait() ? 0.72 : 0.96);
   }
 
+  const processedChatMsgIds = new Set();
+  const activeChibiBubbles = {};
+  let lastChatLogSig = "";
+
+  function getLocalChatPlayerIndex() {
+    if (!state || !Array.isArray(state.players) || state.players.length === 0) return 0;
+    if (mp.mySeat !== -1 && state.players[mp.mySeat]) return mp.mySeat;
+    if (state.seatMap && typeof state.seatMap[mp.clientId] === "number" && state.players[state.seatMap[mp.clientId]]) {
+      return state.seatMap[mp.clientId];
+    }
+    return state.activePlayerIndex || 0;
+  }
+
+  function getPawnBoardCoords(playerIndex) {
+    if (!state || !Array.isArray(state.players) || !state.players[playerIndex]) return null;
+    const p = state.players[playerIndex];
+    const renderTid = skillMoveAnimOverrides[playerIndex] || p.tileId;
+    const tile = TILE_MAP[renderTid] || TILE_MAP.T0;
+    if (!tile) return null;
+    const group = [];
+    state.players.forEach((pl, idx) => {
+      const tid = skillMoveAnimOverrides[idx] || pl.tileId;
+      if (tid === renderTid) group.push(idx);
+    });
+    const posInGroup = Math.max(0, group.indexOf(playerIndex));
+    const spreadX = (posInGroup - (group.length - 1) / 2) * 1.45;
+    return { x: tile.x + spreadX, y: tile.y };
+  }
+
+  function openInGameChatInput() {
+    if (!state || isTitleScreenVisible || !isMatchStarted) return;
+    const bar = document.getElementById("hud-chat-input-bar");
+    const input = document.getElementById("hud-chat-input");
+    if (!bar || !input) return;
+    bar.classList.remove("is-hidden");
+    input.focus();
+  }
+
+  function closeInGameChatInput() {
+    const bar = document.getElementById("hud-chat-input-bar");
+    const input = document.getElementById("hud-chat-input");
+    if (input) {
+      input.value = "";
+      input.blur();
+    }
+    if (bar) bar.classList.add("is-hidden");
+  }
+
+  function submitInGameChat() {
+    const input = document.getElementById("hud-chat-input");
+    if (!input) return;
+    const text = input.value.trim().slice(0, 120);
+    closeInGameChatInput();
+    if (!text || !state) return;
+
+    if (mp.mode === "client") {
+      sendClientActionToHost("chat_message", { text });
+      return;
+    }
+
+    const pIdx = getLocalChatPlayerIndex();
+    recordInGameChatMessage(pIdx, text);
+    if (mp.mode === "host") {
+      broadcastMultiplayerState();
+    }
+  }
+
+  function recordInGameChatMessage(playerIndex, rawText) {
+    if (!state || !Array.isArray(state.players) || !state.players[playerIndex]) return;
+    const text = String(rawText || "").trim().slice(0, 120);
+    if (!text) return;
+    const p = state.players[playerIndex];
+    if (!Array.isArray(state.chatMessages)) state.chatMessages = [];
+    const msg = {
+      id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      playerIndex,
+      senderName: p.name,
+      color: p.color || "#34d399",
+      text,
+      ts: Date.now()
+    };
+    state.chatMessages.push(msg);
+    if (state.chatMessages.length > 24) {
+      state.chatMessages = state.chatMessages.slice(-24);
+    }
+    syncInGameChatFromState();
+  }
+
+  function spawnChibiChatBubble(playerIndex, text, color, senderName) {
+    const layer = document.getElementById("board-chat-bubbles-layer");
+    if (!layer) return;
+    const coords = getPawnBoardCoords(playerIndex);
+    if (!coords) return;
+
+    const prev = activeChibiBubbles[playerIndex];
+    if (prev && prev.timeoutId) clearTimeout(prev.timeoutId);
+    if (prev && prev.removeId) clearTimeout(prev.removeId);
+
+    let el = layer.querySelector(`.chibi-chat-bubble[data-player-idx="${playerIndex}"]`);
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "chibi-chat-bubble";
+      el.setAttribute("data-player-idx", String(playerIndex));
+      layer.appendChild(el);
+    }
+
+    el.classList.remove("is-fading");
+    el.style.left = `${coords.x}%`;
+    el.style.top = `${coords.y}%`;
+    el.style.setProperty("--bubble-accent", color || "#34d399");
+    el.innerHTML = `<span class="ccb-name">${escapeHtml(senderName || "")}</span><span class="ccb-text">${escapeHtml(text)}</span>`;
+
+    const timeoutId = setTimeout(() => {
+      if (el) el.classList.add("is-fading");
+      const removeId = setTimeout(() => {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+        if (activeChibiBubbles[playerIndex] && activeChibiBubbles[playerIndex].timeoutId === timeoutId) {
+          delete activeChibiBubbles[playerIndex];
+        }
+      }, 360);
+      if (activeChibiBubbles[playerIndex]) activeChibiBubbles[playerIndex].removeId = removeId;
+    }, 5400);
+
+    activeChibiBubbles[playerIndex] = { text, color, senderName, timeoutId, removeId: null };
+  }
+
+  function syncChibiChatBubblePositions() {
+    const layer = document.getElementById("board-chat-bubbles-layer");
+    if (!layer || !state) return;
+    layer.querySelectorAll(".chibi-chat-bubble[data-player-idx]").forEach((el) => {
+      const idx = Number(el.getAttribute("data-player-idx"));
+      const coords = getPawnBoardCoords(idx);
+      if (coords) {
+        el.style.left = `${coords.x}%`;
+        el.style.top = `${coords.y}%`;
+      }
+    });
+  }
+
+  function syncInGameChatFromState() {
+    if (!state) return;
+    const msgs = Array.isArray(state.chatMessages) ? state.chatMessages : [];
+    const logEl = document.getElementById("hud-chat-log");
+    const recent = msgs.slice(-6);
+    const sig = recent.map((m) => m.id).join(",");
+
+    if (logEl && sig !== lastChatLogSig) {
+      lastChatLogSig = sig;
+      logEl.innerHTML = recent
+        .map(
+          (m) => `
+        <div class="hud-chat-line">
+          <span class="hud-chat-name" style="color:${escapeHtml(m.color || "#6ee7b7")};">${escapeHtml(m.senderName || "Player")}:</span>
+          <span class="hud-chat-text">${escapeHtml(m.text || "")}</span>
+        </div>`
+        )
+        .join("");
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    const now = Date.now();
+    msgs.forEach((m) => {
+      if (!m || !m.id || processedChatMsgIds.has(m.id)) return;
+      processedChatMsgIds.add(m.id);
+      if (now - (m.ts || 0) < 12000) {
+        spawnChibiChatBubble(m.playerIndex, m.text, m.color, m.senderName);
+        playSfx("click");
+      }
+    });
+  }
+
   function openNewMatchSetupModal() {
     openWelcomeSetupModal("local");
   }
@@ -14347,6 +14917,12 @@
     openCompendiumModal,
     openRulesModal,
     openSoundSettingsModal,
+    toggleBgm,
+    setBgmVolume,
+    sortMyHand,
+    openInGameChatInput,
+    closeInGameChatInput,
+    submitInGameChat,
     toggleDrawer,
     handleRollButton,
     handleEndTurnButton,
@@ -14625,7 +15201,30 @@
       if (state && state.activeMinigame && window.EFT_MINIGAMES && window.EFT_MINIGAMES.handleKeyDown(e)) {
         return;
       }
+      if (e.key === "Enter") {
+        const activeEl = document.activeElement;
+        const isTyping =
+          activeEl &&
+          (activeEl.tagName === "INPUT" ||
+            activeEl.tagName === "TEXTAREA" ||
+            activeEl.tagName === "SELECT" ||
+            activeEl.isContentEditable);
+        const modal = document.getElementById("app-modal");
+        const modalOpen = modal && modal.classList.contains("open");
+        const chatBar = document.getElementById("hud-chat-input-bar");
+        const chatOpen = chatBar && !chatBar.classList.contains("is-hidden");
+        if (!isTyping && !modalOpen && !chatOpen && !isTitleScreenVisible && isMatchStarted && state && !state.activeMinigame) {
+          e.preventDefault();
+          openInGameChatInput();
+          return;
+        }
+      }
       if (e.key === "Escape") {
+        const chatBar = document.getElementById("hud-chat-input-bar");
+        if (chatBar && !chatBar.classList.contains("is-hidden")) {
+          closeInGameChatInput();
+          return;
+        }
         const menuPop = document.getElementById("floating-menu-popover");
         if (menuPop && menuPop.classList.contains("open")) {
           closeFloatingMenu(true);

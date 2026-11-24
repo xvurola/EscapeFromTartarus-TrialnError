@@ -2454,15 +2454,15 @@ body.admin-mode .admin-only-el {
    CLEAN CIRCULAR MEDALLION BOARD TILES (LARGE, CALM, LOW-DISTRACTION)
    ============================================================================ */
 .digital-tile {
-  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #f1f5f9 64%, #dce5f0 100%);
-  --tile-ring: rgba(255, 255, 255, 0.92);
-  --tile-base: #475569;
-  --tile-accent: #334155;
-  --tile-label: #1e293b;
+  --tile-surface: radial-gradient(circle at 34% 28%, #22353d 0%, #16242b 68%, #0f191f 100%);
+  --tile-ring: rgba(168, 198, 208, 0.36);
+  --tile-base: #0b1419;
+  --tile-accent: #cbd5e1;
+  --tile-label: #e2e8f0;
   --tile-glow: rgba(148, 163, 184, 0.22);
   position: absolute;
-  width: 80px;
-  height: 80px;
+  width: 78px;
+  height: 78px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   display: flex;
@@ -2470,13 +2470,13 @@ body.admin-mode .admin-only-el {
   justify-content: center;
   cursor: default;
   z-index: 6;
-  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease, filter 0.16s ease;
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease, filter 0.16s ease, border-color 0.16s ease;
   background: var(--tile-surface);
-  border: 3px solid var(--tile-ring);
+  border: 2.5px solid var(--tile-ring);
   box-shadow:
-    0 5px 0 var(--tile-base),
-    0 11px 22px rgba(0, 0, 0, 0.5),
-    inset 0 2px 3px rgba(255, 255, 255, 0.85);
+    0 4px 0 var(--tile-base),
+    0 8px 16px rgba(0, 0, 0, 0.42),
+    inset 0 1px 2px rgba(255, 255, 255, 0.14);
   user-select: none;
 }
 
@@ -2499,7 +2499,7 @@ body.admin-mode .admin-only-el {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0) 54%);
+  background: radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 54%);
   pointer-events: none;
   z-index: 3;
 }
@@ -2513,7 +2513,7 @@ body.admin-mode .admin-only-el {
   align-items: center;
   justify-content: center;
   color: var(--tile-accent);
-  filter: drop-shadow(0 1.5px 1.5px rgba(0, 0, 0, 0.18));
+  filter: drop-shadow(0 1.5px 2px rgba(0, 0, 0, 0.48));
 }
 
 .lgr-icon svg {
@@ -2525,13 +2525,14 @@ body.admin-mode .admin-only-el {
 .lgr-pill-label {
   position: relative;
   z-index: 2;
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.25px;
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.35px;
   text-transform: uppercase;
   color: var(--tile-label);
   line-height: 1;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72);
 }
 
 .digital-tile.has-tile-effect,
@@ -2544,53 +2545,53 @@ body.admin-mode .digital-tile {
 .digital-tile:hover {
   transform: translate(-50%, -58%) scale(1.13);
   z-index: 24;
-  border-color: #ffffff;
+  border-color: #f8fafc;
   box-shadow:
     0 8px 0 var(--tile-base),
     0 16px 26px rgba(0, 0, 0, 0.68),
-    0 0 18px var(--tile-glow);
+    0 0 16px var(--tile-glow);
 }
 
 /* ----------------------------------------------------------------------------
-   CIRCULAR TILE THEMES (CALM BASE + DISTINCT SPECIAL MEDALLIONS)
+   CIRCULAR TILE THEMES (CALM LOW-GLARE DARK STONE + CLEAR COLOR-CODED RINGS)
    ---------------------------------------------------------------------------- */
 
-/* Normal Stepping Tile — Calm Minimalist Frosted Circle (Zero Visual Clutter) */
+/* Normal Stepping Tile - Calm Low-Glare Slate Stone Circle */
 .dt-normal {
-  width: 68px;
-  height: 68px;
-  --tile-surface: radial-gradient(circle at 34% 28%, #eef4f8 0%, #d4e0ea 72%, #bac9d6 100%);
-  --tile-ring: rgba(241, 245, 249, 0.75);
-  --tile-base: #5b6d80;
-  --tile-accent: #64748b;
-  --tile-label: #475569;
-  --tile-glow: rgba(148, 163, 184, 0.28);
+  width: 64px;
+  height: 64px;
+  --tile-surface: radial-gradient(circle at 36% 30%, #24363e 0%, #19262d 72%, #111b20 100%);
+  --tile-ring: rgba(164, 194, 204, 0.26);
+  --tile-base: #0b1318;
+  --tile-accent: #7b96a4;
+  --tile-label: #9fb3be;
+  --tile-glow: rgba(148, 163, 184, 0.22);
   box-shadow:
     0 4px 0 var(--tile-base),
     0 8px 16px rgba(0, 0, 0, 0.42),
-    inset 0 2px 3px rgba(255, 255, 255, 0.78);
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.14);
 }
 
 .dt-normal .lgr-icon {
   width: 16px;
   height: 16px;
-  opacity: 0.32;
+  opacity: 0.28;
 }
 
 /* START Landmark Circle */
 .dt-spawn {
   width: 90px;
   height: 90px;
-  --tile-surface: radial-gradient(circle at 32% 28%, #ecfdf5 0%, #a7f3d0 64%, #34d399 100%);
-  --tile-ring: #fde047;
-  --tile-base: #065f46;
-  --tile-accent: #065f46;
-  --tile-label: #064e3b;
-  --tile-glow: rgba(16, 185, 129, 0.5);
+  --tile-surface: radial-gradient(circle at 32% 28%, #164436 0%, #0f2e25 66%, #091d17 100%);
+  --tile-ring: #e5b94c;
+  --tile-base: #061c16;
+  --tile-accent: #6ee7b7;
+  --tile-label: #ecfdf5;
+  --tile-glow: rgba(52, 211, 153, 0.32);
   box-shadow:
-    0 6px 0 #065f46,
+    0 6px 0 #061c16,
     0 14px 24px rgba(0, 0, 0, 0.62),
-    0 0 20px rgba(16, 185, 129, 0.38);
+    0 0 14px rgba(52, 211, 153, 0.22);
 }
 
 .dt-spawn .lgr-icon {
@@ -2602,76 +2603,76 @@ body.admin-mode .digital-tile {
   font-size: 0.68rem;
 }
 
-/* +10 TC — Soft Emerald Circle */
+/* +10 TC - Calm Emerald Slate Circle */
 .dt-tc_plus10 {
-  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #d1fae5 70%, #a7f3d0 100%);
-  --tile-ring: #6ee7b7;
-  --tile-base: #047857;
-  --tile-accent: #059669;
-  --tile-label: #065f46;
-  --tile-glow: rgba(16, 185, 129, 0.42);
+  --tile-surface: radial-gradient(circle at 32% 28%, #163a31 0%, #102a23 70%, #0a1b17 100%);
+  --tile-ring: rgba(52, 211, 153, 0.72);
+  --tile-base: #06211a;
+  --tile-accent: #6ee7b7;
+  --tile-label: #d1fae5;
+  --tile-glow: rgba(16, 185, 129, 0.26);
 }
 
-/* -5 TC — Soft Rose Crimson Circle */
+/* -5 TC - Calm Crimson Slate Circle */
 .dt-tc_minus5 {
-  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #ffe4e6 70%, #fecdd3 100%);
-  --tile-ring: #fda4af;
-  --tile-base: #9f1239;
-  --tile-accent: #e11d48;
-  --tile-label: #881337;
-  --tile-glow: rgba(225, 29, 72, 0.42);
+  --tile-surface: radial-gradient(circle at 32% 28%, #3c1b25 0%, #2a121a 70%, #1b0a10 100%);
+  --tile-ring: rgba(251, 113, 133, 0.72);
+  --tile-base: #2a0a14;
+  --tile-accent: #fda4af;
+  --tile-label: #ffe4e6;
+  --tile-glow: rgba(244, 63, 94, 0.26);
 }
 
-/* +1 Card — Soft Sky Sapphire Circle */
+/* +1 Card - Calm Sapphire Slate Circle */
 .dt-card_plus1 {
-  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #e0f2fe 70%, #bae6fd 100%);
-  --tile-ring: #7dd3fc;
-  --tile-base: #0369a1;
-  --tile-accent: #0284c7;
-  --tile-label: #0c4a6e;
-  --tile-glow: rgba(14, 165, 233, 0.42);
+  --tile-surface: radial-gradient(circle at 32% 28%, #143045 0%, #0e2232 70%, #081520 100%);
+  --tile-ring: rgba(56, 189, 248, 0.72);
+  --tile-base: #071b2b;
+  --tile-accent: #7dd3fc;
+  --tile-label: #e0f2fe;
+  --tile-glow: rgba(14, 165, 233, 0.26);
 }
 
-/* -1 Card — Soft Amber Circle */
+/* -1 Card - Calm Amber-Bronze Slate Circle */
 .dt-card_minus1 {
-  --tile-surface: radial-gradient(circle at 32% 28%, #ffffff 0%, #fef3c7 70%, #fde68a 100%);
-  --tile-ring: #fcd34d;
-  --tile-base: #92400e;
-  --tile-accent: #b45309;
-  --tile-label: #78350f;
-  --tile-glow: rgba(245, 158, 11, 0.42);
+  --tile-surface: radial-gradient(circle at 32% 28%, #3b2a14 0%, #2a1d0d 70%, #1a1207 100%);
+  --tile-ring: rgba(251, 191, 36, 0.72);
+  --tile-base: #261808;
+  --tile-accent: #fcd34d;
+  --tile-label: #fef3c7;
+  --tile-glow: rgba(245, 158, 11, 0.26);
 }
 
-/* Positive Effect — Jade Mint Circle */
+/* Positive Effect - Calm Jade Mint Slate Circle */
 .dt-pos_effect {
-  --tile-surface: radial-gradient(circle at 32% 28%, #f0fdfa 0%, #99f6e4 68%, #5eead4 100%);
-  --tile-ring: #5eead4;
-  --tile-base: #115e59;
-  --tile-accent: #0f766e;
-  --tile-label: #134e4a;
-  --tile-glow: rgba(45, 212, 191, 0.48);
+  --tile-surface: radial-gradient(circle at 32% 28%, #123939 0%, #0c292a 68%, #071a1b 100%);
+  --tile-ring: rgba(45, 212, 191, 0.76);
+  --tile-base: #072222;
+  --tile-accent: #5eead4;
+  --tile-label: #ccfbf1;
+  --tile-glow: rgba(45, 212, 191, 0.28);
 }
 
-/* Negative Effect — Berry Rose Circle */
+/* Negative Effect - Calm Plum-Rose Slate Circle */
 .dt-neg_effect {
-  --tile-surface: radial-gradient(circle at 32% 28%, #fdf2f8 0%, #fbcfe8 68%, #f9a8d4 100%);
-  --tile-ring: #f472b6;
-  --tile-base: #831843;
-  --tile-accent: #be185d;
-  --tile-label: #831843;
-  --tile-glow: rgba(236, 72, 153, 0.46);
+  --tile-surface: radial-gradient(circle at 32% 28%, #3a1a30 0%, #281121 68%, #190a15 100%);
+  --tile-ring: rgba(244, 114, 182, 0.74);
+  --tile-base: #270b1e;
+  --tile-accent: #f9a8d4;
+  --tile-label: #fce7f3;
+  --tile-glow: rgba(236, 72, 153, 0.28);
 }
 
-/* Global Event — Royal Violet Medallion */
+/* Global Event - Calm Royal Obsidian-Violet Medallion */
 .dt-event {
   width: 88px;
   height: 88px;
-  --tile-surface: radial-gradient(circle at 32% 28%, #faf5ff 0%, #e9d5ff 64%, #d8b4fe 100%);
-  --tile-ring: #c084fc;
-  --tile-base: #581c87;
-  --tile-accent: #7e22ce;
-  --tile-label: #581c87;
-  --tile-glow: rgba(168, 85, 247, 0.52);
+  --tile-surface: radial-gradient(circle at 32% 28%, #2d1c47 0%, #1e1232 64%, #120b20 100%);
+  --tile-ring: rgba(192, 132, 252, 0.8);
+  --tile-base: #1b0d31;
+  --tile-accent: #d8b4fe;
+  --tile-label: #f3e8ff;
+  --tile-glow: rgba(168, 85, 247, 0.34);
 }
 
 .dt-event .lgr-icon {
@@ -2679,16 +2680,16 @@ body.admin-mode .digital-tile {
   height: 28px;
 }
 
-/* Versus Duel — Warm Coral-Orange Medallion */
+/* Versus Duel - Calm Burnt Ember-Bronze Medallion */
 .dt-versus {
   width: 88px;
   height: 88px;
-  --tile-surface: radial-gradient(circle at 32% 28%, #fff7ed 0%, #fed7aa 64%, #fdba74 100%);
-  --tile-ring: #fb923c;
-  --tile-base: #9a3412;
-  --tile-accent: #c2410c;
-  --tile-label: #7c2d12;
-  --tile-glow: rgba(249, 115, 22, 0.5);
+  --tile-surface: radial-gradient(circle at 32% 28%, #412214 0%, #2c160c 64%, #1a0d07 100%);
+  --tile-ring: rgba(251, 146, 60, 0.82);
+  --tile-base: #2a1308;
+  --tile-accent: #fdba74;
+  --tile-label: #ffedd5;
+  --tile-glow: rgba(249, 115, 22, 0.34);
 }
 
 .dt-versus .lgr-icon {
@@ -2696,30 +2697,30 @@ body.admin-mode .digital-tile {
   height: 28px;
 }
 
-/* Trading Post — Soft Sage Lime Circle */
+/* Trading Post - Calm Moss-Olive Slate Circle */
 .dt-trading {
-  --tile-surface: radial-gradient(circle at 32% 28%, #f7fee7 0%, #d9f99d 68%, #bef264 100%);
-  --tile-ring: #a3e635;
-  --tile-base: #3f6212;
-  --tile-accent: #4d7c0f;
-  --tile-label: #365314;
-  --tile-glow: rgba(132, 204, 22, 0.45);
+  --tile-surface: radial-gradient(circle at 32% 28%, #253717 0%, #1a2710 68%, #10190a 100%);
+  --tile-ring: rgba(163, 230, 53, 0.72);
+  --tile-base: #15220a;
+  --tile-accent: #bef264;
+  --tile-label: #ecfccb;
+  --tile-glow: rgba(132, 204, 22, 0.26);
 }
 
-/* Merchant Shop — Roadside Golden Circle with Directional Pointer Arrow */
+/* Merchant Shop - Calm Antique Gold-Bronze Circle */
 .dt-merchant {
   width: 88px;
   height: 88px;
-  --tile-surface: radial-gradient(circle at 32% 28%, #fefce8 0%, #fde68a 62%, #fbbf24 100%);
-  --tile-ring: #fef08a;
-  --tile-base: #92400e;
-  --tile-accent: #92400e;
-  --tile-label: #78350f;
-  --tile-glow: rgba(245, 158, 11, 0.52);
+  --tile-surface: radial-gradient(circle at 32% 28%, #423012 0%, #2d200b 62%, #1b1306 100%);
+  --tile-ring: rgba(251, 191, 36, 0.84);
+  --tile-base: #2b1d07;
+  --tile-accent: #fde047;
+  --tile-label: #fef9c3;
+  --tile-glow: rgba(245, 158, 11, 0.34);
   box-shadow:
-    0 6px 0 #92400e,
+    0 6px 0 #2b1d07,
     0 12px 22px rgba(0, 0, 0, 0.6),
-    0 0 18px rgba(245, 158, 11, 0.36);
+    0 0 14px rgba(245, 158, 11, 0.24);
 }
 
 .dt-merchant .lgr-icon {
@@ -2753,20 +2754,20 @@ body.admin-mode .digital-tile {
   border-top: 15px solid #f59e0b;
 }
 
-/* Warp Teleporter — Deep Sky Indigo Medallion */
+/* Warp Teleporter - Calm Deep Indigo-Sky Medallion */
 .dt-warp {
   width: 88px;
   height: 88px;
-  --tile-surface: radial-gradient(circle at 32% 28%, #eff6ff 0%, #bfdbfe 62%, #93c5fd 100%);
-  --tile-ring: #60a5fa;
-  --tile-base: #1e3a8a;
-  --tile-accent: #1d4ed8;
-  --tile-label: #1e3a8a;
-  --tile-glow: rgba(59, 130, 246, 0.5);
+  --tile-surface: radial-gradient(circle at 32% 28%, #182a4c 0%, #101d36 62%, #091122 100%);
+  --tile-ring: rgba(96, 165, 250, 0.82);
+  --tile-base: #0c1730;
+  --tile-accent: #93c5fd;
+  --tile-label: #dbeafe;
+  --tile-glow: rgba(59, 130, 246, 0.32);
   box-shadow:
-    0 6px 0 #1e3a8a,
+    0 6px 0 #0c1730,
     0 12px 22px rgba(0, 0, 0, 0.6),
-    0 0 18px rgba(59, 130, 246, 0.36);
+    0 0 14px rgba(59, 130, 246, 0.24);
 }
 
 .dt-warp .lgr-icon {
@@ -2774,17 +2775,17 @@ body.admin-mode .digital-tile {
   height: 28px;
 }
 
-/* River Shortcut — Aqua Cyan Medallion */
+/* River Shortcut - Calm Deep Ocean-Cyan Medallion */
 .dt-river_top,
 .dt-river_bottom {
   width: 86px;
   height: 86px;
-  --tile-surface: radial-gradient(circle at 32% 28%, #ecfeff 0%, #a5f3fc 64%, #67e8f9 100%);
-  --tile-ring: #22d3ee;
-  --tile-base: #0e7490;
-  --tile-accent: #0e7490;
-  --tile-label: #155e75;
-  --tile-glow: rgba(34, 211, 238, 0.45);
+  --tile-surface: radial-gradient(circle at 32% 28%, #123642 0%, #0c2630 64%, #07171e 100%);
+  --tile-ring: rgba(34, 211, 238, 0.78);
+  --tile-base: #071e28;
+  --tile-accent: #67e8f9;
+  --tile-label: #cffafe;
+  --tile-glow: rgba(34, 211, 238, 0.28);
 }
 
 .dt-river_top .lgr-icon,
@@ -4257,24 +4258,95 @@ body:not(.modal-open) .tucked-card:hover,
 
 .action-prompt-bar {
   position: absolute;
-  bottom: 145px;
+  bottom: 154px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--bg-panel);
-  border: 1.5px solid var(--accent-gold);
-  border-radius: var(--radius-md);
-  padding: 10px 18px;
-  box-shadow: var(--shadow-overlay);
-  z-index: 45;
+  background: #0a1519;
+  border: 1px solid rgba(203, 213, 225, 0.22);
+  border-left: 5px solid #d97706;
+  border-radius: 12px;
+  padding: 15px 22px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.78);
+  z-index: 62;
   display: none;
   align-items: center;
-  gap: 12px;
-  font-size: 0.8rem;
-  max-width: 94vw;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: min(520px, 90vw);
+  max-width: min(740px, 94vw);
+  color: #f1f5f9;
 }
 
 .action-prompt-bar.visible {
   display: flex;
+}
+
+.action-prompt-bar.is-entering {
+  animation: apbLiftIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes apbLiftIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.action-prompt-bar[data-prompt-tone="shop"] { border-left-color: #eab308; }
+.action-prompt-bar[data-prompt-tone="haste"] { border-left-color: #e11d48; }
+.action-prompt-bar[data-prompt-tone="shard"] { border-left-color: #c084fc; }
+.action-prompt-bar[data-prompt-tone="river"] { border-left-color: #38bdf8; }
+.action-prompt-bar[data-prompt-tone="tile"] { border-left-color: #10b981; }
+.action-prompt-bar[data-prompt-tone="duel"] { border-left-color: #f59e0b; }
+.action-prompt-bar[data-prompt-tone="wait"] { border-left-color: #64748b; }
+
+.apb-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.apb-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #fbbf24;
+}
+
+.action-prompt-bar[data-prompt-tone="haste"] .apb-eyebrow { color: #fda4af; }
+.action-prompt-bar[data-prompt-tone="shard"] .apb-eyebrow { color: #d8b4fe; }
+.action-prompt-bar[data-prompt-tone="river"] .apb-eyebrow { color: #7dd3fc; }
+.action-prompt-bar[data-prompt-tone="tile"] .apb-eyebrow { color: #6ee7b7; }
+.action-prompt-bar[data-prompt-tone="wait"] .apb-eyebrow { color: #94a3b8; }
+
+.apb-headline {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-size: 1.04rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #f8fafc;
+}
+
+.apb-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.apb-actions .btn {
+  min-height: 38px;
+  padding: 8px 16px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  border-radius: 8px;
 }
 
 .floating-drawer {
@@ -9993,6 +10065,411 @@ body {
     bottom: 152px;
     font-size: 0.74rem;
     padding: 6px 12px;
+  }
+}
+
+/* ============================================================================
+   DAY / NIGHT CYCLE ATMOSPHERE, SORT HAND, SHARD ARROWS, & IN-GAME CHAT
+   ============================================================================ */
+.cycle-time-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  transition: background 0.45s ease, color 0.45s ease, border-color 0.45s ease;
+}
+
+.cycle-time-badge.is-day {
+  background: rgba(245, 196, 81, 0.16);
+  color: #fde68a;
+  border-color: rgba(245, 196, 81, 0.42);
+}
+
+.cycle-time-badge.is-night {
+  background: rgba(129, 140, 248, 0.18);
+  color: #c7d2fe;
+  border-color: rgba(165, 180, 252, 0.42);
+}
+
+.board-viewport,
+.digital-board-surface,
+.map-art-backdrop {
+  transition: background 0.85s ease, filter 0.85s ease, box-shadow 0.85s ease;
+}
+
+.arena-stage[data-cycle-time="day"] .board-viewport {
+  background:
+    radial-gradient(circle at 24% 18%, rgba(245, 200, 92, 0.14) 0%, rgba(245, 200, 92, 0) 46%),
+    radial-gradient(circle at 50% 48%, #153133 0%, #0d2125 60%, #071316 100%);
+}
+
+.arena-stage[data-cycle-time="day"] .digital-board-surface {
+  background:
+    radial-gradient(ellipse at 28% 22%, rgba(245, 204, 102, 0.1) 0%, rgba(245, 204, 102, 0) 52%),
+    radial-gradient(ellipse at 50% 48%, #163033 0%, #0f2327 64%, #09171b 100%);
+  box-shadow: inset 0 0 96px rgba(3, 14, 16, 0.46);
+}
+
+.arena-stage[data-cycle-time="day"] .map-art-backdrop {
+  filter: brightness(1.16) saturate(1.06);
+}
+
+.arena-stage[data-cycle-time="night"] .board-viewport {
+  background:
+    radial-gradient(circle at 76% 18%, rgba(129, 140, 248, 0.14) 0%, rgba(129, 140, 248, 0) 46%),
+    radial-gradient(circle at 50% 48%, #0b1224 0%, #060b17 60%, #03060e 100%);
+}
+
+.arena-stage[data-cycle-time="night"] .digital-board-surface {
+  background:
+    radial-gradient(ellipse at 74% 22%, rgba(165, 180, 252, 0.08) 0%, rgba(165, 180, 252, 0) 50%),
+    radial-gradient(ellipse at 50% 48%, #0d152a 0%, #080e1d 64%, #050812 100%);
+  box-shadow: inset 0 0 130px rgba(1, 3, 12, 0.72);
+}
+
+.arena-stage[data-cycle-time="night"] .map-art-backdrop {
+  filter: brightness(0.76) hue-rotate(24deg) saturate(1.1);
+}
+
+/* Sort Hand Button above Draw Pile */
+.draw-pile-dock {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.eft-sort-hand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(159, 214, 190, 0.28);
+  background: #0d1d21;
+  color: #dcebe5;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.34);
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease, color 0.16s ease;
+}
+
+.eft-sort-hand-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #6ee7b7;
+}
+
+.eft-sort-hand-btn:hover {
+  background: #142b31;
+  border-color: rgba(110, 231, 183, 0.56);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.eft-sort-hand-btn:focus-visible {
+  outline: 2px solid #f5c451;
+  outline-offset: 2px;
+}
+
+/* Shard Direction Compass Arrows (visible when Focus Player is active) */
+.shard-compass-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 36;
+  overflow: hidden;
+}
+
+.shard-dir-pointer {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px 4px 6px;
+  border-radius: 999px;
+  background: rgba(8, 18, 22, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.58);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  color: #e0f2fe;
+  pointer-events: none;
+  transition: left 0.16s ease-out, top 0.16s ease-out;
+}
+
+.shard-dir-arrow {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.shard-dir-arrow svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.shard-dir-tag {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #f0f9ff;
+  white-space: nowrap;
+}
+
+/* Compact Borderless Left Chat Log */
+.hud-chat-log {
+  position: fixed;
+  left: 16px;
+  bottom: 72px;
+  z-index: 44;
+  width: 268px;
+  max-width: 34vw;
+  max-height: 132px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  pointer-events: none;
+  scrollbar-width: none;
+}
+
+.hud-chat-log::-webkit-scrollbar {
+  display: none;
+}
+
+.hud-chat-line {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: #edf4f2;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.96),
+    0 0 8px rgba(0, 0, 0, 0.78);
+  word-break: break-word;
+  animation: eftChatLineIn 0.2s ease;
+}
+
+.hud-chat-name {
+  font-weight: 800;
+  margin-right: 4px;
+}
+
+.hud-chat-text {
+  font-weight: 500;
+  color: #f1f5f9;
+}
+
+@keyframes eftChatLineIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Floating Enter-Triggered Chat Input Bar */
+.hud-chat-input-bar {
+  position: fixed;
+  left: 16px;
+  bottom: 208px;
+  z-index: 62;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: #0a1519;
+  border: 1px solid rgba(159, 214, 190, 0.34);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.62);
+}
+
+.hud-chat-input-bar.is-hidden {
+  display: none;
+}
+
+.hud-chat-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: #f5f9f8;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.82rem;
+  padding: 7px 10px;
+}
+
+.hud-chat-input:focus {
+  outline: 2px solid #f5c451;
+  outline-offset: 1px;
+  border-color: rgba(245, 196, 81, 0.52);
+}
+
+.hud-chat-send-btn {
+  padding: 7px 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(52, 211, 153, 0.56);
+  background: #0f3a30;
+  color: #ecfdf5;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.hud-chat-send-btn:hover {
+  background: #144d40;
+}
+
+.hud-chat-send-btn:focus-visible {
+  outline: 2px solid #f5c451;
+  outline-offset: 2px;
+}
+
+/* Chibi Speech Bubble Layer (inside #map-canvas-wrap, floats above chibi head) */
+.board-chat-bubbles-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 48;
+}
+
+.chibi-chat-bubble {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 96px));
+  max-width: 240px;
+  min-width: 82px;
+  padding: 8px 13px;
+  border-radius: 12px;
+  background: #0c171b;
+  border: 2px solid var(--bubble-accent, #34d399);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.68);
+  color: #f8fafc;
+  font-family: "Inter", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: left 0.24s ease, top 0.24s ease, opacity 0.32s ease, transform 0.28s ease;
+  animation: chibiBubblePop 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.chibi-chat-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 9px solid var(--bubble-accent, #34d399);
+}
+
+.chibi-chat-bubble.is-fading {
+  opacity: 0;
+  transform: translate(-50%, calc(-100% - 106px)) scale(0.95);
+}
+
+.ccb-name {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bubble-accent, #6ee7b7);
+  line-height: 1.1;
+}
+
+.ccb-text {
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #f8fafc;
+  word-break: break-word;
+}
+
+@keyframes chibiBubblePop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 82px)) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, calc(-100% - 96px)) scale(1);
+  }
+}
+
+/* Mobile Landscape Refinements for Prompt Banner, Chat, & Sort Hand */
+@media (max-width: 960px) and (orientation: landscape) {
+  .action-prompt-bar {
+    bottom: 132px;
+    min-width: 0;
+    width: min(560px, calc(100vw - 24px));
+    padding: 10px 14px 10px 16px;
+    gap: 10px;
+  }
+
+  .apb-headline {
+    font-size: 0.88rem;
+  }
+
+  .apb-actions .btn {
+    min-height: 32px;
+    padding: 6px 12px;
+    font-size: 0.74rem;
+  }
+
+  .hud-chat-log {
+    left: 10px;
+    bottom: 48px;
+    width: 210px;
+    max-height: 82px;
+  }
+
+  .hud-chat-line {
+    font-size: 0.68rem;
+  }
+
+  .hud-chat-input-bar {
+    left: 10px;
+    bottom: 138px;
+    width: 260px;
+  }
+
+  .eft-sort-hand-btn {
+    padding: 4px 8px;
+    font-size: 0.66rem;
   }
 }
 
