@@ -10282,10 +10282,6 @@
         triggerDraggedCardActivation(st.cardUid, st.ownerIdx);
         return;
       }
-        if (st.sourceEl) st.sourceEl.classList.remove("is-dragging-source");
-        triggerDraggedCardActivation(st.cardUid, st.ownerIdx);
-        return;
-      }
 
       if (!cancelled && st.inZone && st.evalRes && !st.evalRes.ok) {
         playSfx("card_drag_deny");
