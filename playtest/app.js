@@ -814,6 +814,27 @@
         }
         break;
       }
+      case "card_burn": {
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 920, duration: 0.24, gain: 0.22, q: 0.85 });
+        playSoftNoise(ctx, warmFilter, { startTime: t + 0.14, filterType: "highpass", filterFreq: 2100, duration: 0.28, gain: 0.14, q: 0.7 });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.02, freq: 245, endFreq: 112, duration: 0.30, attack: 0.014, gain: 0.22, type: "triangle" });
+        break;
+      }
+      case "card_steal": {
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1950, duration: 0.16, gain: 0.20, q: 1.4 });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.015, freq: 440, endFreq: 784, duration: 0.15, attack: 0.008, gain: 0.22, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.09, freq: 659.25, endFreq: 987.77, duration: 0.16, attack: 0.008, gain: 0.18, type: "triangle" });
+        break;
+      }
+      case "card_drag_ok": {
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1750, duration: 0.08, gain: 0.16, q: 1.0 });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.01, freq: 523.25, endFreq: 698.46, duration: 0.10, attack: 0.008, gain: 0.18, type: "sine" });
+        break;
+      }
+      case "card_drag_deny": {
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 220, endFreq: 148, duration: 0.14, attack: 0.008, gain: 0.20, type: "triangle" });
+        break;
+      }
       case "turn":
         playSoftTone(ctx, warmFilter, { startTime: t, freq: 329.63, duration: 0.14, attack: 0.016, gain: 0.20, type: "sine" });
         playSoftTone(ctx, warmFilter, { startTime: t + 0.075, freq: 440, duration: 0.20, attack: 0.016, gain: 0.22, type: "sine" });
@@ -2479,6 +2500,7 @@
       lastPurchasedShard: null,
       lastBoardVfxEvent: null,
       lastSkillMoveAnim: null,
+      recentCardLosses: [],
       activeMinigame: null,
       minigameHistory: { versus: null, ffa: null },
       activeTileModal: null,
@@ -2492,6 +2514,8 @@
     lastShownDiceRollEventId = null;
     lastShownDofRollEventId = null;
     lastShownTileEffectRevealId = null;
+    _playedCardLossEventIds.clear();
+    _lastRenderedHandCardRects.clear();
     lastProcessedBoardVfxId = null;
     lastProcessedSkillMoveAnimId = null;
     activeBoardVfxList = [];
@@ -2708,7 +2732,201 @@
     return drawn;
   }
 
-  function discardRandomCards(player, count) {
+  const _playedCardLossEventIds = new Set();
+  let _cardLossSeq = 0;
+
+  function recordCardLossEvent(victimPlayer, card, kind = "discard", opts = {}) {
+    if (!state || !victimPlayer || !card || isInitializingMatch) return;
+    captureRenderedHandCardRects();
+    if (!Array.isArray(state.recentCardLosses)) state.recentCardLosses = [];
+    const cleanKind = kind === "stolen" ? "stolen" : "discard";
+    const ev = {
+      id: "cl_" + (++_cardLossSeq) + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 5),
+      victimIndex: victimPlayer.index,
+      victimName: victimPlayer.name,
+      victimCharId: victimPlayer.charId,
+      cardUid: card.uid || "",
+      cardId: card.id || "",
+      cardName: card.name || "Skill Card",
+      cardRarity: card.rarity || "Common",
+      cardImage: getCardImage(card, victimPlayer.charId),
+      kind: cleanKind,
+      byIndex: opts.byIndex !== undefined ? opts.byIndex : -1,
+      byName: opts.byName || "",
+      sourceLabel: opts.sourceLabel || (cleanKind === "stolen" ? "Stolen" : "Discarded"),
+      badgeLabel: opts.badgeLabel || "",
+      createdAt: Date.now()
+    };
+    state.recentCardLosses.push(ev);
+    if (state.recentCardLosses.length > 14) {
+      state.recentCardLosses = state.recentCardLosses.slice(-14);
+    }
+  }
+
+  function getViewedHandPlayerIndex() {
+    if (!state || !Array.isArray(state.players) || state.players.length === 0) return 0;
+    const activeP = getActivePlayer();
+    let viewPlayerIdx = mp.mySeat !== -1 ? mp.mySeat : state.activePlayerIndex;
+    if (mp.mode === "local" && activeP && activeP.isBot && state.seatMap && typeof state.seatMap[mp.clientId] === "number") {
+      viewPlayerIdx = state.seatMap[mp.clientId];
+    }
+    return viewPlayerIdx;
+  }
+
+  function spawnCardLossAnimation(ev, batchIndex = 0, batchTotal = 1) {
+    if (!ev || isTitleScreenVisible) return;
+    let layer = document.getElementById("card-loss-fx-layer");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = "card-loss-fx-layer";
+      layer.className = "card-loss-fx-layer";
+      document.body.appendChild(layer);
+    }
+
+    const mobileLs = isMobileLandscape();
+    const cardW = mobileLs ? 112 : 148;
+    const cardH = mobileLs ? 160 : 212;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const viewedIdx = getViewedHandPlayerIndex();
+    const isFromViewedHand = ev.victimIndex === viewedIdx;
+
+    let sx = (vw - cardW) * 0.5;
+    let sy = vh - cardH * 0.58;
+    const savedRect = isFromViewedHand && ev.cardUid ? _lastRenderedHandCardRects.get(ev.cardUid) : null;
+    if (savedRect) {
+      sx = savedRect.left;
+      sy = savedRect.top;
+    } else if (!isFromViewedHand) {
+      const victimHud = document.querySelector(`.player-hud-card[data-player-idx="${ev.victimIndex}"]`);
+      if (victimHud) {
+        const vr = victimHud.getBoundingClientRect();
+        sx = Math.max(16, Math.min(vw - cardW - 16, vr.left + vr.width * 0.5 - cardW * 0.5));
+        sy = Math.max(40, Math.min(vh - cardH - 40, vr.top + vr.height * 0.5 - cardH * 0.5));
+      }
+    }
+
+    const spreadStep = Math.min(cardW + 26, (vw - 48) / Math.max(1, batchTotal));
+    const centerOffset = (batchIndex - (batchTotal - 1) / 2) * spreadStep;
+    const mx = Math.max(18, Math.min(vw - cardW - 18, (vw - cardW) * 0.5 + centerOffset));
+    const my = Math.max(78, Math.min(vh - cardH - (mobileLs ? 98 : 178), vh * 0.46 - cardH * 0.5));
+
+    let tx = 24;
+    let ty = 88;
+    let trot = -18;
+    if (ev.kind === "stolen") {
+      const thiefHud =
+        ev.byIndex >= 0
+          ? document.querySelector(`.player-hud-card[data-player-idx="${ev.byIndex}"]`)
+          : null;
+      if (thiefHud) {
+        const tr = thiefHud.getBoundingClientRect();
+        tx = tr.left + tr.width * 0.5 - cardW * 0.5;
+        ty = tr.top + tr.height * 0.5 - cardH * 0.5;
+        trot = tx < mx ? -22 : 22;
+      } else {
+        tx = mx - 180;
+        ty = 64;
+        trot = -20;
+      }
+    }
+
+    const isStolen = ev.kind === "stolen";
+    const badgeText =
+      ev.badgeLabel ||
+      (isStolen ? (ev.byName ? `STOLEN BY ${ev.byName}` : "STOLEN") : "DISCARDED");
+    const ownerPrefix = !isFromViewedHand && ev.victimName ? `${ev.victimName}: ` : "";
+    const metaSub = ev.sourceLabel ? `<small>${escapeHtml(ownerPrefix + ev.sourceLabel)}</small>` : ownerPrefix ? `<small>${escapeHtml(ev.victimName)}</small>` : "";
+
+    let particlesHtml = "";
+    if (isStolen) {
+      const wisps = [
+        { wx: "-28px", wy: "-18px", wa: "-24deg", wd: "0.42s" },
+        { wx: "26px", wy: "-22px", wa: "20deg", wd: "0.48s" },
+        { wx: "-22px", wy: "20px", wa: "-14deg", wd: "0.52s" },
+        { wx: "24px", wy: "16px", wa: "26deg", wd: "0.56s" }
+      ];
+      particlesHtml = wisps
+        .map((w) => `<span class="cl-wisp" style="--wx:${w.wx};--wy:${w.wy};--wa:${w.wa};--wd:${w.wd};"></span>`)
+        .join("");
+    } else {
+      const embers = [
+        { left: "12%", ex: "-18px", ey: "-135px", ed: "0.28s" },
+        { left: "24%", ex: "12px", ey: "-152px", ed: "0.38s" },
+        { left: "36%", ex: "-10px", ey: "-124px", ed: "0.44s" },
+        { left: "48%", ex: "16px", ey: "-165px", ed: "0.32s" },
+        { left: "60%", ex: "-14px", ey: "-142px", ed: "0.50s" },
+        { left: "72%", ex: "18px", ey: "-130px", ed: "0.36s" },
+        { left: "84%", ex: "-12px", ey: "-158px", ed: "0.46s" },
+        { left: "52%", ex: "6px", ey: "-174px", ed: "0.58s" }
+      ];
+      particlesHtml = embers
+        .map((em) => `<span class="cl-ember" style="left:${em.left};--ex:${em.ex};--ey:${em.ey};--ed:${em.ed};"></span>`)
+        .join("");
+    }
+
+    const node = document.createElement("div");
+    node.className = `card-loss-fx ${isStolen ? "is-stolen" : "is-discard"}`;
+    node.style.setProperty("--sx", `${sx.toFixed(1)}px`);
+    node.style.setProperty("--sy", `${sy.toFixed(1)}px`);
+    node.style.setProperty("--mx", `${mx.toFixed(1)}px`);
+    node.style.setProperty("--my", `${my.toFixed(1)}px`);
+    node.style.setProperty("--tx", `${tx.toFixed(1)}px`);
+    node.style.setProperty("--ty", `${ty.toFixed(1)}px`);
+    node.style.setProperty("--trot", `${trot}deg`);
+    node.style.setProperty("--srot", `${((batchIndex % 2 === 0 ? -1 : 1) * 4).toFixed(1)}deg`);
+
+    node.innerHTML = `
+      <div class="card-loss-fx-badge ${isStolen ? "is-stolen" : "is-discard"}">${escapeHtml(badgeText)}</div>
+      <div class="card-loss-fx-shell">
+        <img class="card-loss-fx-img" src="${escapeHtml(ev.cardImage)}" alt="${escapeHtml(ev.cardName)}" />
+        ${isStolen ? '<div class="card-loss-fx-steal-slash"></div>' : '<div class="card-loss-fx-burn-edge"></div>'}
+      </div>
+      ${particlesHtml}
+      <div class="card-loss-fx-meta">
+        ${escapeHtml(ev.cardName)}
+        ${metaSub}
+      </div>`;
+
+    layer.appendChild(node);
+    playSfx(isStolen ? "card_steal" : "card_burn");
+
+    setTimeout(() => {
+      if (node.parentNode) node.remove();
+    }, 1680);
+  }
+
+  function processPendingCardLossAnimations() {
+    if (!state || !Array.isArray(state.recentCardLosses) || isInitializingMatch || !isMatchStarted || isTitleScreenVisible) {
+      if (state && Array.isArray(state.recentCardLosses)) {
+        state.recentCardLosses.forEach((ev) => {
+          if (ev && ev.id) _playedCardLossEventIds.add(ev.id);
+        });
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const fresh = [];
+    state.recentCardLosses.forEach((ev) => {
+      if (!ev || !ev.id || _playedCardLossEventIds.has(ev.id)) return;
+      _playedCardLossEventIds.add(ev.id);
+      if (ev.createdAt && now - ev.createdAt > 15000) return;
+      // In Multiplayer, keep opponent hands private: only reveal the victim's lost card face to the victim
+      if (mp.mySeat !== -1 && ev.victimIndex !== mp.mySeat) return;
+      fresh.push(ev);
+    });
+
+    if (fresh.length === 0) return;
+    const batch = fresh.slice(-4);
+    batch.forEach((ev, idx) => {
+      setTimeout(() => {
+        spawnCardLossAnimation(ev, idx, batch.length);
+      }, idx * 170);
+    });
+  }
+
+  function discardRandomCards(player, count, lossMeta = null) {
     if (hasPassive(player, "passive_immune_steal")) {
       addLog(`${player.name} is immune to card destruction/stealing (Stellaron Hunter's Resolve).`);
       return [];
@@ -2722,11 +2940,19 @@
       if (eligibleIndices.length === 0) break;
       const pickIdx = eligibleIndices[Math.floor(Math.random() * eligibleIndices.length)];
       const c = player.hand.splice(pickIdx, 1)[0];
-      if (isCardForeignToPlayer(c, player)) {
-        returnForeignCardToOwner(c, player);
-      } else {
-        player.discard.push(c);
+      if (!lossMeta || !lossMeta.skipDiscardPile) {
+        if (isCardForeignToPlayer(c, player)) {
+          returnForeignCardToOwner(c, player);
+        } else {
+          player.discard.push(c);
+        }
       }
+      recordCardLossEvent(
+        player,
+        c,
+        lossMeta && lossMeta.kind ? lossMeta.kind : "discard",
+        lossMeta || { sourceLabel: "Discarded" }
+      );
       removed.push(c);
     }
     return removed;
@@ -3437,7 +3663,7 @@
 
       let triggeredThisPair = false;
       if (hasPassive(mover, "passive_unpredictable_tricks")) {
-        const disc = discardRandomCards(other, 1);
+        const disc = discardRandomCards(other, 1, { kind: "discard", sourceLabel: "Unpredictable Tricks" });
         const stolen = Math.min(5, other.tc);
         other.tc -= stolen;
         mover.tc += stolen;
@@ -3457,7 +3683,7 @@
         triggeredThisPair = true;
       }
       if (hasPassive(other, "passive_unpredictable_tricks")) {
-        const disc = discardRandomCards(mover, 1);
+        const disc = discardRandomCards(mover, 1, { kind: "discard", sourceLabel: "Unpredictable Tricks" });
         const stolen = Math.min(5, mover.tc);
         mover.tc -= stolen;
         other.tc += stolen;
@@ -3774,6 +4000,11 @@
           if (giveIdx !== -1) {
             const surrendered = p.hand.splice(giveIdx, 1)[0];
             if (owner && owner.hand.length < state.rules.maxHandSize) owner.hand.push(surrendered);
+            recordCardLossEvent(p, surrendered, "stolen", {
+              byIndex: owner ? owner.index : -1,
+              byName: owner ? owner.name : "Mao-Mao",
+              sourceLabel: "Restricted Zone"
+            });
             hitNames.push(`${p.name} (-1 card)`);
           } else {
             const fee = Math.min(20, p.tc);
@@ -3849,6 +4080,11 @@
           if (giveIdx !== -1) {
             const surrendered = player.hand.splice(giveIdx, 1)[0];
             if (owner && owner.hand.length < state.rules.maxHandSize) owner.hand.push(surrendered);
+            recordCardLossEvent(player, surrendered, "stolen", {
+              byIndex: owner ? owner.index : -1,
+              byName: owner ? owner.name : "Mao-Mao",
+              sourceLabel: "Restricted Zone"
+            });
             addLog(`${player.name} could not pay 20 TC on Restricted Zone -> surrendered [${surrendered.name}] to ${owner ? owner.name : "Mao-Mao"}!`);
           } else {
             const fee = Math.min(20, player.tc);
@@ -4263,7 +4499,7 @@
         return false;
       }
       case "card_minus1": {
-        const disc = discardRandomCards(player, 1);
+        const disc = discardRandomCards(player, 1, { kind: "discard", sourceLabel: "-1 Card Tile" });
         addLog(`${player.name} discarded ${disc.length} card.`);
         return false;
       }
@@ -4360,7 +4596,7 @@
       addLog(`Board Card [${card.name}]: ${player.name} drew ${drawn.length} card(s).`);
       outcomeText = `${player.name} drew +${drawn.length} card(s)`;
     } else if (card.effectType === "discard") {
-      const disc = discardRandomCards(player, card.value);
+      const disc = discardRandomCards(player, card.value, { kind: "discard", sourceLabel: card.name || "Negative Effect" });
       addLog(`Board Card [${card.name}]: ${player.name} discarded ${disc.length} card(s).`);
       outcomeText = `${player.name} discarded ${disc.length} card(s)`;
     } else if (card.effectType === "dice_next_turn") {
@@ -5737,7 +5973,7 @@
         drawCards(p, 1);
         break;
       case "card_minus1":
-        discardRandomCards(p, 1);
+        discardRandomCards(p, 1, { kind: "discard", sourceLabel: "-1 Card Tile" });
         break;
       case "pos_effect": {
         const deck = DATA.BOARD_CARDS.positive;
@@ -6622,8 +6858,15 @@
               other.tc -= 15;
               totalCollected += 15;
             } else {
-              const surrendered = discardRandomCards(other, 1);
-              if (surrendered.length > 0 && player.hand.length < state.rules.maxHandSize) {
+              const willReceive = player.hand.length < state.rules.maxHandSize;
+              const surrendered = discardRandomCards(other, 1, {
+                kind: "stolen",
+                byIndex: player.index,
+                byName: player.name,
+                sourceLabel: "The House Always Wins",
+                skipDiscardPile: willReceive
+              });
+              if (surrendered.length > 0 && willReceive) {
                 player.hand.push(surrendered[0]);
               }
               cardLootedCount += surrendered.length;
@@ -6633,7 +6876,7 @@
         });
         const credited = totalCollected > 0 ? modifyPlayerTC(player, totalCollected, "own_skill") : 0;
         const msg = `Collected +${credited} TC${cardLootedCount > 0 ? ` & ${cardLootedCount} opponent card(s)` : ""}!`;
-        addLog(`[The House Always Wins]: ${player.name} memperoleh ${msg}`);
+        addLog(`[The House Always Wins]: ${player.name} gained ${msg}`);
         return msg;
       }
       case "passive_ipc_gems": {
@@ -6689,7 +6932,7 @@
       case "discard_1_or_minus3_steps": {
         const hasDiscardable = targetPlayer.hand.some((c) => c && c.rarity !== "Ultimate");
         if (hasDiscardable) {
-          const disc = discardRandomCards(targetPlayer, 1);
+          const disc = discardRandomCards(targetPlayer, 1, { kind: "discard", sourceLabel: "Marionette String" });
           const msg = `${targetPlayer.name} discarded 1 card [${disc[0]?.name || "Card"}]!`;
           addLog(`[Marionette String]: ${msg}`);
           return msg;
@@ -6738,7 +6981,7 @@
             const nonUltCards = other.hand.filter((c) => c && c.rarity !== "Ultimate");
             if (dist <= rad && nonUltCards.length > 0) {
               const count = applyRounding(nonUltCards.length * 0.5, state.rules);
-              const removed = discardRandomCards(other, count);
+              const removed = discardRandomCards(other, count, { kind: "discard", sourceLabel: "Soul Extraction" });
               totalDestroyed += removed.length;
               if (removed.length > 0) victims.push(`${other.name} (-${removed.length})`);
             }
@@ -6796,7 +7039,7 @@
           return msg;
         } else {
           const g = modifyPlayerTC(player, gainVal, "own_skill");
-          const msg = `${player.name} memperoleh +${g} TC!`;
+          const msg = `${player.name} gained +${g} TC!`;
           addLog(`[Showtime!]: ${msg}`);
           return msg;
         }
@@ -6838,6 +7081,11 @@
             const pickIdx = stealableIndices[Math.floor(Math.random() * stealableIndices.length)];
             const stolenCard = victim.hand.splice(pickIdx, 1)[0];
             if (player.hand.length < state.rules.maxHandSize) player.hand.push(stolenCard);
+            recordCardLossEvent(victim, stolenCard, "stolen", {
+              byIndex: player.index,
+              byName: player.name,
+              sourceLabel: "Phantom Thief"
+            });
             stealMsg = ` & stole [${stolenCard.name}] (${stolenCard.rarity}) from ${victim.name}!`;
             addLog(`[Phantom Thief]: ${player.name} stole [${stolenCard.name}] (${stolenCard.rarity}) from ${victim.name}.`);
           }
@@ -6845,7 +7093,7 @@
         if (shouldActivateBlock && TILE_MAP[destId]) {
           resolveExactLandingTile(player, TILE_MAP[destId]);
         }
-        return `${player.name} berlari ke [${destId}]${stealMsg || "!"}`;
+        return `${player.name} dashed to [${destId}]${stealMsg || "!"}`;
       }
       case "aoa_15tc_silence": {
         modifyPlayerTC(targetPlayer, -15, "own_skill");
@@ -7082,7 +7330,7 @@
           coveredTileIds,
           remainingCycles: 1
         });
-        const msg = `Safe Zone (radius 3 blok, ${coveredTileIds.length} tile) dipasang berpusat di [${tid}]!`;
+        const msg = `Safe Zone (3-block radius, ${coveredTileIds.length} tiles) placed centered at [${tid}]!`;
         addLog(`[Oak Cake Break]: ${msg}`);
         return msg;
       }
@@ -7614,6 +7862,7 @@
     syncScryPickModal();
     syncHasteReactionModal();
     detectAndTriggerPlayerFeedback();
+    processPendingCardLossAnimations();
     applyCameraTransform();
     scheduleAutoEndTurnIfReady();
     scheduleMultiplayerBotIfNeeded();
@@ -9268,6 +9517,7 @@
       player.hand.map((c) => `${c.uid}:${c.id}`).join(",")
     ].join("|");
     if (_hudCache.hand === handSig) return;
+    captureRenderedHandCardRects();
     _hudCache.hand = handSig;
 
     if (player.hand.length === 0) {
@@ -9288,9 +9538,11 @@
 
         return `
         <div class="tucked-card ${isUlt ? "ult-card" : ""} ${isSelected ? "selected" : ""}"
+             data-card-uid="${escapeHtml(card.uid)}"
+             data-owner-idx="${player.index}"
              style="${inlineTransform}"
              onclick="event.stopPropagation();window.EFT_APP.onHandCardClicked('${card.uid}', ${player.index})">
-          <img src="${imgUrl}" alt="${card.name}" loading="lazy" decoding="async" />
+          <img src="${imgUrl}" alt="${escapeHtml(card.name)}" draggable="false" loading="lazy" decoding="async" />
           <div class="tucked-card-actions">
             <button class="btn btn-emerald btn-sm" style="width:100%;" onclick="event.stopPropagation();window.EFT_APP.openPlayCardModal('${card.uid}', ${player.index})">
               Use / Details
@@ -9301,7 +9553,555 @@
       .join("");
   }
 
+  let _suppressNextHandClick = false;
+  let _pendingQuickDragPick = null;
+  let _handDragBound = false;
+  const _lastRenderedHandCardRects = new Map();
+
+  function captureRenderedHandCardRects() {
+    const container = document.getElementById("hand-cards-scroll");
+    if (!container) return;
+    const cards = container.querySelectorAll(".tucked-card[data-card-uid]");
+    if (cards.length === 0) return;
+    cards.forEach((el) => {
+      const uid = el.getAttribute("data-card-uid");
+      if (!uid) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        _lastRenderedHandCardRects.set(uid, {
+          left: r.left,
+          top: r.top,
+          width: r.width,
+          height: r.height
+        });
+      }
+    });
+  }
+
+  function showHandDragToast(message) {
+    if (!message) return;
+    document.querySelectorAll(".hand-drag-toast").forEach((el) => el.remove());
+    const toast = document.createElement("div");
+    toast.className = "hand-drag-toast";
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      if (toast.parentNode) toast.remove();
+    }, 1900);
+  }
+
+  function getValidTargetPlayersForSkill(targetCard, player) {
+    if (!targetCard || !player || !state) return [];
+    const rad = targetCard.radius || 5;
+    const validPlayers = state.players.filter((other) => {
+      if (targetCard.targetType === "any_player") {
+        return other.index === player.index || !other.inSpawn;
+      }
+      if (targetCard.targetType === "any_player_in_radius") {
+        if (other.index === player.index) return true;
+        if (other.inSpawn) return false;
+        return getTileDistance(player.tileId, other.tileId) <= rad;
+      }
+      if (targetCard.targetType === "other_player") {
+        return other.index !== player.index && !other.inSpawn;
+      }
+      if (targetCard.targetType === "opponent_in_radius") {
+        if (other.index === player.index || other.inSpawn) return false;
+        return getTileDistance(player.tileId, other.tileId) <= rad;
+      }
+      return true;
+    });
+    validPlayers.sort((a, b) => {
+      const aSelf = a.index === player.index ? 1 : 0;
+      const bSelf = b.index === player.index ? 1 : 0;
+      return targetCard.effectKey === "move_steps" ? bSelf - aSelf : aSelf - bSelf;
+    });
+    return validPlayers;
+  }
+
+  function evaluateCardDragAction(player, card, ownerIdx) {
+    if (!player || !card || !state) {
+      return { ok: false, mode: "denied", pillText: "Unavailable", reason: "Card unavailable." };
+    }
+    const isMyTurn = ownerIdx === state.activePlayerIndex && canLocalPlayerAct();
+    if (!isMyTurn) {
+      return { ok: false, mode: "denied", pillText: "Not Your Turn", reason: "Wait for your turn to play this card." };
+    }
+    const check = canPlaySkillCard(player, card);
+    if (!check.ok) {
+      const shortPill = card.haste
+        ? "[Haste] Reactive Only"
+        : check.reason.length > 32
+        ? check.reason.slice(0, 30) + "..."
+        : check.reason;
+      return { ok: false, mode: "denied", pillText: shortPill, reason: check.reason };
+    }
+
+    if (card.effectKey === "copy_last_skill") {
+      const pool = (state.recentOpponentSkills || []).filter(
+        (e) =>
+          e.casterIndex !== player.index &&
+          e.card &&
+          e.card.effectKey !== "copy_last_skill" &&
+          e.card.rarity !== "Ultimate" &&
+          (!e.cycle || e.cycle === state.cycle)
+      );
+      if (pool.length === 0) {
+        return { ok: true, mode: "instant", pillText: "Release to Gain +15 TC", options: {}, flowCard: card };
+      }
+      return { ok: true, mode: "quick_copy", pillText: "Release to Pick Skill", pool, flowCard: card };
+    }
+
+    return evaluateConcreteSkillDrag(player, card, {});
+  }
+
+  function evaluateConcreteSkillDrag(player, targetCard, baseOptions = {}) {
+    const needsPlayerTarget =
+      targetCard.targetType === "any_player" ||
+      targetCard.targetType === "any_player_in_radius" ||
+      targetCard.targetType === "other_player" ||
+      targetCard.targetType === "opponent_in_radius";
+
+    if (needsPlayerTarget) {
+      const validPlayers = getValidTargetPlayersForSkill(targetCard, player);
+      if (validPlayers.length === 0) {
+        const rad = targetCard.radius || 5;
+        const isRad = targetCard.targetType === "opponent_in_radius" || targetCard.targetType === "any_player_in_radius";
+        const reason = isRad
+          ? `No valid targets within ${rad} blocks.`
+          : "All opponents are still at Spawn.";
+        return { ok: false, mode: "denied", pillText: "No Valid Target", reason };
+      }
+      const alsoNeedsChoice = targetCard.effectKey === "sam_discounted_versus";
+      if (validPlayers.length === 1 && !alsoNeedsChoice) {
+        return {
+          ok: true,
+          mode: "instant",
+          pillText: `Release -> ${validPlayers[0].name}`,
+          options: { ...baseOptions, targetPlayerIndex: validPlayers[0].index },
+          flowCard: targetCard
+        };
+      }
+      return {
+        ok: true,
+        mode: "quick_target",
+        pillText: "Release to Pick Target",
+        validPlayers,
+        alsoNeedsChoice,
+        options: { ...baseOptions },
+        flowCard: targetCard
+      };
+    }
+
+    if (targetCard.targetType === "opponents_in_radius_aoe") {
+      const rad = targetCard.radius || 8;
+      const inRange = state.players.filter(
+        (other) => other.index !== player.index && !other.inSpawn && getTileDistance(player.tileId, other.tileId) <= rad
+      );
+      if (inRange.length === 0) {
+        return {
+          ok: false,
+          mode: "denied",
+          pillText: "No Opponents in Range",
+          reason: `No opponents within ${rad} blocks of your position (${player.tileId}).`
+        };
+      }
+    }
+
+    if (targetCard.effectKey === "relocate_board_traps") {
+      if (!Array.isArray(state.boardTokens) || state.boardTokens.length === 0) {
+        return {
+          ok: false,
+          mode: "denied",
+          pillText: "No Tokens on Board",
+          reason: "There are no active Tokens/Traps on the board to relocate right now."
+        };
+      }
+      return { ok: true, mode: "instant", pillText: "Release to Pick Token", options: { ...baseOptions }, flowCard: targetCard };
+    }
+
+    if (
+      targetCard.effectKey === "choice_10tc_or_draw1" ||
+      targetCard.effectKey === "choice_move1_2_or_10tc" ||
+      targetCard.effectKey === "sam_discounted_versus"
+    ) {
+      return {
+        ok: true,
+        mode: "quick_choice",
+        pillText: "Release to Choose Effect",
+        options: { ...baseOptions },
+        flowCard: targetCard
+      };
+    }
+
+    const picksTile =
+      targetCard.effectKey === "sam_fire_tiles" ||
+      targetCard.targetType === "normal_tile_in_radius" ||
+      targetCard.targetType === "any_tile" ||
+      targetCard.targetType === "non_event_tile" ||
+      !!getSkillMoveSelectionSpec(targetCard, baseOptions);
+
+    return {
+      ok: true,
+      mode: "instant",
+      pillText: picksTile ? "Release to Pick Tile" : "Release to Activate",
+      options: { ...baseOptions },
+      flowCard: targetCard
+    };
+  }
+
+  function finalizeDraggedSkillActivation(player, card, flowCard, options) {
+    closeModal();
+    const emperorTax = getEmperorTaxInfo(player, card);
+    if (emperorTax.owners.length > 0) {
+      openEmperorTaxConfirmModal(player, card, flowCard, options || {}, emperorTax);
+      return;
+    }
+    proceedCardActivationAfterTax(card.uid, flowCard, options || {});
+  }
+
+  function openQuickDragPickModal(player, card, evalRes) {
+    if (!player || !card || !evalRes) return;
+    const flowCard = evalRes.flowCard || card;
+    const choices = [];
+    let heading = `${escapeHtml(card.name)}`;
+    let subline = "";
+
+    if (evalRes.mode === "quick_copy") {
+      heading = `${escapeHtml(card.name)}: Copy Skill`;
+      subline = `Choose an opponent skill played in Cycle ${state.cycle}:`;
+      evalRes.pool.forEach((entry) => {
+        choices.push({
+          label: `${entry.card.name}`,
+          meta: `by ${entry.casterName} · ${entry.card.rarity}`,
+          kind: "copy_entry",
+          entry
+        });
+      });
+    } else if (evalRes.mode === "quick_target") {
+      heading = `${escapeHtml(card.name)}: Select Target`;
+      subline = flowCard.radius ? `Valid targets within ${flowCard.radius} blocks:` : "Select a target player:";
+      evalRes.validPlayers.forEach((vp) => {
+        const dist = getTileDistance(player.tileId, vp.tileId);
+        const selfTag = vp.index === player.index ? " (Self)" : "";
+        choices.push({
+          label: `${vp.name}${selfTag}`,
+          meta: `${vp.tileId} · ${dist} ${dist === 1 ? "block" : "blocks"}`,
+          kind: evalRes.alsoNeedsChoice ? "target_then_choice" : "direct",
+          options: { ...(evalRes.options || {}), targetPlayerIndex: vp.index },
+          flowCard
+        });
+      });
+    } else if (evalRes.mode === "quick_choice") {
+      heading = `${escapeHtml(card.name)}: Choose Effect`;
+      subline = "Select an option to activate immediately:";
+      if (flowCard.effectKey === "choice_10tc_or_draw1") {
+        const gainVal = flowCard.tcGain || (state.compendiumId === "comp_v0_1" ? 5 : 10);
+        choices.push({ label: `Gain +${gainVal} T-Coins`, meta: "💰 TC", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "tc" }, flowCard });
+        choices.push({ label: "Draw +1 Card", meta: "Deck", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "draw" }, flowCard });
+      } else if (flowCard.effectKey === "choice_move1_2_or_10tc") {
+        choices.push({ label: "Move +1 / +2 Tiles", meta: "Pick on Map", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "move" }, flowCard });
+        choices.push({ label: "Gain +10 T-Coins", meta: "💰 TC", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "tc" }, flowCard });
+      } else if (flowCard.effectKey === "sam_discounted_versus") {
+        choices.push({ label: "Tier 1: SAM Free (0 TC) vs Opponent 15 TC", meta: "Versus", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "tier1" }, flowCard });
+        choices.push({ label: "Tier 2: SAM 15 TC vs Opponent 30 TC", meta: "Versus", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "tier2" }, flowCard });
+      }
+    }
+
+    _pendingQuickDragPick = {
+      playerIndex: player.index,
+      cardUid: card.uid,
+      choices
+    };
+
+    const buttonsHtml = choices
+      .map(
+        (ch, idx) => `
+        <button type="button" class="quick-pick-btn" onclick="window.EFT_APP.confirmQuickDragPick(${idx})">
+          <span>${escapeHtml(ch.label)}</span>
+          <span class="quick-pick-meta">${escapeHtml(ch.meta || "")}</span>
+        </button>`
+      )
+      .join("");
+
+    openInfoModal(
+      heading,
+      `<div class="quick-pick-stack">
+        <div class="quick-pick-sub">${escapeHtml(subline)}</div>
+        ${buttonsHtml}
+      </div>`
+    );
+  }
+
+  function confirmQuickDragPick(choiceIdx) {
+    const req = _pendingQuickDragPick;
+    _pendingQuickDragPick = null;
+    if (!req || !canLocalPlayerAct()) return;
+    const player = state.players[req.playerIndex] || getActivePlayer();
+    const card = player ? player.hand.find((c) => c.uid === req.cardUid) : null;
+    const picked = req.choices[choiceIdx];
+    if (!player || !card || !picked) {
+      closeModal();
+      return;
+    }
+
+    if (picked.kind === "copy_entry") {
+      const copiedCard = picked.entry.card;
+      const baseOpts = { copiedSkillEntryId: picked.entry.id };
+      const nextEval = evaluateConcreteSkillDrag(player, copiedCard, baseOpts);
+      if (!nextEval.ok) {
+        closeModal();
+        playSfx("card_drag_deny");
+        showHandDragToast(nextEval.reason);
+        return;
+      }
+      if (nextEval.mode === "instant") {
+        finalizeDraggedSkillActivation(player, card, copiedCard, nextEval.options);
+      } else {
+        openQuickDragPickModal(player, card, nextEval);
+      }
+      return;
+    }
+
+    if (picked.kind === "target_then_choice") {
+      openQuickDragPickModal(player, card, {
+        ok: true,
+        mode: "quick_choice",
+        options: picked.options,
+        flowCard: picked.flowCard
+      });
+      return;
+    }
+
+    finalizeDraggedSkillActivation(player, card, picked.flowCard || card, picked.options || {});
+  }
+
+  function triggerDraggedCardActivation(cardUid, ownerIdx) {
+    const player = state && state.players[ownerIdx] ? state.players[ownerIdx] : getActivePlayer();
+    const card = player ? player.hand.find((c) => c.uid === cardUid) : null;
+    if (!player || !card) return;
+    if (selectedCardUid !== null) {
+      selectedCardUid = null;
+      renderTuckedHandAndDice();
+    }
+    const evalRes = evaluateCardDragAction(player, card, ownerIdx);
+    if (!evalRes.ok) {
+      playSfx("card_drag_deny");
+      showHandDragToast(evalRes.reason);
+      return;
+    }
+    if (evalRes.mode === "instant") {
+      finalizeDraggedSkillActivation(player, card, evalRes.flowCard || card, evalRes.options || {});
+      return;
+    }
+    openQuickDragPickModal(player, card, evalRes);
+  }
+
+  function setupHandCardDragGestures() {
+    if (_handDragBound) return;
+    const container = document.getElementById("hand-cards-scroll");
+    if (!container) return;
+    _handDragBound = true;
+
+    let zoneLineEl = document.getElementById("hand-drag-zone-line");
+    if (!zoneLineEl) {
+      zoneLineEl = document.createElement("div");
+      zoneLineEl.id = "hand-drag-zone-line";
+      zoneLineEl.className = "hand-drag-zone-line";
+      document.body.appendChild(zoneLineEl);
+    }
+
+    let dragState = null;
+
+    function cleanupDrag() {
+      if (zoneLineEl) {
+        zoneLineEl.classList.remove("is-visible", "is-ready", "is-denied");
+      }
+      if (dragState) {
+        if (dragState.sourceEl) {
+          dragState.sourceEl.classList.remove("is-dragging-source");
+        }
+        if (dragState.ghostEl && dragState.ghostEl.parentNode) {
+          dragState.ghostEl.remove();
+        }
+      }
+      dragState = null;
+    }
+
+    container.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (e.target && e.target.closest && e.target.closest(".tucked-card-actions")) return;
+      const cardEl = e.target && e.target.closest ? e.target.closest(".tucked-card[data-card-uid]") : null;
+      if (!cardEl || !state || isTitleScreenVisible) return;
+      if (document.body.classList.contains("modal-open")) return;
+
+      const cardUid = cardEl.getAttribute("data-card-uid");
+      const ownerIdx = Number(cardEl.getAttribute("data-owner-idx"));
+      const player = state.players[ownerIdx];
+      const card = player ? player.hand.find((c) => c.uid === cardUid) : null;
+      if (!player || !card) return;
+
+      const rect = cardEl.getBoundingClientRect();
+      const dockEl = document.getElementById("hand-cards-scroll");
+      const dockRect = dockEl ? dockEl.getBoundingClientRect() : rect;
+
+      dragState = {
+        pointerId: e.pointerId,
+        pointerType: e.pointerType,
+        cardUid,
+        ownerIdx,
+        player,
+        card,
+        sourceEl: cardEl,
+        startX: e.clientX,
+        startY: e.clientY,
+        lastX: e.clientX,
+        origRect: rect,
+        dockTop: dockRect.top,
+        offsetX: e.clientX - rect.left,
+        offsetY: Math.min(rect.height * 0.48, Math.max(24, e.clientY - rect.top)),
+        started: false,
+        inZone: false,
+        evalRes: null,
+        ghostEl: null,
+        pillEl: null
+      };
+    });
+
+    window.addEventListener("pointermove", (e) => {
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
+      const dx = e.clientX - dragState.startX;
+      const dy = e.clientY - dragState.startY;
+
+      if (!dragState.started) {
+        const dist = Math.hypot(dx, dy);
+        if (dist < 11) return;
+        const isUpwardIntent = dy < -10 && Math.abs(dy) >= Math.abs(dx) * 0.72;
+        const isMousePull = dragState.pointerType === "mouse" && dy < -8 && dist >= 12;
+        if (!isUpwardIntent && !isMousePull) {
+          if (dragState.pointerType !== "mouse" && Math.abs(dx) > 16) {
+            dragState = null;
+          }
+          return;
+        }
+
+        dragState.started = true;
+        _suppressNextHandClick = true;
+        dragState.evalRes = evaluateCardDragAction(dragState.player, dragState.card, dragState.ownerIdx);
+        dragState.sourceEl.classList.add("is-dragging-source");
+
+        const ghost = document.createElement("div");
+        ghost.className = "hand-drag-ghost" + (dragState.card.rarity === "Ultimate" ? " is-ult" : "");
+        ghost.style.width = dragState.origRect.width + "px";
+        ghost.style.height = dragState.origRect.height + "px";
+
+        const img = document.createElement("img");
+        img.className = "hand-drag-ghost-art";
+        img.src = getCardImage(dragState.card, dragState.player.charId);
+        img.alt = dragState.card.name;
+        img.draggable = false;
+        ghost.appendChild(img);
+
+        const pill = document.createElement("div");
+        pill.className = "hand-drag-pill";
+        pill.textContent = "Drag up to Activate";
+        ghost.appendChild(pill);
+
+        document.body.appendChild(ghost);
+        dragState.ghostEl = ghost;
+        dragState.pillEl = pill;
+        zoneLineEl.classList.add("is-visible");
+        playSfx("click");
+      }
+
+      if (dragState.started) {
+        e.preventDefault();
+        const vx = e.clientX - dragState.lastX;
+        dragState.lastX = e.clientX;
+        const tilt = Math.max(-13, Math.min(13, vx * 0.65));
+
+        const gx = e.clientX - dragState.offsetX;
+        const gy = e.clientY - dragState.offsetY;
+        const minPull = isMobileLandscape() ? -74 : -106;
+        const thresholdY = Math.min(dragState.dockTop - 18, window.innerHeight - (isMobileLandscape() ? 138 : 204));
+        const inZone = e.clientY < thresholdY || dy < minPull;
+        dragState.inZone = inZone;
+
+        const scale = inZone ? 1.07 : 1.03;
+        dragState.ghostEl.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0) rotate(${tilt.toFixed(1)}deg) scale(${scale})`;
+
+        if (inZone) {
+          const canGo = dragState.evalRes && dragState.evalRes.ok;
+          dragState.ghostEl.classList.toggle("is-ready", !!canGo);
+          dragState.ghostEl.classList.toggle("is-denied", !canGo);
+          zoneLineEl.classList.toggle("is-ready", !!canGo);
+          zoneLineEl.classList.toggle("is-denied", !canGo);
+          dragState.pillEl.textContent = dragState.evalRes ? dragState.evalRes.pillText : "Release to Activate";
+        } else {
+          dragState.ghostEl.classList.remove("is-ready", "is-denied");
+          zoneLineEl.classList.remove("is-ready", "is-denied");
+          dragState.pillEl.textContent = "Drag up to Activate";
+        }
+      }
+    }, { passive: false });
+
+    const finishDrag = (e, cancelled) => {
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
+      const st = dragState;
+      dragState = null;
+
+      if (!st.started) return;
+
+      setTimeout(() => {
+        _suppressNextHandClick = false;
+      }, 140);
+
+      zoneLineEl.classList.remove("is-visible", "is-ready", "is-denied");
+
+      if (!cancelled && st.inZone && st.evalRes && st.evalRes.ok) {
+        playSfx("card_drag_ok");
+        const ghost = st.ghostEl;
+        if (ghost) {
+          ghost.classList.add("is-launching");
+          const curX = e.clientX - st.offsetX;
+          const curY = e.clientY - st.offsetY - 44;
+          ghost.style.transform = `translate3d(${curX.toFixed(1)}px, ${curY.toFixed(1)}px, 0) scale(1.16)`;
+          ghost.style.opacity = "0";
+          setTimeout(() => {
+            if (ghost.parentNode) ghost.remove();
+          }, 250);
+        }
+        if (st.sourceEl) st.sourceEl.classList.remove("is-dragging-source");
+        triggerDraggedCardActivation(st.cardUid, st.ownerIdx);
+        return;
+      }
+
+      if (!cancelled && st.inZone && st.evalRes && !st.evalRes.ok) {
+        playSfx("card_drag_deny");
+        showHandDragToast(st.evalRes.reason);
+      }
+
+      const ghost = st.ghostEl;
+      const srcEl = st.sourceEl;
+      if (ghost) {
+        ghost.classList.add("is-returning");
+        ghost.style.transform = `translate3d(${st.origRect.left.toFixed(1)}px, ${st.origRect.top.toFixed(1)}px, 0) rotate(0deg) scale(1)`;
+        ghost.style.opacity = "0";
+        setTimeout(() => {
+          if (ghost.parentNode) ghost.remove();
+          if (srcEl) srcEl.classList.remove("is-dragging-source");
+        }, 210);
+      } else if (srcEl) {
+        srcEl.classList.remove("is-dragging-source");
+      }
+    };
+
+    window.addEventListener("pointerup", (e) => finishDrag(e, false));
+    window.addEventListener("pointercancel", (e) => finishDrag(e, true));
+  }
+
   function onHandCardClicked(cardUid, ownerIdx) {
+    if (_suppressNextHandClick) return;
     playSfx("click");
     if (selectedCardUid === cardUid) {
       openPlayCardModal(cardUid, ownerIdx);
@@ -10728,7 +11528,7 @@
       } else {
         controlsHtml += `
           <div class="form-field">
-            <label>Target Player${targetCard.radius ? ` (Radius ${targetCard.radius} Blok)` : ""}:</label>
+            <label>Target Player${targetCard.radius ? ` (Radius ${targetCard.radius} Blocks)` : ""}:</label>
             <select id="card-modal-target-player">
               ${validPlayers
                 .map((vp) => {
@@ -10737,7 +11537,7 @@
                   return `<option value="${vp.index}">${escapeHtml(vp.name)}${selfTag} (${charNote}${vp.tileId} · ${getTileDistance(
                     player.tileId,
                     vp.tileId
-                  )} blok)</option>`;
+                  )} blocks)</option>`;
                 })
                 .join("")}
             </select>
@@ -10753,7 +11553,7 @@
         controlsHtml += `<div style="color:#fda4af;font-size:0.8rem;">No opponents within ${rad} blocks of your position (${player.tileId}).</div>`;
       } else {
         controlsHtml += `<div style="color:#a7f3d0;font-size:0.78rem;">Targets within ${rad} blocks: <strong>${inRange
-          .map((o) => `${escapeHtml(o.name)} (${getTileDistance(player.tileId, o.tileId)} blok)`)
+          .map((o) => `${escapeHtml(o.name)} (${getTileDistance(player.tileId, o.tileId)} blocks)`)
           .join(", ")}</strong></div>`;
       }
     }
@@ -11514,6 +12314,12 @@
         partner.tc += 15;
         const bought = partner.hand.splice(pCardIdx, 1)[0];
         trader.hand.push(bought);
+        recordCardLossEvent(partner, bought, "stolen", {
+          byIndex: trader.index,
+          byName: trader.name,
+          sourceLabel: "Trading Post",
+          badgeLabel: `BOUGHT BY ${trader.name}`
+        });
         summaryText = `${trader.name} bought 1 random card from ${partner.name} for 💰 15 TC!`;
       } else {
         summaryText = `Trade failed: ${trader.name} has less than 15 TC or ${partner.name} has no non-Ultimate cards.`;
@@ -11534,6 +12340,12 @@
         const c2 = partner.hand.splice(pickNonUltIdx(partner.hand), 1)[0];
         trader.hand.push(c2);
         partner.hand.push(c1);
+        recordCardLossEvent(partner, c2, "stolen", {
+          byIndex: trader.index,
+          byName: trader.name,
+          sourceLabel: "Trading Post (Swap)",
+          badgeLabel: `SWAPPED WITH ${trader.name}`
+        });
         summaryText = `${trader.name} swapped 1 random card (1:1) with ${partner.name}!`;
       } else {
         summaryText = `Trade failed: one of the players has no non-Ultimate cards to swap.`;
@@ -12761,6 +13573,7 @@
     resumeFromMerchantPrompt,
     openPlayCardModal,
     confirmPlayCardFromModal,
+    confirmQuickDragPick,
     startTileTargetSelection,
     startMoveTileSelection,
     reopenPendingCardModal,
@@ -12960,6 +13773,7 @@
     syncAdminUiState();
     syncSoundControlUi();
     setupBoardDragAndZoom();
+    setupHandCardDragGestures();
     if (window.EFT_WEBGL_VFX && typeof window.EFT_WEBGL_VFX.init === "function") {
       window.EFT_WEBGL_VFX.init(
         document.getElementById("board-viewport"),

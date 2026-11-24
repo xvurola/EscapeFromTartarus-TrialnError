@@ -4039,11 +4039,23 @@ body.admin-mode .digital-tile {
   border: 1.5px solid rgba(173, 224, 202, 0.38);
   box-shadow: -6px 0 18px rgba(0, 0, 0, 0.65);
   position: relative;
-  cursor: pointer;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
   transform: translateY(104px) rotate(-4deg);
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease, border-color 0.2s ease;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease, border-color 0.2s ease, opacity 0.16s ease;
   overflow: hidden;
   flex-shrink: 0;
+}
+
+.tucked-card:active {
+  cursor: grabbing;
+}
+
+.tucked-card.is-dragging-source {
+  opacity: 0.16 !important;
+  pointer-events: none;
+  transform: translateY(118px) scale(0.94) !important;
 }
 
 .tucked-card:first-child {
@@ -4067,6 +4079,10 @@ body:not(.modal-open) .tucked-card:hover,
   height: 100%;
   object-fit: cover;
   display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
 .tucked-card-actions {
@@ -8645,6 +8661,517 @@ body:not(.modal-open) .tucked-card:hover,
   .compendium-showcase-root.is-modal-mode .comp-char-card {
     flex: 0 0 138px;
     height: 100%;
+  }
+}
+
+/* ============================================================================
+   DRAG-TO-ACTIVATE HAND CARD + QUICK PICKER + DISCARD BURN / STOLEN FX
+   ============================================================================ */
+.hand-drag-zone-line {
+  position: fixed;
+  left: 50%;
+  bottom: 196px;
+  width: min(560px, 84vw);
+  height: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 340;
+  background: linear-gradient(90deg, transparent 0%, rgba(167, 243, 208, 0.38) 22%, rgba(167, 243, 208, 0.62) 50%, rgba(167, 243, 208, 0.38) 78%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.16s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.hand-drag-zone-line.is-visible {
+  opacity: 1;
+}
+
+.hand-drag-zone-line.is-ready {
+  background: linear-gradient(90deg, transparent 0%, rgba(52, 211, 153, 0.72) 20%, #6ee7b7 50%, rgba(52, 211, 153, 0.72) 80%, transparent 100%);
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.8);
+}
+
+.hand-drag-zone-line.is-denied {
+  background: linear-gradient(90deg, transparent 0%, rgba(248, 113, 113, 0.72) 20%, #fca5a5 50%, rgba(248, 113, 113, 0.72) 80%, transparent 100%);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.75);
+}
+
+.hand-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 156px;
+  height: 224px;
+  border-radius: 13px;
+  background: var(--bg-card-dark);
+  border: 2px solid rgba(173, 224, 202, 0.72);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.82);
+  overflow: visible;
+  pointer-events: none;
+  z-index: 420;
+  will-change: transform, opacity;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hand-drag-ghost-art {
+  width: 100%;
+  height: 100%;
+  border-radius: 11px;
+  overflow: hidden;
+  display: block;
+  object-fit: cover;
+}
+
+.hand-drag-ghost.is-ult {
+  border-color: #fbbf24;
+}
+
+.hand-drag-ghost.is-ready {
+  border-color: #34d399;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.35), 0 0 32px rgba(52, 211, 153, 0.65), 0 22px 44px rgba(0, 0, 0, 0.84);
+}
+
+.hand-drag-ghost.is-denied {
+  border-color: #f87171;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.32), 0 0 26px rgba(239, 68, 68, 0.58), 0 20px 38px rgba(0, 0, 0, 0.84);
+}
+
+.hand-drag-ghost.is-returning {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+}
+
+.hand-drag-ghost.is-launching {
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
+}
+
+.hand-drag-pill {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+  background: rgba(6, 20, 17, 0.94);
+  border: 1px solid rgba(173, 224, 202, 0.52);
+  color: #e2e8f0;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.72);
+  pointer-events: none;
+}
+
+.hand-drag-ghost.is-ready .hand-drag-pill {
+  background: #06382b;
+  border-color: #34d399;
+  color: #d1fae5;
+}
+
+.hand-drag-ghost.is-denied .hand-drag-pill {
+  background: #450a0a;
+  border-color: #f87171;
+  color: #fecaca;
+}
+
+.hand-drag-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 224px;
+  transform: translateX(-50%);
+  z-index: 430;
+  pointer-events: none;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #450a0a;
+  border: 1px solid #f87171;
+  color: #fee2e2;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.78);
+  animation: eftDragToastPop 1.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes eftDragToastPop {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.94); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -8px) scale(0.97); }
+}
+
+.quick-pick-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quick-pick-sub {
+  font-size: 0.78rem;
+  color: var(--mint-light);
+  font-weight: 600;
+}
+
+.quick-pick-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(10, 31, 26, 0.92);
+  border: 1px solid rgba(110, 231, 183, 0.36);
+  color: #f8fafc;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+
+.quick-pick-btn:hover {
+  background: rgba(16, 60, 48, 0.96);
+  border-color: #6ee7b7;
+  transform: translateY(-1px);
+}
+
+.quick-pick-btn:focus-visible {
+  outline: 2px solid #6ee7b7;
+  outline-offset: 2px;
+}
+
+.quick-pick-meta {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* ---- Card Loss Animation Layer (Burn/Discard vs Stolen/Snatched) ---- */
+.card-loss-fx-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 440;
+  overflow: hidden;
+}
+
+.card-loss-fx {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 148px;
+  height: 212px;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.card-loss-fx-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 13px;
+  overflow: hidden;
+  background: #0b1412;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.82);
+}
+
+.card-loss-fx-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-loss-fx-badge {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.55px;
+  text-transform: uppercase;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.78);
+}
+
+.card-loss-fx-meta {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 7px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: rgba(6, 14, 13, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.72);
+}
+
+.card-loss-fx-meta small {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* Variant 1: DISCARDED / BURNED (Ember glow + upward ash dissolve) */
+.card-loss-fx.is-discard {
+  animation: eftCardBurnFlight 1.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.card-loss-fx.is-discard .card-loss-fx-shell {
+  border: 2px solid #f97316;
+  box-shadow: 0 0 26px rgba(249, 115, 22, 0.72), 0 0 52px rgba(220, 38, 38, 0.42), 0 18px 36px rgba(0, 0, 0, 0.85);
+  animation: eftCardBurnDissolve 1.55s ease-in forwards;
+}
+
+.card-loss-fx.is-discard .card-loss-fx-img {
+  animation: eftCardBurnScorch 1.55s ease-in forwards;
+}
+
+.card-loss-fx-burn-edge {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(0deg, rgba(254, 240, 138, 0.92) 0%, rgba(249, 115, 22, 0.85) 14%, rgba(220, 38, 38, 0.52) 32%, transparent 56%);
+  opacity: 0;
+  animation: eftCardBurnSweep 1.55s ease-in forwards;
+}
+
+.card-loss-fx-badge.is-discard {
+  background: linear-gradient(135deg, #7c2d12, #991b1b);
+  border: 1px solid #fb923c;
+  color: #ffedd5;
+  animation: eftCardLossLabelFade 1.55s ease forwards;
+}
+
+.card-loss-fx.is-discard .card-loss-fx-meta {
+  border-color: rgba(251, 146, 60, 0.55);
+  animation: eftCardLossLabelFade 1.55s ease forwards;
+}
+
+.cl-ember {
+  position: absolute;
+  bottom: 12%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fef08a 0%, #f97316 58%, rgba(220, 38, 38, 0) 100%);
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.95);
+  opacity: 0;
+  animation: eftCardEmberRise 1.05s ease-out var(--ed, 0.35s) forwards;
+}
+
+@keyframes eftCardBurnFlight {
+  0% {
+    transform: translate3d(var(--sx), var(--sy), 0) scale(0.96) rotate(var(--srot, 0deg));
+    opacity: 0.92;
+  }
+  26% {
+    transform: translate3d(var(--mx), var(--my), 0) scale(1.07) rotate(-2deg);
+    opacity: 1;
+  }
+  58% {
+    transform: translate3d(var(--mx), calc(var(--my) - 10px), 0) scale(1.05) rotate(1.5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--mx), calc(var(--my) - 66px), 0) scale(0.92) rotate(-4deg);
+    opacity: 0;
+  }
+}
+
+@keyframes eftCardBurnDissolve {
+  0%, 48% {
+    clip-path: inset(0 0 0 0 round 13px);
+  }
+  100% {
+    clip-path: inset(0 0 100% 0 round 13px);
+  }
+}
+
+@keyframes eftCardBurnScorch {
+  0%, 42% {
+    filter: brightness(1) saturate(1);
+  }
+  68% {
+    filter: brightness(1.18) saturate(1.45) sepia(0.45) hue-rotate(-18deg);
+  }
+  100% {
+    filter: brightness(0.28) saturate(0.2) contrast(1.4);
+  }
+}
+
+@keyframes eftCardBurnSweep {
+  0%, 24% {
+    opacity: 0;
+    transform: translateY(85%);
+  }
+  45% {
+    opacity: 0.95;
+    transform: translateY(30%);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(-62%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes eftCardEmberRise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.6);
+  }
+  22% {
+    opacity: 1;
+    transform: translate3d(var(--ex, 10px), -26px, 0) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--ex, 10px) * 1.9), var(--ey, -125px), 0) scale(0.25);
+  }
+}
+
+/* Variant 2: STOLEN / SNATCHED (Spectral violet-cyan slash + fly to thief HUD) */
+.card-loss-fx.is-stolen {
+  animation: eftCardStealFlight 1.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.card-loss-fx.is-stolen .card-loss-fx-shell {
+  border: 2px solid #c084fc;
+  box-shadow: 0 0 26px rgba(168, 85, 247, 0.72), 0 0 46px rgba(56, 189, 248, 0.42), 0 18px 36px rgba(0, 0, 0, 0.85);
+}
+
+.card-loss-fx-steal-slash {
+  position: absolute;
+  inset: -24%;
+  pointer-events: none;
+  background: linear-gradient(125deg, transparent 36%, rgba(56, 189, 248, 0.55) 47%, rgba(240, 171, 252, 0.95) 50%, rgba(168, 85, 247, 0.55) 53%, transparent 64%);
+  opacity: 0;
+  animation: eftCardStealSlash 1.48s ease-out forwards;
+}
+
+.card-loss-fx-badge.is-stolen {
+  background: linear-gradient(135deg, #4c1d95, #0e7490);
+  border: 1px solid #d8b4fe;
+  color: #f3e8ff;
+  animation: eftCardStealLabelFade 1.48s ease forwards;
+}
+
+.card-loss-fx.is-stolen .card-loss-fx-meta {
+  border-color: rgba(192, 132, 252, 0.6);
+  animation: eftCardStealLabelFade 1.48s ease forwards;
+}
+
+.cl-wisp {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0), #c084fc, #67e8f9);
+  opacity: 0;
+  animation: eftCardStealWisp 0.82s ease-out var(--wd, 0.45s) forwards;
+}
+
+@keyframes eftCardStealFlight {
+  0% {
+    transform: translate3d(var(--sx), var(--sy), 0) scale(0.95) rotate(var(--srot, 0deg));
+    opacity: 0.92;
+  }
+  22% {
+    transform: translate3d(var(--mx), var(--my), 0) scale(1.08) rotate(3deg);
+    opacity: 1;
+  }
+  52% {
+    transform: translate3d(var(--mx), calc(var(--my) - 6px), 0) scale(1.06) skewX(-5deg) rotate(-2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--tx), var(--ty), 0) scale(0.24) skewX(-12deg) rotate(var(--trot, -18deg));
+    opacity: 0;
+  }
+}
+
+@keyframes eftCardStealSlash {
+  0%, 14% {
+    opacity: 0;
+    transform: translate3d(-90%, -40%, 0);
+  }
+  30% {
+    opacity: 1;
+    transform: translate3d(0%, 0%, 0);
+  }
+  50% {
+    opacity: 0;
+    transform: translate3d(90%, 40%, 0);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes eftCardStealWisp {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) rotate(var(--wa, -25deg)) scaleX(0.4);
+  }
+  30% {
+    opacity: 0.95;
+    transform: translate3d(var(--wx, -24px), var(--wy, -18px), 0) rotate(var(--wa, -25deg)) scaleX(1.25);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--wx, -24px) * 2.2), calc(var(--wy, -18px) * 2.2), 0) rotate(var(--wa, -25deg)) scaleX(0.3);
+  }
+}
+
+@keyframes eftCardLossLabelFade {
+  0% { opacity: 0; transform: translate(-50%, 6px); }
+  16% { opacity: 1; transform: translate(-50%, 0); }
+  74% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -10px); }
+}
+
+@keyframes eftCardStealLabelFade {
+  0% { opacity: 0; transform: translate(-50%, 6px); }
+  16% { opacity: 1; transform: translate(-50%, 0); }
+  58% { opacity: 1; transform: translate(-50%, 0); }
+  82% { opacity: 0; transform: translate(-50%, -6px); }
+  100% { opacity: 0; }
+}
+
+@media (max-width: 960px) and (orientation: landscape) {
+  .hand-drag-ghost,
+  .card-loss-fx {
+    width: 112px;
+    height: 160px;
+  }
+
+  .hand-drag-zone-line {
+    bottom: 132px;
+  }
+
+  .hand-drag-toast {
+    bottom: 152px;
+    font-size: 0.74rem;
+    padding: 6px 12px;
   }
 }
 
