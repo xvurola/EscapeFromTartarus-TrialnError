@@ -1592,74 +1592,6 @@
     }
   }
 
-  function updateShardDirectionArrows() {
-    const layer = document.getElementById("shard-compass-layer");
-    if (!layer) return;
-    if (
-      !state ||
-      camera.mode !== "follow" ||
-      isTitleScreenVisible ||
-      !isMatchStarted ||
-      !Array.isArray(state.activeShards) ||
-      state.activeShards.length === 0
-    ) {
-      if (layer.innerHTML !== "") layer.innerHTML = "";
-      return;
-    }
-
-    const viewport = document.getElementById("board-viewport");
-    if (!viewport) return;
-    const vw = viewport.clientWidth || window.innerWidth;
-    const vh = viewport.clientHeight || window.innerHeight;
-    const activeP = getActivePlayer();
-    const pTile = activeP ? TILE_MAP[skillMoveAnimOverrides[state.activePlayerIndex] || activeP.tileId] : null;
-    if (!pTile) {
-      if (layer.innerHTML !== "") layer.innerHTML = "";
-      return;
-    }
-
-    const boardW = 2970;
-    const boardH = 1998;
-    const toScreen = (tile) => ({
-      x: vw / 2 + camera.panX + (tile.x / 100 - 0.5) * boardW * camera.zoom,
-      y: vh / 2 + camera.panY + (tile.y / 100 - 0.5) * boardH * camera.zoom
-    });
-
-    const pScreen = toScreen(pTile);
-    const mobile = isMobileLandscape() || isMobilePortrait();
-    const orbitR = mobile ? 86 : 122;
-
-    const pointersHtml = state.activeShards
-      .map((sh) => {
-        const sTile = TILE_MAP[sh.tileId];
-        if (!sTile) return "";
-        const sScreen = toScreen(sTile);
-        const dx = sScreen.x - pScreen.x;
-        const dy = sScreen.y - pScreen.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist < orbitR + 24) return "";
-
-        const angleRad = Math.atan2(dy, dx);
-        const angleDeg = (angleRad * 180) / Math.PI;
-        const ax = Math.max(48, Math.min(vw - 48, pScreen.x + Math.cos(angleRad) * orbitR));
-        const ay = Math.max(66, Math.min(vh - 126, pScreen.y + Math.sin(angleRad) * orbitR));
-
-        return `
-          <div class="shard-dir-pointer" style="left:${ax.toFixed(1)}px;top:${ay.toFixed(1)}px;">
-            <span class="shard-dir-arrow" style="transform:rotate(${angleDeg.toFixed(1)}deg);" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M5 12h13" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path>
-                <path d="M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
-              </svg>
-            </span>
-            <span class="shard-dir-tag">💎 ${escapeHtml(sh.roman || "")}</span>
-          </div>`;
-      })
-      .join("");
-
-    layer.innerHTML = pointersHtml;
-  }
-
   function applyCameraTransform() {
     const surface = document.getElementById("map-canvas-wrap");
     if (!surface) return;
@@ -1672,7 +1604,6 @@
     if (followBtn) {
       followBtn.classList.toggle("active-cam", camera.mode === "follow");
     }
-    updateShardDirectionArrows();
   }
 
   function isMobileLandscape() {
@@ -9877,7 +9808,6 @@
     }
 
     applyBranchPreviewTileClasses();
-    updateShardDirectionArrows();
     if (typeof syncChibiChatBubblePositions === "function") {
       syncChibiChatBubblePositions();
     }
