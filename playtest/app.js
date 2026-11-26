@@ -2614,6 +2614,7 @@
       isMonsterTurn: false,
       lastMonsterSpawnEvent: null,
       lastMonsterAlertEvent: null,
+      lastMonsterTargetShuffleEvent: null,
       activeGlobalEvent: null,
       lastOpponentSkillUsed: null,
       recentOpponentSkills: [],
@@ -8268,6 +8269,14 @@
     ) {
       lastProcessedMonsterAlertId = state.lastMonsterAlertEvent.id;
       showMonsterHorrorAlert(state.lastMonsterAlertEvent);
+    }
+    if (
+      state.lastMonsterTargetShuffleEvent &&
+      state.lastMonsterTargetShuffleEvent.id &&
+      state.lastMonsterTargetShuffleEvent.id !== lastProcessedMonsterShuffleId
+    ) {
+      lastProcessedMonsterShuffleId = state.lastMonsterTargetShuffleEvent.id;
+      playMonsterTargetShuffle(state.lastMonsterTargetShuffleEvent, null);
     }
     if (state.lastBoardVfxEvent && state.lastBoardVfxEvent.id && state.lastBoardVfxEvent.id !== lastProcessedBoardVfxId) {
       lastProcessedBoardVfxId = state.lastBoardVfxEvent.id;
@@ -15011,13 +15020,20 @@
   // ============================================================================
   let lastProcessedMonsterSpawnId = null;
   let lastProcessedMonsterAlertId = null;
+  let lastProcessedMonsterShuffleId = null;
   let monsterTurnTimers = [];
   let monsterAlertFadeTimer = null;
   let monsterAlertHideTimer = null;
+  let monsterShuffleTimers = [];
 
   function clearMonsterTurnTimers() {
     monsterTurnTimers.forEach((tid) => clearTimeout(tid));
     monsterTurnTimers = [];
+  }
+
+  function clearMonsterShuffleTimers() {
+    monsterShuffleTimers.forEach((tid) => clearTimeout(tid));
+    monsterShuffleTimers = [];
   }
 
   function scheduleMonsterTimer(fn, ms) {
@@ -15031,16 +15047,23 @@
 
   function clearMonsterRuntimeUi() {
     clearMonsterTurnTimers();
+    clearMonsterShuffleTimers();
     clearTimeout(monsterAlertFadeTimer);
     clearTimeout(monsterAlertHideTimer);
     lastProcessedMonsterSpawnId = null;
     lastProcessedMonsterAlertId = null;
+    lastProcessedMonsterShuffleId = null;
     const portalLayer = document.getElementById("board-monster-portal-layer");
     if (portalLayer) portalLayer.innerHTML = "";
     const alertEl = document.getElementById("monster-horror-alert");
     if (alertEl) {
       alertEl.classList.remove("is-visible", "is-fading", "tone-spawn", "tone-skill", "tone-death", "tone-passive");
       alertEl.innerHTML = "";
+    }
+    const shufEl = document.getElementById("monster-target-shuffle-overlay");
+    if (shufEl) {
+      shufEl.classList.remove("is-visible", "is-fading");
+      shufEl.innerHTML = "";
     }
   }
 
@@ -15181,14 +15204,159 @@
     el.classList.add("is-visible", `tone-${tone}`);
     playSfx(tone === "spawn" ? "monster_portal" : "monster_skill");
 
-    const holdMs = tone === "spawn" || tone === "death" ? 3200 : 2650;
+    const holdMs =
+      tone === "spawn"
+        ? 4800
+        : tone === "death"
+        ? 4600
+        : tone === "skill"
+        ? 4400
+        : 3800;
     monsterAlertFadeTimer = setTimeout(() => {
       el.classList.add("is-fading");
     }, holdMs);
     monsterAlertHideTimer = setTimeout(() => {
       el.classList.remove("is-visible", "is-fading", `tone-${tone}`);
       el.innerHTML = "";
-    }, holdMs + 650);
+    }, holdMs + 950);
+  }
+
+  function playMonsterTargetShuffle(ev, onComplete) {
+    const overlay = document.getElementById("monster-target-shuffle-overlay");
+    if (!overlay || !ev) {
+      if (typeof onComplete === "function") onComplete();
+      return;
+    }
+    clearMonsterShuffleTimers();
+
+    const candidates = Array.isArray(ev.candidates) && ev.candidates.length > 0 ? ev.candidates : [];
+    const chosenIdx = Math.max(0, Math.min(candidates.length - 1, Number(ev.chosenCandIdx) || 0));
+    const cardCount = Math.max(2, candidates.length);
+
+    const cardsHtml = candidates
+      .map((c, idx) => {
+        const isChosen = idx === chosenIdx;
+        const portraitHtml = c.portraitSrc
+          ? `<img class="mts-card-face-img" src="${escapeHtml(c.portraitSrc)}" alt="${escapeHtml(c.name)}" />`
+          : `<div class="mts-card-face-fallback">${escapeHtml((c.name || "?").slice(0, 2).toUpperCase())}</div>`;
+        return `
+          <div class="m-tarot-card ${isChosen ? "is-chosen" : "is-other"}" data-slot="${idx}" style="--c-accent:${escapeHtml(c.color || "#22c55e")};">
+            <div class="m-tarot-inner">
+              <div class="m-tarot-back">
+                <span class="m-tarot-numeral">XIII</span>
+                <span class="m-tarot-coffin" aria-hidden="true"></span>
+                <span class="m-tarot-seal">DEATH</span>
+              </div>
+              <div class="m-tarot-front">
+                <div class="m-tarot-portrait">${portraitHtml}</div>
+                <div class="m-tarot-name">${escapeHtml(c.name || "Player")}</div>
+                <div class="m-tarot-curse-stamp">CURSED</div>
+              </div>
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    overlay.classList.remove("is-visible", "is-fading", "phase-shuffle", "phase-reveal");
+    overlay.innerHTML = `
+      <div class="m-shuffle-eyebrow">${escapeHtml(ev.eyebrow || "THANATOS · DRAWING A VESSEL")}</div>
+      <div class="m-shuffle-title">${escapeHtml(ev.skillName || "DEATH WHISPER")}</div>
+      <div class="m-tarot-stage" data-count="${cardCount}">
+        ${cardsHtml}
+      </div>
+    `;
+    void overlay.offsetWidth;
+    overlay.classList.add("is-visible", "phase-shuffle");
+    playSfx("monster_skill");
+
+    // Animate 6 rapid shuffle swaps with card_shuffle SFX
+    const cardEls = Array.from(overlay.querySelectorAll(".m-tarot-card"));
+    const spacing = Math.min(138, Math.max(88, Math.floor((window.innerWidth - 100) / Math.max(2, cardCount))));
+    const applyOffsets = (orderArr, tilt = 0) => {
+      const mid = (orderArr.length - 1) / 2;
+      orderArr.forEach((el, pos) => {
+        const dx = (pos - mid) * spacing;
+        const rot = (pos - mid) * 3.5 + tilt;
+        const dy = Math.abs(pos - mid) * 6;
+        el.style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) rotate(${rot.toFixed(1)}deg)`;
+      });
+    };
+
+    let order = [...cardEls];
+    applyOffsets(order, 0);
+
+    const shuffleSteps = [220, 440, 660, 890, 1140, 1410];
+    shuffleSteps.forEach((delay, stepIdx) => {
+      monsterShuffleTimers.push(
+        setTimeout(() => {
+          // Fisher-Yates style shuffle visual
+          for (let i = order.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [order[i], order[j]] = [order[j], order[i]];
+          }
+          playSfx("card_shuffle");
+          applyOffsets(order, stepIdx % 2 === 0 ? -4 : 4);
+        }, delay)
+      );
+    });
+
+    // Phase 2: Lock & Flip chosen card at center
+    monsterShuffleTimers.push(
+      setTimeout(() => {
+        overlay.classList.remove("phase-shuffle");
+        overlay.classList.add("phase-reveal");
+        cardEls.forEach((el) => {
+          if (el.classList.contains("is-chosen")) {
+            el.style.transform = "translate3d(0px, -10px, 0) scale(1.18) rotate(0deg)";
+          }
+        });
+        playSfx("card_reveal", "negative");
+      }, 1720)
+    );
+
+    // Phase 3: Fade out & trigger callback
+    monsterShuffleTimers.push(
+      setTimeout(() => {
+        overlay.classList.add("is-fading");
+      }, 3350)
+    );
+    monsterShuffleTimers.push(
+      setTimeout(() => {
+        overlay.classList.remove("is-visible", "is-fading", "phase-shuffle", "phase-reveal");
+        overlay.innerHTML = "";
+        if (typeof onComplete === "function") onComplete();
+      }, 3900)
+    );
+  }
+
+  function triggerMonsterTargetShuffle(skillName, eyebrow, targets, chosenVictim, onComplete) {
+    if (!state) {
+      if (typeof onComplete === "function") onComplete();
+      return;
+    }
+    const candidates = (targets || []).map((p) => {
+      const ch = DATA.CHARACTERS[p.charId] || {};
+      const src = (ch.portrait && ch.portrait.src) || ch.menuPortrait || "";
+      return {
+        playerIndex: p.index,
+        name: p.name,
+        color: p.color || "#22c55e",
+        portraitSrc: src
+      };
+    });
+    const chosenCandIdx = Math.max(0, candidates.findIndex((c) => c.playerIndex === chosenVictim.index));
+    const ev = {
+      id: `msh_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      skillName,
+      eyebrow,
+      candidates,
+      chosenCandIdx,
+      ts: Date.now()
+    };
+    state.lastMonsterTargetShuffleEvent = ev;
+    lastProcessedMonsterShuffleId = ev.id;
+    broadcastMultiplayerState();
+    playMonsterTargetShuffle(ev, onComplete);
   }
 
   function triggerMonsterHorrorAlert(title, subtitle, detail, tone = "skill") {
@@ -15330,7 +15498,7 @@
       if (opts.startTurnAfterSpawn !== false && !isRemoteClient()) {
         runMonsterTurn();
       }
-    }, 2350);
+    }, 4400);
   }
 
   function runMonsterTurn() {
@@ -15352,55 +15520,73 @@
     const activePool = state.players.filter((p) => !p.hasLeftRoom);
     const targets = activePool.length > 0 ? activePool : state.players;
 
-    // Skill 1 - Death Whisper (Round 2 & Round 4): random player [Cursed] for 1 round
+    // Skill 1 - Death Whisper (Round 2 & Round 4): Card shuffle picks random player -> [Cursed] for 1 round
     if (monster.id === "thanatos" && (curRound === 2 || curRound === 4) && targets.length > 0) {
       const victim = targets[Math.floor(Math.random() * targets.length)];
-      victim.cursedRounds = Math.max(victim.cursedRounds || 0, 1);
-      addLog(`Thanatos cast [Death Whisper] on ${victim.name} -> Inflicted [Cursed] for 1 round (cannot obtain TC)!`);
-      if (victim.tileId && window.EFT_WEBGL_VFX) {
-        window.EFT_WEBGL_VFX.burstAtTile(victim.tileId, "debuff", "#22c55e");
-      }
-      focusCameraOnTile(victim.tileId, isMobilePortrait() ? 0.78 : 1.0);
-      triggerMonsterHorrorAlert(
+      triggerMonsterTargetShuffle(
         "DEATH WHISPER",
-        "THANATOS · GOD OF DEATH",
-        `${victim.name} is Cursed for 1 round. No TC can be obtained.`,
-        "skill"
+        "THANATOS · DRAWING A VESSEL",
+        targets,
+        victim,
+        () => {
+          if (!state || !state.activeMonster || state.winner) return;
+          victim.cursedRounds = Math.max(victim.cursedRounds || 0, 1);
+          addLog(`Thanatos cast [Death Whisper] on ${victim.name} -> Inflicted [Cursed] for 1 round (cannot obtain TC)!`);
+          if (victim.tileId && window.EFT_WEBGL_VFX) {
+            window.EFT_WEBGL_VFX.burstAtTile(victim.tileId, "debuff", "#22c55e");
+          }
+          focusCameraOnTile(victim.tileId, isMobilePortrait() ? 0.78 : 1.0);
+          triggerMonsterHorrorAlert(
+            "DEATH WHISPER",
+            "THANATOS · GOD OF DEATH",
+            `${victim.name} is Cursed for 1 round. No TC can be obtained.`,
+            "skill"
+          );
+          renderAll();
+          broadcastMultiplayerState();
+          scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 4200);
+        }
       );
-      renderAll();
-      broadcastMultiplayerState();
-      scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 2050);
       return;
     }
 
-    // Skill 2 - I Am Death (Round 3): highest TC player [Cursed] + teleported to Thanatos
+    // Skill 2 - I Am Death (Round 3): Card shuffle reveals highest TC player -> [Cursed] + teleported to Thanatos
     if (monster.id === "thanatos" && curRound === 3 && targets.length > 0) {
       const maxTc = Math.max(...targets.map((p) => p.tc || 0));
       const topTargets = targets.filter((p) => (p.tc || 0) === maxTc);
       const victim = topTargets[Math.floor(Math.random() * topTargets.length)];
-      victim.cursedRounds = Math.max(victim.cursedRounds || 0, 1);
-      victim.inSpawn = false;
-      victim.lastTileId = victim.tileId;
-      victim.tileId = monster.tileId;
-      addLog(`Thanatos cast [I Am Death] on ${victim.name} (Highest TC: ${victim.tc}) -> Inflicted [Cursed] and dragged them to ${monster.tileId}!`);
-      addCameraTrauma(0.5);
-      if (monster.tileId && window.EFT_WEBGL_VFX) {
-        window.EFT_WEBGL_VFX.burstAtTile(monster.tileId, "debuff", "#22c55e");
-      }
-      focusCameraOnTile(monster.tileId, isMobilePortrait() ? 0.8 : 1.06);
-      triggerMonsterHorrorAlert(
+      triggerMonsterTargetShuffle(
         "I AM DEATH",
-        "THANATOS · GOD OF DEATH",
-        `${victim.name} (Highest TC) is Cursed and dragged to Thanatos.`,
-        "death"
+        "THANATOS · JUDGING HIGHEST TC",
+        targets,
+        victim,
+        () => {
+          if (!state || !state.activeMonster || state.winner) return;
+          victim.cursedRounds = Math.max(victim.cursedRounds || 0, 1);
+          victim.inSpawn = false;
+          victim.lastTileId = victim.tileId;
+          victim.tileId = monster.tileId;
+          addLog(`Thanatos cast [I Am Death] on ${victim.name} (Highest TC: ${victim.tc}) -> Inflicted [Cursed] and dragged them to ${monster.tileId}!`);
+          addCameraTrauma(0.5);
+          if (monster.tileId && window.EFT_WEBGL_VFX) {
+            window.EFT_WEBGL_VFX.burstAtTile(monster.tileId, "debuff", "#22c55e");
+          }
+          focusCameraOnTile(monster.tileId, isMobilePortrait() ? 0.8 : 1.06);
+          triggerMonsterHorrorAlert(
+            "I AM DEATH",
+            "THANATOS · GOD OF DEATH",
+            `${victim.name} (Highest TC) is Cursed and dragged to Thanatos.`,
+            "death"
+          );
+          renderAll();
+          broadcastMultiplayerState();
+          scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 4400);
+        }
       );
-      renderAll();
-      broadcastMultiplayerState();
-      scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 2250);
       return;
     }
 
-    scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 700);
+    scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 850);
   }
 
   function rollMonster1d8AndWalk() {

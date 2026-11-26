@@ -10832,8 +10832,8 @@ body {
   padding: 24px;
   text-align: center;
   opacity: 0;
-  background: radial-gradient(ellipse at center, rgba(0, 4, 2, 0.72) 0%, rgba(0, 0, 0, 0.24) 48%, rgba(0, 0, 0, 0) 76%);
-  transition: opacity 0.45s ease;
+  background: radial-gradient(ellipse at center, rgba(0, 4, 2, 0.76) 0%, rgba(0, 0, 0, 0.28) 50%, rgba(0, 0, 0, 0) 78%);
+  transition: opacity 0.85s ease;
 }
 
 .monster-horror-alert.is-visible {
@@ -10842,7 +10842,7 @@ body {
 
 .monster-horror-alert.is-fading {
   opacity: 0;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.95s ease;
 }
 
 .mha-whisper {
@@ -10851,10 +10851,10 @@ body {
   font-weight: 700;
   letter-spacing: 0.42em;
   text-transform: uppercase;
-  color: rgba(134, 239, 172, 0.82);
+  color: rgba(134, 239, 172, 0.85);
   text-shadow: 0 2px 14px #000000, 0 0 22px rgba(0, 0, 0, 0.95);
-  margin-bottom: 8px;
-  animation: mhaWhisperDrift 0.9s ease-out both;
+  margin-bottom: 10px;
+  animation: mhaWhisperDrift 1.4s ease-out both;
 }
 
 .mha-headline {
@@ -10870,7 +10870,7 @@ body {
     0 4px 24px #000000,
     0 0 36px rgba(0, 0, 0, 0.96),
     0 0 18px rgba(34, 197, 94, 0.55);
-  animation: mhaCreepReveal 0.82s cubic-bezier(0.22, 1, 0.36, 1) both, mhaSubtleTremble 2.8s ease-in-out 0.3s infinite;
+  animation: mhaCreepReveal 1.5s cubic-bezier(0.22, 1, 0.36, 1) both, mhaSubtleTremble 3.4s ease-in-out 0.6s infinite;
 }
 
 .mha-headline::before,
@@ -10904,8 +10904,8 @@ body {
 }
 
 .mha-detail {
-  margin-top: 12px;
-  max-width: min(640px, 88vw);
+  margin-top: 14px;
+  max-width: min(660px, 88vw);
   font-family: "Playfair Display", Georgia, serif;
   font-style: italic;
   font-size: clamp(0.95rem, 1.7vw, 1.24rem);
@@ -10913,7 +10913,221 @@ body {
   letter-spacing: 0.05em;
   color: #d8e6dc;
   text-shadow: 0 2px 14px #000000, 0 0 24px #000000;
-  animation: mhaWhisperDrift 1.05s ease-out 0.14s both;
+  animation: mhaWhisperDrift 1.5s ease-out 0.35s both;
+}
+
+/* ============================================================================
+   THANATOS TARGET CARD SHUFFLE OVERLAY (DARK TAROT / COFFIN DECK)
+   ============================================================================ */
+.monster-target-shuffle-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 258;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(0, 5, 3, 0.84) 0%, rgba(0, 0, 0, 0.44) 55%, rgba(0, 0, 0, 0) 86%);
+  transition: opacity 0.45s ease;
+}
+
+.monster-target-shuffle-overlay.is-visible {
+  opacity: 1;
+}
+
+.monster-target-shuffle-overlay.is-fading {
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+
+.m-shuffle-eyebrow {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(0.72rem, 1.2vw, 0.88rem);
+  font-weight: 700;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+  color: rgba(134, 239, 172, 0.82);
+  text-shadow: 0 2px 12px #000000;
+}
+
+.m-shuffle-title {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.5rem, 3.2vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #e6f7ea;
+  text-shadow: 0 4px 18px #000000, 0 0 18px rgba(34, 197, 94, 0.45);
+  margin-bottom: 14px;
+}
+
+.m-tarot-stage {
+  position: relative;
+  width: 100%;
+  height: 210px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1100px;
+}
+
+.m-tarot-card {
+  position: absolute;
+  width: 122px;
+  height: 178px;
+  transform-style: preserve-3d;
+  transition: transform 0.21s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease, filter 0.42s ease;
+}
+
+.monster-target-shuffle-overlay.phase-reveal .m-tarot-card {
+  transition: transform 0.58s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.45s ease, filter 0.45s ease;
+}
+
+.monster-target-shuffle-overlay.phase-reveal .m-tarot-card.is-other {
+  opacity: 0.16;
+  filter: blur(2px) grayscale(0.75);
+}
+
+.m-tarot-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.68s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.monster-target-shuffle-overlay.phase-reveal .m-tarot-card.is-chosen .m-tarot-inner {
+  transform: rotateY(180deg);
+}
+
+.m-tarot-back,
+.m-tarot-front {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.85);
+}
+
+.m-tarot-back {
+  background: #040907;
+  border: 1.5px solid rgba(34, 197, 94, 0.62);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 10px;
+}
+
+.m-tarot-back::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border: 1px solid rgba(74, 222, 128, 0.24);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.m-tarot-numeral {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: #4ade80;
+}
+
+.m-tarot-coffin {
+  width: 34px;
+  height: 68px;
+  background: #08130e;
+  border: 1.5px solid rgba(74, 222, 128, 0.72);
+  clip-path: polygon(22% 0%, 78% 0%, 100% 34%, 74% 100%, 26% 100%, 0% 34%);
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.28);
+}
+
+.m-tarot-seal {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.26em;
+  color: rgba(187, 247, 208, 0.75);
+}
+
+.m-tarot-front {
+  transform: rotateY(180deg);
+  background: #060b0d;
+  border: 2px solid var(--c-accent, #22c55e);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.m-tarot-portrait {
+  position: absolute;
+  inset: 0;
+}
+
+.mts-card-face-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 22%;
+  display: block;
+}
+
+.mts-card-face-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--c-accent, #4ade80);
+  background: #071210;
+}
+
+.m-tarot-front::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.52) 56%, rgba(0, 0, 0, 0.94) 100%);
+  pointer-events: none;
+}
+
+.m-tarot-name {
+  position: relative;
+  z-index: 2;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: #f8fafc;
+  text-shadow: 0 2px 8px #000000;
+  margin-bottom: 4px;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.m-tarot-curse-stamp {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 10px;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: #4ade80;
+  text-shadow: 0 1px 10px #000000, 0 0 10px rgba(34, 197, 94, 0.7);
 }
 
 @keyframes mhaCreepReveal {
