@@ -2536,8 +2536,8 @@
 
   function createShopState(rules) {
     return {
-      1: { ultStock: 1, drawStock: rules.drawShopStock, actAgainStock: rules.actAgainStock, playerBuys: {} },
-      2: { ultStock: 1, drawStock: rules.drawShopStock, actAgainStock: rules.actAgainStock, playerBuys: {} }
+      1: { drawStock: rules.drawShopStock, actAgainStock: rules.actAgainStock, playerBuys: {} },
+      2: { drawStock: rules.drawShopStock, actAgainStock: rules.actAgainStock, playerBuys: {} }
     };
   }
 
@@ -12673,7 +12673,6 @@
     const effectiveShopId = state.rules.independentShops ? shopId : 1;
     const shop = state.shops[effectiveShopId];
     if (!shop) return;
-    if (shop.ultStock === undefined) shop.ultStock = 1;
     if (!shop.playerBuys[player.id]) shop.playerBuys[player.id] = { ult: 0, draw: 0, actAgain: 0 };
     const pBuys = shop.playerBuys[player.id];
     if (pBuys.ult === undefined) pBuys.ult = 0;
@@ -12696,8 +12695,8 @@
         alert("Meta-Shard can only be purchased once per match.");
         return;
       }
-      if (shop.ultStock <= 0 || pBuys.ult >= 1) {
-        alert("This Shop's Ultimate Card stock is sold out for this Cycle (1/Cycle).");
+      if (pBuys.ult >= 1) {
+        alert("You already purchased your Ultimate Card at this Shop for this Cycle (Individual limit: 1/Cycle).");
         return;
       }
       if (player.hand.some((c) => c.rarity === "Ultimate")) {
@@ -12709,7 +12708,6 @@
         return;
       }
       player.tc -= ultCost;
-      shop.ultStock--;
       pBuys.ult++;
       if (ultDef && ultDef.effectKey === "grant_meta_shard") {
         player.metaShardBought = true;
@@ -13366,20 +13364,20 @@
     }
     const effectiveShopId = state.rules.independentShops ? shopId : 1;
     const shop = state.shops[effectiveShopId];
-    if (shop.ultStock === undefined) shop.ultStock = 1;
     const charDef = getCharacterForCompendium(player.charId, state.compendiumId);
     const ultDef = player.isSamMode && charDef.samUltimate ? charDef.samUltimate : charDef.ultimate;
     const ultCost = (ultDef && ultDef.cost) || charDef.ultCost || state.rules.defaultUltCost;
     const ultImg = getCardImage(ultDef, player.charId);
     const pBuys = shop.playerBuys[player.id] || { ult: 0, draw: 0, actAgain: 0 };
-    const ultUsedThisCycle = shop.ultStock <= 0 || (pBuys.ult || 0) >= 1;
+    const myUltLeft = Math.max(0, 1 - (pBuys.ult || 0));
+    const ultUsedThisCycle = myUltLeft <= 0;
     const hasUltInHand = player.hand.some((c) => c.rarity === "Ultimate");
     const metaShardUsed =
       ultDef && ultDef.effectKey === "grant_meta_shard" && (player.metaShardBought || player.metaShard >= 1);
     const ultDisabled = metaShardUsed || ultUsedThisCycle || hasUltInHand;
     let ultBtnLabel = `Buy Ultimate (${ultCost} TC)`;
     if (metaShardUsed) ultBtnLabel = "Already Purchased (Max 1/Match)";
-    else if (ultUsedThisCycle) ultBtnLabel = "Sold Out (0/1 This Cycle)";
+    else if (ultUsedThisCycle) ultBtnLabel = "Purchased (0/1 This Cycle)";
     else if (hasUltInHand) ultBtnLabel = "Already Holding 1 Ultimate";
 
     openInfoModal(
@@ -13398,7 +13396,7 @@
             <div>
               <div style="font-size:0.95rem;font-weight:800;color:var(--accent-gold);">ULTIMATE: ${ultDef.name} (💰 ${ultCost} TC)</div>
               <p style="font-size:0.82rem;color:#f8fafc;margin-top:6px;">${ultDef.description}</p>
-              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">Stock: <strong>${shop.ultStock}/1</strong> · Your Limit: <strong>${pBuys.ult || 0}/1</strong></p>
+              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">Individual Stock: <strong>${myUltLeft}/1</strong> · Your Limit: <strong>${pBuys.ult || 0}/1</strong></p>
             </div>
             <button class="btn btn-gold" ${ultDisabled ? "disabled" : ""} onclick="window.EFT_APP.buyShopItem(${shopId}, 'ultimate')">
               ${ultBtnLabel}
@@ -13408,12 +13406,12 @@
         <div class="grid-2col">
           <div class="panel-box">
             <div class="panel-header">+1 Card Draw (💰 ${state.rules.drawShopCost} TC)</div>
-            <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px;">Stock: <strong>${shop.drawStock}/${state.rules.drawShopStock}</strong> · Your Limit: <strong>${pBuys.draw}/${state.rules.drawShopPlayerLimit}</strong></p>
+            <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px;">Global Stock: <strong>${shop.drawStock}/${state.rules.drawShopStock}</strong> · Your Limit: <strong>${pBuys.draw}/${state.rules.drawShopPlayerLimit}</strong></p>
             <button class="btn btn-primary" style="width:100%;" onclick="window.EFT_APP.buyShopItem(${shopId}, 'draw')">Buy +1 Card Draw</button>
           </div>
           <div class="panel-box">
             <div class="panel-header">Act Again (💰 ${state.rules.actAgainCost} TC)</div>
-            <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px;">Stock: <strong>${shop.actAgainStock}/${state.rules.actAgainStock}</strong> · Your Limit: <strong>${pBuys.actAgain}/${state.rules.actAgainPlayerLimit}</strong></p>
+            <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px;">Global Stock: <strong>${shop.actAgainStock}/${state.rules.actAgainStock}</strong> · Your Limit: <strong>${pBuys.actAgain}/${state.rules.actAgainPlayerLimit}</strong></p>
             <button class="btn btn-primary" style="width:100%;" onclick="window.EFT_APP.buyShopItem(${shopId}, 'actAgain')">Buy Act Again (+1 Roll)</button>
           </div>
         </div>
@@ -15162,10 +15160,8 @@
 
   function pickRandomCycleMonsterId() {
     const ids = Object.keys((DATA && DATA.MONSTERS) || { thanatos: {} });
-    if (ids.length <= 1) return ids[0] || "thanatos";
-    const pool = state && state.lastSpawnedMonsterId ? ids.filter((id) => id !== state.lastSpawnedMonsterId) : ids;
-    const list = pool.length > 0 ? pool : ids;
-    return list[Math.floor(Math.random() * list.length)];
+    if (ids.length === 0) return "thanatos";
+    return ids[Math.floor(Math.random() * ids.length)];
   }
 
   function clearMonsterTurnTimers() {
