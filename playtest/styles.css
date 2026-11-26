@@ -11647,6 +11647,248 @@ body {
 }
 
 /* ============================================================================
+   MOSTIMA TIME-LOCK VISUALS: LOCKED SKILL CARDS, PASSIVE SEAL, & ROUND LOCK
+   ============================================================================ */
+.tucked-card.is-time-locked {
+  cursor: not-allowed;
+  border-color: rgba(96, 165, 250, 0.72) !important;
+  box-shadow:
+    0 10px 24px rgba(2, 6, 23, 0.85),
+    inset 0 0 0 1px rgba(147, 197, 253, 0.32) !important;
+}
+
+.tucked-card.is-time-locked > img {
+  filter: saturate(0.22) brightness(0.54) contrast(1.08);
+  transition: filter 0.25s ease;
+}
+
+.tucked-card.is-time-locked:hover {
+  animation: mostimaLockRefuseShake 0.34s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.tucked-card.is-time-locked.is-lock-slam {
+  animation: mostimaCardLockSlam 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mostima-card-lock-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 44%, rgba(15, 23, 42, 0.26) 0%, rgba(7, 13, 30, 0.76) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Crossed Forged Sapphire-Steel Chains across locked card */
+.mcl-chain {
+  position: absolute;
+  left: -26%;
+  right: -26%;
+  height: 11px;
+  top: calc(50% - 5.5px);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(191, 219, 254, 0.78) 0px,
+      rgba(96, 165, 250, 0.72) 5px,
+      rgba(15, 23, 42, 0.95) 5px,
+      rgba(15, 23, 42, 0.95) 9px,
+      rgba(59, 130, 246, 0.75) 9px,
+      rgba(30, 58, 138, 0.92) 15px,
+      rgba(15, 23, 42, 0.95) 15px,
+      rgba(15, 23, 42, 0.95) 18px
+    );
+  border-top: 1px solid rgba(219, 234, 254, 0.65);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.96);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.82);
+}
+
+.mcl-chain-a {
+  transform: rotate(34deg);
+}
+
+.mcl-chain-b {
+  transform: rotate(-34deg);
+}
+
+.tucked-card.is-lock-slam .mcl-chain-a {
+  animation: mostimaChainSnapA 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.tucked-card.is-lock-slam .mcl-chain-b {
+  animation: mostimaChainSnapB 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Central Clockwork Padlock Seal (Black Lock & White Key motif) */
+.mcl-padlock-seal {
+  position: relative;
+  z-index: 3;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #172554 0%, #0b132b 72%, #050814 100%);
+  border: 2px solid #93c5fd;
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.86),
+    inset 0 0 0 2px rgba(15, 23, 42, 0.9),
+    inset 0 0 0 3px rgba(191, 219, 254, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e0f2fe;
+}
+
+.mcl-padlock-seal svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85));
+}
+
+.tucked-card.is-lock-slam .mcl-padlock-seal {
+  animation: mostimaPadlockSlam 0.46s cubic-bezier(0.18, 0.89, 0.32, 1.28) 0.08s both;
+}
+
+.mcl-lock-label {
+  position: relative;
+  z-index: 3;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: rgba(7, 13, 30, 0.94);
+  border: 1px solid rgba(147, 197, 253, 0.65);
+  color: #dbeafe;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* Pending Phase 2 Lock Subtle Corner Seal (shown during Main Phase 1 before MP2 hits) */
+.mostima-pending-lock-tag {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(12, 24, 54, 0.94);
+  border: 1px solid rgba(96, 165, 250, 0.72);
+  color: #bfdbfe;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.72);
+}
+
+.mostima-pending-lock-tag svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+
+.tucked-card.is-time-locked .tucked-card-actions .btn {
+  background: #172554;
+  border-color: rgba(147, 197, 253, 0.55);
+  color: #bfdbfe;
+}
+
+/* Passive Orb Locked State (Key of Chronology) */
+.ph-passive-orb.is-locked {
+  background: radial-gradient(circle at 38% 35%, #1d4ed8 0%, #0f172a 82%) !important;
+  border-color: #93c5fd !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35), 0 3px 8px rgba(0, 0, 0, 0.72) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #e0f2fe;
+}
+
+.ph-passive-orb.is-locked svg {
+  width: 11px;
+  height: 11px;
+  display: block;
+}
+
+.fp-effect-chip.is-time-lock {
+  background: rgba(30, 58, 138, 0.82);
+  border-color: rgba(147, 197, 253, 0.62);
+  color: #dbeafe;
+}
+
+/* Round Progress Ring Lock Indicator (Lock Of Shattered Time) */
+.round-progress-ring.is-round-locked {
+  position: relative;
+}
+
+.round-progress-ring.is-round-locked::after {
+  content: "LOCKED";
+  position: absolute;
+  bottom: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #0f1d3d;
+  border: 1px solid rgba(147, 197, 253, 0.72);
+  color: #bfdbfe;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 0.48rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.status-timer-val.is-halved {
+  background: #0f1d3d;
+  border-color: rgba(147, 197, 253, 0.72);
+  color: #93c5fd;
+}
+
+@keyframes mostimaChainSnapA {
+  0% { opacity: 0; transform: rotate(34deg) scaleX(0.15); }
+  100% { opacity: 1; transform: rotate(34deg) scaleX(1); }
+}
+
+@keyframes mostimaChainSnapB {
+  0% { opacity: 0; transform: rotate(-34deg) scaleX(0.15); }
+  100% { opacity: 1; transform: rotate(-34deg) scaleX(1); }
+}
+
+@keyframes mostimaPadlockSlam {
+  0% { opacity: 0; transform: scale(1.75) rotate(-14deg); }
+  65% { opacity: 1; transform: scale(0.92) rotate(3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@keyframes mostimaCardLockSlam {
+  0% { filter: brightness(1.18); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes mostimaLockRefuseShake {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: -3px; }
+  55% { margin-left: 3px; }
+  80% { margin-left: -2px; }
+}
+
+/* ============================================================================
    ACCESSIBILITY: RESPECT PREFERS-REDUCED-MOTION (R-39)
    ============================================================================ */
 @media (prefers-reduced-motion: reduce) {

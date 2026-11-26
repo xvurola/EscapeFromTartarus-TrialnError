@@ -492,7 +492,7 @@
   let audioBuses = null;
 
   function loadSoundPrefs() {
-    const defaultChars = { bocchi: true, aventurine: true, joker: true, lilith: true, maomao: true, firefly: true };
+    const defaultChars = { bocchi: true, aventurine: true, joker: true, lilith: true, maomao: true, firefly: true, mostima: true };
     try {
       const raw = localStorage.getItem(SOUND_PREFS_KEY);
       if (raw) {
@@ -1123,6 +1123,23 @@
               type: idx % 2 === 0 ? "triangle" : "sine"
             });
           });
+        } else if (charId === "mostima") {
+          // Chronometer clockwork ticks + crystalline sapphire bell resonance (Black Lock & White Key)
+          playSoftTone(ctx, warmFilter, { startTime: t, freq: 1480, endFreq: 980, duration: 0.045, attack: 0.002, gain: 0.22, type: "triangle" });
+          playSoftTone(ctx, warmFilter, { startTime: t + 0.08, freq: 1174.66, endFreq: 783.99, duration: 0.05, attack: 0.002, gain: 0.20, type: "triangle" });
+          const notes = isUlt
+            ? [293.66, 440.0, 587.33, 659.25, 880.0, 1174.66]
+            : [392.0, 493.88, 587.33, 880.0];
+          notes.forEach((hz, idx) => {
+            playSoftTone(ctx, warmFilter, {
+              startTime: t + 0.06 + idx * 0.055,
+              freq: hz,
+              duration: isUlt ? 0.62 : 0.42,
+              attack: 0.008,
+              gain: isUlt ? 0.22 : 0.18,
+              type: idx % 2 === 0 ? "sine" : "triangle"
+            });
+          });
         } else {
           const themeChords = {
             sonic: [329.63, 415.30, 493.88],
@@ -1257,7 +1274,7 @@
 
   function toggleCharacterSkillSfx(charId, enabled) {
     if (!soundPrefs.charSkillSfx || typeof soundPrefs.charSkillSfx !== "object") {
-      soundPrefs.charSkillSfx = { bocchi: true, aventurine: true, joker: true, lilith: true, maomao: true, firefly: true };
+      soundPrefs.charSkillSfx = { bocchi: true, aventurine: true, joker: true, lilith: true, maomao: true, firefly: true, mostima: true };
     }
     soundPrefs.charSkillSfx[charId] = !!enabled;
     saveSoundPrefs();
@@ -2567,6 +2584,10 @@
         reverseNextRoll: false,
         skipNextTurn: false,
         silencedThisPhase: false,
+        timeLimitHalved: false,
+        timeLockPhase2: false,
+        mostimaKeeperLockedThisTurn: false,
+        chronologyLockedRounds: 0,
         cursedRounds: 0,
         dragonblightRounds: 0,
         nextMovementMultiplier: 1,
@@ -2598,6 +2619,8 @@
       isMonsterTurn: false,
       lastSpawnedMonsterId: null,
       mewEffectTilesToPlus5Tc: false,
+      roundLockedForNextAdvance: false,
+      lastMostimaLockEvent: null,
       lastMonsterSpawnEvent: null,
       lastMonsterAlertEvent: null,
       lastMonsterTargetShuffleEvent: null,
@@ -3097,7 +3120,60 @@
   }
 
   function hasPassive(player, key) {
+    if (!player || !Array.isArray(player.passives)) return false;
+    if (player.chronologyLockedRounds > 0) return false;
     return player.passives.some((p) => p.key === key);
+  }
+
+  function getPlayerSkillLockState(player) {
+    if (!player || !state) return { locked: false, pendingOnly: false, kind: "", badgeText: "", reason: "" };
+    if (player.chronologyLockedRounds > 0) {
+      return {
+        locked: true,
+        pendingOnly: false,
+        kind: "chronology",
+        badgeText: "CHRONOLOGY LOCK",
+        reason: "Locked by Mostima's Key of Chronology (Skill Cards & Unique Passives sealed for 1 round)."
+      };
+    }
+    if (player.mostimaKeeperLockedThisTurn) {
+      return {
+        locked: true,
+        pendingOnly: false,
+        kind: "keeper",
+        badgeText: "KEEPER LOCK",
+        reason: "Locked by Mostima's Keeper of the Lock & Keys (started turn within 2 blocks)."
+      };
+    }
+    if (player.timeLockPhase2) {
+      const isPlayerPhase2 = state.activePlayerIndex === player.index && state.phaseIndex === 3;
+      if (isPlayerPhase2) {
+        return {
+          locked: true,
+          pendingOnly: false,
+          kind: "phase2",
+          badgeText: "TIME LOCK · MP2",
+          reason: "Skill Cards are blocked on Main Phase 2 by Mostima's Time Lock."
+        };
+      }
+      return {
+        locked: false,
+        pendingOnly: true,
+        kind: "phase2_pending",
+        badgeText: "MP2 LOCKED",
+        reason: "Mostima's Time Lock will seal your Skill Cards during Main Phase 2."
+      };
+    }
+    if (player.silencedThisPhase) {
+      return {
+        locked: true,
+        pendingOnly: false,
+        kind: "silence",
+        badgeText: "SILENCED",
+        reason: "Silenced by All-Out Attack for this Phase."
+      };
+    }
+    return { locked: false, pendingOnly: false, kind: "", badgeText: "", reason: "" };
   }
 
   function checkVictory(player) {
@@ -5257,6 +5333,8 @@
     player.extraPhasesThisTurn = 0;
     player.turnTcMultiplier = 1.0;
     player.silencedThisPhase = false;
+    player.timeLockPhase2 = false;
+    player.mostimaKeeperLockedThisTurn = false;
     pendingInteraction = null;
     state.activeTileModal = null;
 
@@ -5334,10 +5412,30 @@
     player.extraPhasesThisTurn = 0;
     player.awakenArseneUsedThisTurn = false;
     player.safeZoneImmune = false;
+    player.mostimaKeeperLockedThisTurn = false;
     state.turnTimerKey = generateTurnTimerKey();
     Object.keys(player.cooldowns).forEach((k) => {
       if (player.cooldowns[k] > 0) player.cooldowns[k]--;
     });
+
+    // Mostima Unique Passive: Keeper Of The Lock & Keys (2-block radius at turn start -> cannot use skill cards)
+    const keeperOwner = state.players.find(
+      (other) =>
+        other.index !== player.index &&
+        !other.inSpawn &&
+        hasPassive(other, "passive_keeper_lock_keys") &&
+        getTileDistance(player.tileId, other.tileId) <= 2
+    );
+    if (keeperOwner) {
+      player.mostimaKeeperLockedThisTurn = true;
+      state.lastMostimaLockEvent = {
+        id: `mlock_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        targetIndices: [player.index],
+        kind: "keeper",
+        ts: Date.now()
+      };
+      addLog(`Keeper Of The Lock & Keys (${keeperOwner.name}): ${player.name} started within 2 blocks and cannot use Skill Cards this turn!`);
+    }
 
     if (player.skipNextTurn) {
       player.skipNextTurn = false;
@@ -5397,6 +5495,7 @@
     state.recentOpponentSkills = [];
     state.lastOpponentSkillUsed = null;
     state.mewEffectTilesToPlus5Tc = false;
+    state.roundLockedForNextAdvance = false;
 
     if (state.activeMonster && state.cycle % 2 !== 0) {
       addLog(`${state.activeMonster.name} left the board as Cycle ${state.cycle} (Day) began.`);
@@ -5409,6 +5508,9 @@
 
     // Expire all active Unique / Passive effects on cycle transition & reshuffle decks
     state.players.forEach((p) => {
+      p.timeLimitHalved = false;
+      p.timeLockPhase2 = false;
+      p.mostimaKeeperLockedThisTurn = false;
       if (Array.isArray(p.passives) && p.passives.length > 0) {
         p.passives.forEach((pas) => {
           addLog(`${p.name}'s Passive [${pas.name}] expired due to Cycle reset (${finishedCycle} -> ${state.cycle}).`);
@@ -5476,6 +5578,10 @@
         p.aLittleHelpRounds--;
         if (p.aLittleHelpRounds === 0) addLog(`[A Little Help] faded from ${p.name}.`);
       }
+      if (p.chronologyLockedRounds > 0) {
+        p.chronologyLockedRounds--;
+        if (p.chronologyLockedRounds === 0) addLog(`[Key Of Chronology] lock lifted from ${p.name}.`);
+      }
     });
 
     if (state.activeGlobalEvent) {
@@ -5492,7 +5598,10 @@
     }
 
     state.activePlayerIndex = 0;
-    if (state.roundInCycle < state.rules.turnsPerCycle) {
+    if (state.roundLockedForNextAdvance) {
+      state.roundLockedForNextAdvance = false;
+      addLog(`[Lock Of Shattered Time]: Round count remained LOCKED at Round ${state.roundInCycle} (Cycle ${state.cycle})!`);
+    } else if (state.roundInCycle < state.rules.turnsPerCycle) {
       state.roundInCycle++;
     } else {
       completeFullCycle();
@@ -6029,8 +6138,9 @@
     if (isAdminUnlocked && adminFreeSkillUse) {
       return { ok: true, freeAdmin: true };
     }
-    if (player.silencedThisPhase) {
-      return { ok: false, reason: "Silenced by All-Out Attack for this Phase." };
+    const lockInfo = getPlayerSkillLockState(player);
+    if (lockInfo.locked) {
+      return { ok: false, reason: lockInfo.reason || "Skill Cards are currently locked." };
     }
     const isReactiveOnlyHaste =
       card.haste &&
@@ -6132,6 +6242,11 @@
           return { mode: "forward", minSteps: 1, maxSteps: 2 };
         }
         return null;
+      case "mostima_dilation_choice":
+        if (options.choiceValue === "teleport") {
+          return { mode: "forward", minSteps: 2, maxSteps: 2 };
+        }
+        return null;
       default:
         return null;
     }
@@ -6148,7 +6263,8 @@
         bocchi_ult: "ULTIMATE FINALE · STAGE CONVERGENCE",
         avt_ult: "ULTIMATE GAMBLE · ALL OR NOTHING",
         joker_ult: "ULTIMATE WILDCARD · METAVERSE HEIST",
-        lilith_ult: "ULTIMATE NIGHTMARE · ETERNAL SLUMBER"
+        lilith_ult: "ULTIMATE NIGHTMARE · ETERNAL SLUMBER",
+        mostima_ult: "ULTIMATE CHRONOLOGY · BLACK LOCK & WHITE KEY"
       };
       return {
         theme: "ultimate",
@@ -6163,7 +6279,8 @@
         bocchi_uq: "UNIQUE PASSIVE · SPOTLIGHT AWAKENED",
         avt_uq: "UNIQUE PASSIVE · IPC GOLDEN DIVIDEND",
         joker_uq: "UNIQUE PASSIVE · PERSONA AWAKENED",
-        lilith_uq: "UNIQUE PASSIVE · DAEMONISSA TRICKERY"
+        lilith_uq: "UNIQUE PASSIVE · DAEMONISSA TRICKERY",
+        mostima_uq: "UNIQUE PASSIVE · KEEPER OF THE LOCK & KEYS"
       };
       return {
         theme: "passive",
@@ -6700,7 +6817,7 @@
     for (let offset = 1; offset < totalP; offset++) {
       const defender = state.players[(caster.index + offset) % totalP];
       if (!defender || defender.index === caster.index) continue;
-      if (defender.silencedThisPhase) continue;
+      if (defender.silencedThisPhase || defender.chronologyLockedRounds > 0 || defender.mostimaKeeperLockedThisTurn) continue;
 
       const isTargeted = targetedIndices.includes(defender.index);
       const readyCards = (defender.hand || []).filter((hc) => {
@@ -8052,6 +8169,122 @@
         addLog(`ULTIMATE [Cooldown Protocol]: ${player.name} returned to Firefly mode!`);
         return `${player.name} deactivated armor and returned to Firefly mode!`;
       }
+      case "mostima_dilation_choice": {
+        const mode = options.choiceValue || "tc";
+        if (mode === "teleport") {
+          const prevTileId = player.tileId;
+          const destId =
+            options.selectedTileId && TILE_MAP[options.selectedTileId]
+              ? options.selectedTileId
+              : advanceTileBySteps(player.tileId, 2, player.lastTileId);
+          player.tileId = destId;
+          player.inSpawn = destId === "T0";
+          player.lastTileId = (PREV_MAP[destId] && PREV_MAP[destId][0]) || prevTileId;
+          triggerSkillMoveAnim(player, [prevTileId, destId], "warp");
+          triggerBoardTileVfx([prevTileId, destId], "warp_burst");
+          const msg = `${player.name} warped 2 blocks forward to [${destId}]!`;
+          addLog(`[Time Dilation]: ${msg}`);
+          return msg;
+        }
+        const gained = modifyPlayerTC(player, 5, "own_skill");
+        const msg = `${player.name} chose +${gained} TC (Total: ${player.tc} TC).`;
+        addLog(`[Time Dilation]: ${msg}`);
+        return msg;
+      }
+      case "mostima_halve_timer": {
+        if (!targetPlayer || targetPlayer.index === player.index) {
+          return "No valid opponent selected for Time Magic Cast.";
+        }
+        if (targetPlayer.timeLimitHalved) {
+          const msg = `${targetPlayer.name}'s time limit is already halved (max. 1 per player).`;
+          addLog(`[Time Magic Cast]: ${msg}`);
+          return msg;
+        }
+        targetPlayer.timeLimitHalved = true;
+        const halfSec = Math.ceil(TURN_TIME_LIMIT_SEC / 2);
+        const msg = `${targetPlayer.name}'s turn time limit is halved to ${halfSec}s (max. 1 per player)!`;
+        addLog(`[Time Magic Cast]: ${msg}`);
+        return msg;
+      }
+      case "mostima_time_lock_mp2": {
+        if (!targetPlayer || targetPlayer.index === player.index) {
+          return "No valid opponent within 4 blocks for Time Lock.";
+        }
+        if (targetPlayer.timeLockPhase2) {
+          const msg = `${targetPlayer.name} is already marked by Time Lock (max. 1 per player).`;
+          addLog(`[Time Lock]: ${msg}`);
+          return msg;
+        }
+        targetPlayer.timeLockPhase2 = true;
+        state.lastMostimaLockEvent = {
+          id: `mlock_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          targetIndices: [targetPlayer.index],
+          kind: "phase2",
+          ts: Date.now()
+        };
+        if (targetPlayer.tileId && window.EFT_WEBGL_VFX) {
+          window.EFT_WEBGL_VFX.burstAtTile(targetPlayer.tileId, "debuff", "#3b82f6");
+        }
+        const msg = `${targetPlayer.name}'s Skill Cards are TIME LOCKED during Main Phase 2!`;
+        addLog(`[Time Lock]: ${msg}`);
+        return msg;
+      }
+      case "mostima_round_manipulate": {
+        const mode = options.choiceValue || "lock";
+        if (mode === "fast_forward") {
+          const beforeCycle = state.cycle;
+          const beforeRound = state.roundInCycle;
+          if (state.roundInCycle < state.rules.turnsPerCycle) {
+            state.roundInCycle++;
+            const msg = `${player.name} fast-forwarded time by +1 round (Cycle ${state.cycle}: Round ${beforeRound} -> Round ${state.roundInCycle})!`;
+            addLog(`[Lock Of Shattered Time]: ${msg}`);
+            return msg;
+          }
+          completeFullCycle();
+          const msg = `${player.name} fast-forwarded past Round ${beforeRound} (Cycle ${beforeCycle}) straight into Cycle ${state.cycle} · Round 1!`;
+          addLog(`[Lock Of Shattered Time]: ${msg}`);
+          return msg;
+        }
+        state.roundLockedForNextAdvance = true;
+        const msg = `${player.name} LOCKED the current round count at Round ${state.roundInCycle} (Cycle ${state.cycle})!`;
+        addLog(`[Lock Of Shattered Time]: ${msg}`);
+        return msg;
+      }
+      case "passive_keeper_lock_keys": {
+        const isCopied = Boolean(options.copiedUniqueDurationTurns);
+        const turns = options.copiedUniqueDurationTurns || getFullCycleTurns();
+        addOrRefreshPassive(player, {
+          key: "passive_keeper_lock_keys",
+          name: "Keeper Of The Lock & Keys",
+          remainingTurns: turns,
+          expiresOnCycleEnd: !isCopied
+        });
+        const durLabel = getActiveCycleDurationLabel(options.copiedUniqueDurationTurns);
+        const msg = `Keeper Of The Lock & Keys active (${durLabel}): opponents starting their turn within 2 blocks cannot use Skill Cards!`;
+        addLog(`Passive Active: [Keeper Of The Lock & Keys] (${durLabel}).`);
+        return msg;
+      }
+      case "mostima_key_of_chronology": {
+        const lockedIndices = [];
+        state.players.forEach((other) => {
+          if (other.index !== player.index) {
+            other.chronologyLockedRounds = Math.max(other.chronologyLockedRounds || 0, 1);
+            lockedIndices.push(other.index);
+            if (other.tileId && window.EFT_WEBGL_VFX) {
+              window.EFT_WEBGL_VFX.burstAtTile(other.tileId, "debuff", "#60a5fa");
+            }
+          }
+        });
+        state.lastMostimaLockEvent = {
+          id: `mlock_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          targetIndices: lockedIndices,
+          kind: "chronology",
+          ts: Date.now()
+        };
+        const msg = `ULTIMATE [Key Of Chronology]: All opponents' Skill Cards & Unique Passives are LOCKED for 1 round!`;
+        addLog(msg);
+        return msg;
+      }
       default:
         return card.description;
     }
@@ -8421,10 +8654,19 @@
     ) {
       lastTrackedTurnTimerKey = turnTrackKey;
       localTurnKeyStartedAt = Date.now();
-      turnThinkingRemainingMs = TURN_TIME_LIMIT_SEC * 1000;
+      const activeForTimer = getActivePlayer();
+      const effectiveLimitSec =
+        activeForTimer && activeForTimer.timeLimitHalved
+          ? Math.ceil(TURN_TIME_LIMIT_SEC / 2)
+          : TURN_TIME_LIMIT_SEC;
+      turnThinkingRemainingMs = effectiveLimitSec * 1000;
       lastTurnTimerTickAt = Date.now();
       lastTimerWarnSec = -1;
-      triggerTurnStartReminder(getActivePlayer());
+      const timerEl = document.getElementById("metric-turn-timer");
+      if (timerEl) {
+        timerEl.classList.toggle("is-halved", Boolean(activeForTimer && activeForTimer.timeLimitHalved));
+      }
+      triggerTurnStartReminder(activeForTimer);
       if (camera.mode !== "wide" && !camera.isDragging && state.players[state.activePlayerIndex]) {
         camera.mode = "follow";
         focusCameraOnTile(getActivePlayer().tileId);
@@ -8807,6 +9049,7 @@
     const topSig = [
       state.cycle,
       state.roundInCycle,
+      state.roundLockedForNextAdvance ? 1 : 0,
       state.rules.turnsPerCycle,
       state.activePlayerIndex,
       activeP.name,
@@ -8858,7 +9101,10 @@
     const ringEl = document.getElementById("round-progress-ring");
     if (ringEl) {
       ringEl.innerHTML = buildRoundProgressRingSvg(state.roundInCycle, state.rules.turnsPerCycle);
-      ringEl.title = `Round ${state.roundInCycle} / ${state.rules.turnsPerCycle}`;
+      ringEl.classList.toggle("is-round-locked", Boolean(state.roundLockedForNextAdvance));
+      ringEl.title = state.roundLockedForNextAdvance
+        ? `Round ${state.roundInCycle} / ${state.rules.turnsPerCycle} (LOCKED by Mostima)`
+        : `Round ${state.roundInCycle} / ${state.rules.turnsPerCycle}`;
     }
 
     const freeAdmin = isAdminUnlocked && adminFreeSkillUse;
@@ -9122,6 +9368,19 @@
       return "Active";
     };
 
+    const isChronoLocked = Boolean(p && p.chronologyLockedRounds > 0);
+    if (isChronoLocked) {
+      const baseDef = passiveCardDefs.find((c) => c.rarity === "Unique") || passiveCardDefs[0];
+      return {
+        isActive: false,
+        isLocked: true,
+        title: baseDef ? baseDef.name : "Character Passive",
+        statusLabel: `LOCKED · ${p.chronologyLockedRounds}R`,
+        extraLabel: "Sealed by Mostima's Key Of Chronology",
+        description: "Unique Passive effects are locked and suppressed until Mostima's Key Of Chronology expires."
+      };
+    }
+
     if (isActive) {
       const primary = activePassives[0];
       const matchDef = passiveCardDefs.find((c) => c.effectKey === primary.key) || passiveCardDefs[0];
@@ -9191,6 +9450,10 @@
           p.reverseNextRoll ? 1 : 0,
           p.skipNextTurn ? 1 : 0,
           p.silencedThisPhase ? 1 : 0,
+          p.timeLimitHalved ? 1 : 0,
+          p.timeLockPhase2 ? 1 : 0,
+          p.mostimaKeeperLockedThisTurn ? 1 : 0,
+          p.chronologyLockedRounds || 0,
           p.cursedRounds || 0,
           p.dragonblightRounds || 0,
           p.aLittleHelpRounds || 0,
@@ -9234,6 +9497,10 @@
       if (p.reverseNextRoll) chips.push(`<span class="fp-effect-chip is-debuff">Reverse</span>`);
       if (p.skipNextTurn) chips.push(`<span class="fp-effect-chip is-debuff">Skip Turn</span>`);
       if (p.silencedThisPhase) chips.push(`<span class="fp-effect-chip is-debuff">Silenced</span>`);
+      if (p.chronologyLockedRounds > 0) chips.push(`<span class="fp-effect-chip is-debuff is-time-lock">Chronology Lock</span>`);
+      if (p.mostimaKeeperLockedThisTurn) chips.push(`<span class="fp-effect-chip is-debuff is-time-lock">Keeper Lock</span>`);
+      if (p.timeLockPhase2) chips.push(`<span class="fp-effect-chip is-debuff is-time-lock">MP2 Lock</span>`);
+      if (p.timeLimitHalved) chips.push(`<span class="fp-effect-chip is-debuff is-time-lock">1/2 Timer</span>`);
       if (p.cursedRounds > 0) chips.push(`<span class="fp-effect-chip is-debuff is-cursed">Cursed</span>`);
       if (p.dragonblightRounds > 0) chips.push(`<span class="fp-effect-chip is-debuff is-dragonblight">Dragonblight</span>`);
       if (p.cannotBuyShardCycle === state.cycle) chips.push(`<span class="fp-effect-chip is-debuff">No Shard</span>`);
@@ -9277,7 +9544,7 @@
           <div class="ph-passive-spacer" aria-hidden="true"></div>
         </div>
         <div class="ph-passive-wrap" onclick="event.stopPropagation()">
-          <button type="button" class="ph-passive-orb ${pasInfo.isActive ? "is-on" : "is-off"}" aria-label="Passive ${escapeHtml(pasInfo.title)}: ${pasInfo.isActive ? "ON" : "OFF"}"></button>
+          <button type="button" class="ph-passive-orb ${pasInfo.isLocked ? "is-locked" : pasInfo.isActive ? "is-on" : "is-off"}" aria-label="Passive ${escapeHtml(pasInfo.title)}: ${pasInfo.isLocked ? "LOCKED" : pasInfo.isActive ? "ON" : "OFF"}">${pasInfo.isLocked ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>` : ""}</button>
           <div class="ph-passive-tooltip" role="tooltip">
             <div class="ph-pt-head">
               <span class="ph-pt-title">${escapeHtml(pasInfo.title)}</span>
@@ -10164,11 +10431,20 @@
 
     const handContainer = document.getElementById("hand-cards-scroll");
     const tuckY = isMobileLandscape() ? 48 : isMobilePortrait() ? 68 : 104;
+    const lockInfo = getPlayerSkillLockState(player);
+    const lockEvtId =
+      state.lastMostimaLockEvent &&
+      Array.isArray(state.lastMostimaLockEvent.targetIndices) &&
+      state.lastMostimaLockEvent.targetIndices.includes(player.index)
+        ? state.lastMostimaLockEvent.id
+        : "";
     const handSig = [
       player.index,
       player.charId,
       selectedCardUid || "",
       tuckY,
+      lockInfo.locked ? lockInfo.kind : lockInfo.pendingOnly ? "pending_mp2" : "",
+      lockEvtId,
       player.hand.map((c) => `${c.uid}:${c.id}`).join(",")
     ].join("|");
     if (_hudCache.hand === handSig) return;
@@ -10179,6 +10455,20 @@
       handContainer.innerHTML = "";
       return;
     }
+
+    const isMostimaLockVisual = lockInfo.locked && lockInfo.kind !== "silence";
+    const isFreshSlam = Boolean(isMostimaLockVisual && lockEvtId && renderTuckedHandAndDice._lastSlamEvtId !== lockEvtId);
+    if (isFreshSlam) {
+      renderTuckedHandAndDice._lastSlamEvtId = lockEvtId;
+    }
+
+    const padlockSealSvg = `<svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9.5 12V8.8a4.5 4.5 0 0 1 9 0V12"/>
+      <rect x="6" y="12" width="16" height="12" rx="3" fill="rgba(30, 58, 138, 0.55)"/>
+      <circle cx="14" cy="18" r="3.4" stroke-width="1.5"/>
+      <path d="M14 15.6V18l1.6 1.1" stroke-width="1.5"/>
+    </svg>`;
+    const miniLockSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
 
     const total = player.hand.length;
     handContainer.innerHTML = player.hand
@@ -10191,16 +10481,28 @@
           ? ""
           : `transform: translateY(${tuckY}px) rotate(${angle}deg);`;
 
+        const lockOverlayHtml = isMostimaLockVisual
+          ? `<div class="mostima-card-lock-overlay" aria-label="${escapeHtml(lockInfo.badgeText)}">
+              <span class="mcl-chain mcl-chain-a" aria-hidden="true"></span>
+              <span class="mcl-chain mcl-chain-b" aria-hidden="true"></span>
+              <span class="mcl-padlock-seal">${padlockSealSvg}</span>
+              <span class="mcl-lock-label">${escapeHtml(lockInfo.badgeText)}</span>
+            </div>`
+          : lockInfo.pendingOnly
+          ? `<div class="mostima-pending-lock-tag" title="${escapeHtml(lockInfo.reason)}">${miniLockSvg}<span>${escapeHtml(lockInfo.badgeText)}</span></div>`
+          : "";
+
         return `
-        <div class="tucked-card ${isUlt ? "ult-card" : ""} ${isSelected ? "selected" : ""}"
+        <div class="tucked-card ${isUlt ? "ult-card" : ""} ${isSelected ? "selected" : ""} ${isMostimaLockVisual ? "is-time-locked" : ""} ${isFreshSlam ? "is-lock-slam" : ""}"
              data-card-uid="${escapeHtml(card.uid)}"
              data-owner-idx="${player.index}"
              style="${inlineTransform}"
              onclick="event.stopPropagation();window.EFT_APP.onHandCardClicked('${card.uid}', ${player.index})">
           <img src="${imgUrl}" alt="${escapeHtml(card.name)}" draggable="false" loading="lazy" decoding="async" />
+          ${lockOverlayHtml}
           <div class="tucked-card-actions">
             <button class="btn btn-emerald btn-sm" style="width:100%;" onclick="event.stopPropagation();window.EFT_APP.openPlayCardModal('${card.uid}', ${player.index})">
-              Use / Details
+              ${isMostimaLockVisual ? "Time Locked" : "Use / Details"}
             </button>
           </div>
         </div>`;
@@ -10378,7 +10680,9 @@
     if (
       targetCard.effectKey === "choice_10tc_or_draw1" ||
       targetCard.effectKey === "choice_move1_2_or_10tc" ||
-      targetCard.effectKey === "sam_discounted_versus"
+      targetCard.effectKey === "sam_discounted_versus" ||
+      targetCard.effectKey === "mostima_dilation_choice" ||
+      targetCard.effectKey === "mostima_round_manipulate"
     ) {
       return {
         ok: true,
@@ -10460,6 +10764,12 @@
       } else if (flowCard.effectKey === "sam_discounted_versus") {
         choices.push({ label: "Tier 1: SAM Free (0 TC) vs Opponent 15 TC", meta: "Versus", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "tier1" }, flowCard });
         choices.push({ label: "Tier 2: SAM 15 TC vs Opponent 30 TC", meta: "Versus", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "tier2" }, flowCard });
+      } else if (flowCard.effectKey === "mostima_dilation_choice") {
+        choices.push({ label: "Teleport 2 Blocks Forward", meta: "Warp", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "teleport" }, flowCard });
+        choices.push({ label: "Gain +5 T-Coins", meta: "💰 TC", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "tc" }, flowCard });
+      } else if (flowCard.effectKey === "mostima_round_manipulate") {
+        choices.push({ label: `Lock Current Round (Stay Round ${state.roundInCycle})`, meta: "Time Lock", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "lock" }, flowCard });
+        choices.push({ label: "Fast Forward +1 Round", meta: "Advance", kind: "direct", options: { ...(evalRes.options || {}), choiceValue: "fast_forward" }, flowCard });
       }
     }
 
@@ -13053,6 +13363,24 @@
             <option value="tier2">Tier 2: SAM 15 TC vs Opponent 30 TC</option>
           </select>
         </div>`;
+    } else if (targetCard.effectKey === "mostima_dilation_choice") {
+      controlsHtml += `
+        <div class="form-field">
+          <label>Choose Effect:</label>
+          <select id="card-modal-choice-val">
+            <option value="teleport">Teleport 2 Blocks Forward</option>
+            <option value="tc">Gain +5 T-Coins</option>
+          </select>
+        </div>`;
+    } else if (targetCard.effectKey === "mostima_round_manipulate") {
+      controlsHtml += `
+        <div class="form-field">
+          <label>Choose Time Manipulation:</label>
+          <select id="card-modal-choice-val">
+            <option value="lock">Lock Current Rounds Count (Stay at Round ${state.roundInCycle})</option>
+            <option value="fast_forward">Fast Forward 1 Round</option>
+          </select>
+        </div>`;
     }
 
     return { html: controlsHtml, missingTarget: missingValidTarget };
@@ -13367,6 +13695,7 @@
         card.targetType === "any_player" ||
         card.targetType === "other_player" ||
         card.effectKey === "choice_move1_2_or_10tc" ||
+        card.effectKey === "mostima_dilation_choice" ||
         card.effectKey === "copy_last_skill"
     };
 
@@ -14294,7 +14623,7 @@
 
       const player = getActivePlayer();
       if (state.phaseIndex === 1 || state.phaseIndex === 3) {
-        if (player.skillsUsedThisTurn < player.maxSkillsThisTurn && player.hand.length > 0 && !player.silencedThisPhase) {
+        if (player.skillsUsedThisTurn < player.maxSkillsThisTurn && player.hand.length > 0 && !getPlayerSkillLockState(player).locked) {
           const playable = player.hand.find((c) => {
             if (!canPlaySkillCard(player, c).ok) return false;
             const taxCheck = getEmperorTaxInfo(player, c);
