@@ -760,119 +760,154 @@
 
     switch (type) {
       case "click":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 520 * pitchJitter, endFreq: 420 * pitchJitter, duration: 0.045, attack: 0.006, gain: 0.24, type: "sine" });
+        // Enchanted crystal tap with subtle harmonic sparkle
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 659.25 * pitchJitter, endFreq: 783.99 * pitchJitter, duration: 0.055, attack: 0.004, gain: 0.19, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.012, freq: 1318.5 * pitchJitter, endFreq: 1567.98 * pitchJitter, duration: 0.07, attack: 0.005, gain: 0.085, type: "triangle" });
         break;
       case "preview":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 587, endFreq: 740, duration: 0.075, attack: 0.008, gain: 0.26, type: "sine" });
+        // Fairy harp two-note gliss
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 587.33, endFreq: 880.0, duration: 0.11, attack: 0.008, gain: 0.21, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.035, freq: 1174.66, endFreq: 1318.5, duration: 0.12, attack: 0.008, gain: 0.10, type: "sine" });
         break;
       case "dice_tick": {
-        const pitch = 290 + Math.random() * 110;
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: pitch, endFreq: pitch * 0.72, duration: 0.032, attack: 0.004, gain: 0.16, type: "triangle" });
-        playSoftNoise(ctx, warmFilter, { startTime: t, filterFreq: 1350, duration: 0.028, gain: 0.09, q: 1.4 });
+        // Arcane rune-stone tumble
+        const pitch = 390 + Math.random() * 160;
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: pitch, endFreq: pitch * 0.78, duration: 0.04, attack: 0.004, gain: 0.14, type: "triangle" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.005, freq: pitch * 2.0, endFreq: pitch * 1.6, duration: 0.032, attack: 0.003, gain: 0.06, type: "sine" });
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterFreq: 1650, duration: 0.028, gain: 0.075, q: 1.5 });
         break;
       }
       case "dice_land":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 392, endFreq: 392, duration: 0.11, attack: 0.01, gain: 0.26, type: "sine" });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.065, freq: 523.25, endFreq: 523.25, duration: 0.18, attack: 0.012, gain: 0.30, type: "sine" });
+        // Warm magical triad bell bloom (G4 -> B4 -> D5 -> G5)
+        [392.0, 493.88, 587.33, 783.99].forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, {
+            startTime: t + idx * 0.038,
+            freq: hz,
+            duration: idx === 3 ? 0.34 : 0.18,
+            attack: 0.008,
+            gain: idx === 3 ? 0.22 : 0.20,
+            type: idx % 2 === 0 ? "sine" : "triangle"
+          });
+        });
         break;
       case "step": {
+        // Enchanted stone step + tiny crystalline fairy-dust overtone
         const sp = 0.94 + Math.random() * 0.13;
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 270 * sp, endFreq: 175 * sp, duration: 0.055, attack: 0.006, gain: 0.19, type: "triangle" });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.008, freq: 520 * sp, endFreq: 340 * sp, duration: 0.032, attack: 0.004, gain: 0.08, type: "sine" });
-        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 980 * sp, duration: 0.036, gain: 0.06, q: 1.3 });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 290 * sp, endFreq: 196 * sp, duration: 0.055, attack: 0.005, gain: 0.17, type: "triangle" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.01, freq: 880 * sp, endFreq: 1046.5 * sp, duration: 0.065, attack: 0.006, gain: 0.065, type: "sine" });
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1220 * sp, duration: 0.034, gain: 0.05, q: 1.4 });
         break;
       }
       case "map_move": {
         const mpPitch = 0.95 + Math.random() * 0.1;
-        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 680 * mpPitch, duration: 0.065, gain: 0.048, q: 1.1 });
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 235 * mpPitch, endFreq: 275 * mpPitch, duration: 0.058, attack: 0.014, gain: 0.052, type: "sine" });
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 860 * mpPitch, duration: 0.065, gain: 0.04, q: 1.2 });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 330 * mpPitch, endFreq: 392 * mpPitch, duration: 0.07, attack: 0.014, gain: 0.048, type: "sine" });
         break;
       }
       case "branch":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 440, duration: 0.13, attack: 0.012, gain: 0.24, type: "sine" });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.07, freq: 587.33, duration: 0.18, attack: 0.014, gain: 0.26, type: "sine" });
+        // Mystical crossroads harp arpeggio
+        [440.0, 554.37, 659.25, 880.0].forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.048, freq: hz, duration: 0.24, attack: 0.01, gain: 0.19, type: "sine" });
+        });
         break;
       case "coin_gain":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 659.25, duration: 0.11, attack: 0.01, gain: 0.24, type: "sine" });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.065, freq: 880, duration: 0.19, attack: 0.012, gain: 0.28, type: "sine" });
+        // Glittering fantasy treasure celesta cascade
+        [659.25, 830.61, 987.77, 1318.51].forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.045, freq: hz, duration: idx === 3 ? 0.32 : 0.18, attack: 0.008, gain: 0.20, type: "sine" });
+        });
         break;
       case "coin_loss":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 349.23, endFreq: 311.13, duration: 0.12, attack: 0.012, gain: 0.24, type: "triangle" });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.08, freq: 261.63, endFreq: 233.08, duration: 0.18, attack: 0.014, gain: 0.22, type: "sine" });
+        // Hollow dark-fantasy bell descent
+        [349.23, 311.13, 233.08].forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.065, freq: hz, endFreq: hz * 0.94, duration: 0.24, attack: 0.012, gain: 0.20, type: idx === 0 ? "triangle" : "sine" });
+        });
         break;
       case "card":
-        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1650, duration: 0.075, gain: 0.18, q: 0.9 });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.015, freq: 493.88, endFreq: 587.33, duration: 0.08, attack: 0.01, gain: 0.16, type: "sine" });
+        // Arcane parchment swoosh + luminous rune chime
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1850, duration: 0.08, gain: 0.15, q: 1.0 });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.012, freq: 587.33, endFreq: 783.99, duration: 0.11, attack: 0.008, gain: 0.16, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.036, freq: 1174.66, endFreq: 1318.5, duration: 0.12, attack: 0.008, gain: 0.08, type: "sine" });
         break;
       case "card_shuffle": {
-        const pitch = 360 + Math.random() * 140;
-        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1950, duration: 0.055, gain: 0.15, q: 1.1 });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.008, freq: pitch, endFreq: pitch * 0.82, duration: 0.04, attack: 0.005, gain: 0.10, type: "triangle" });
+        // Enchanted tarot flutter with soft crystal overtone
+        const pitch = 440 + Math.random() * 180;
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 2150, duration: 0.055, gain: 0.13, q: 1.2 });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.006, freq: pitch, endFreq: pitch * 0.88, duration: 0.05, attack: 0.005, gain: 0.09, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.012, freq: pitch * 1.5, duration: 0.055, attack: 0.005, gain: 0.05, type: "triangle" });
         break;
       }
       case "card_reveal": {
         if (variant === "negative") {
-          [392.0, 311.13, 246.94].forEach((hz, idx) => {
-            playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.075, freq: hz, duration: 0.36, attack: 0.016, gain: 0.22, type: idx === 0 ? "triangle" : "sine" });
+          [415.3, 349.23, 293.66, 220.0].forEach((hz, idx) => {
+            playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.07, freq: hz, duration: 0.42, attack: 0.014, gain: 0.21, type: idx === 0 ? "triangle" : "sine" });
           });
         } else if (variant === "event") {
-          [392.0, 587.33, 659.25, 880.0].forEach((hz, idx) => {
-            playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.06, freq: hz, duration: 0.42, attack: 0.016, gain: 0.22, type: "sine" });
+          [392.0, 587.33, 739.99, 880.0, 1174.66].forEach((hz, idx) => {
+            playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.055, freq: hz, duration: 0.48, attack: 0.014, gain: 0.20, type: "sine" });
           });
         } else {
-          [523.25, 659.25, 783.99, 1046.5].forEach((hz, idx) => {
-            playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.055, freq: hz, duration: 0.36, attack: 0.014, gain: 0.22, type: "sine" });
+          [523.25, 659.25, 783.99, 987.77, 1318.51].forEach((hz, idx) => {
+            playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.05, freq: hz, duration: 0.44, attack: 0.012, gain: 0.20, type: "sine" });
           });
         }
         break;
       }
       case "card_burn": {
-        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 920, duration: 0.24, gain: 0.22, q: 0.85 });
-        playSoftNoise(ctx, warmFilter, { startTime: t + 0.14, filterType: "highpass", filterFreq: 2100, duration: 0.28, gain: 0.14, q: 0.7 });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.02, freq: 245, endFreq: 112, duration: 0.30, attack: 0.014, gain: 0.22, type: "triangle" });
+        // Arcane ember dissolve
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 980, duration: 0.24, gain: 0.20, q: 0.9 });
+        playSoftNoise(ctx, warmFilter, { startTime: t + 0.14, filterType: "highpass", filterFreq: 2300, duration: 0.28, gain: 0.13, q: 0.8 });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.02, freq: 293.66, endFreq: 130.81, duration: 0.34, attack: 0.014, gain: 0.22, type: "triangle" });
         break;
       }
       case "card_steal": {
-        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1950, duration: 0.16, gain: 0.20, q: 1.4 });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.015, freq: 440, endFreq: 784, duration: 0.15, attack: 0.008, gain: 0.22, type: "sine" });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.09, freq: 659.25, endFreq: 987.77, duration: 0.16, attack: 0.008, gain: 0.18, type: "triangle" });
+        // Phantom arcane whisk
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 2150, duration: 0.16, gain: 0.18, q: 1.4 });
+        [493.88, 739.99, 987.77, 1479.98].forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.042, freq: hz, duration: 0.18, attack: 0.008, gain: 0.18, type: "sine" });
+        });
         break;
       }
       case "card_drag_ok": {
-        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1750, duration: 0.08, gain: 0.16, q: 1.0 });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.01, freq: 523.25, endFreq: 698.46, duration: 0.10, attack: 0.008, gain: 0.18, type: "sine" });
+        // Spell-ready crystal chime
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1950, duration: 0.075, gain: 0.13, q: 1.1 });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.008, freq: 523.25, endFreq: 783.99, duration: 0.12, attack: 0.008, gain: 0.18, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.045, freq: 1046.5, endFreq: 1318.5, duration: 0.16, attack: 0.008, gain: 0.11, type: "sine" });
         break;
       }
       case "card_drag_deny": {
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 220, endFreq: 148, duration: 0.14, attack: 0.008, gain: 0.20, type: "triangle" });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 233.08, endFreq: 155.56, duration: 0.16, attack: 0.008, gain: 0.19, type: "triangle" });
         break;
       }
       case "turn":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 329.63, duration: 0.14, attack: 0.016, gain: 0.20, type: "sine" });
-        playSoftTone(ctx, warmFilter, { startTime: t + 0.075, freq: 440, duration: 0.20, attack: 0.016, gain: 0.22, type: "sine" });
+        // Gentle fantasy bell chime
+        [392.0, 587.33, 783.99].forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.055, freq: hz, duration: 0.24, attack: 0.012, gain: 0.18, type: "sine" });
+        });
         break;
       case "turn_reminder": {
+        // Ethereal fantasy harp fanfare
         const cleanTurnVar = String(variant || "").replace(/^preview:/, "");
         const isMy = cleanTurnVar === "my_turn";
-        const notes = isMy ? [523.25, 659.25, 783.99, 1046.5] : [440.0, 587.33];
+        const notes = isMy ? [523.25, 659.25, 783.99, 987.77, 1318.51] : [440.0, 587.33, 880.0];
         notes.forEach((hz, idx) => {
           playSoftTone(ctx, warmFilter, {
-            startTime: t + idx * (isMy ? 0.068 : 0.09),
+            startTime: t + idx * (isMy ? 0.058 : 0.08),
             freq: hz,
-            duration: idx === notes.length - 1 ? 0.40 : 0.20,
+            duration: idx === notes.length - 1 ? 0.48 : 0.24,
             attack: 0.01,
-            gain: isMy ? 0.34 : 0.28,
+            gain: isMy ? 0.28 : 0.22,
             type: idx === notes.length - 1 ? "triangle" : "sine"
           });
         });
         break;
       }
       case "timer_warn":
-        playSoftTone(ctx, warmFilter, { startTime: t, freq: 520, endFreq: 440, duration: 0.045, attack: 0.005, gain: 0.16, type: "triangle" });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 587.33, endFreq: 523.25, duration: 0.06, attack: 0.005, gain: 0.15, type: "sine" });
         break;
       case "shard":
-        [523.25, 659.25, 783.99].forEach((hz, idx) => {
-          playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.07, freq: hz, duration: 0.34, attack: 0.018, gain: 0.26, type: "sine" });
+        // Radiant Tartarus Crystal resonance chorus
+        [523.25, 659.25, 783.99, 1046.5, 1567.98].forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.06, freq: hz, duration: 0.46, attack: 0.014, gain: 0.22, type: "sine" });
         });
         break;
       case "monster_portal": {
@@ -1157,112 +1192,27 @@
     if (skillToggle) skillToggle.checked = soundPrefs.skillSfxEnabled !== false;
     if (skillSlider) skillSlider.value = String(skillPct);
     if (skillLabel) skillLabel.textContent = soundPrefs.skillSfxEnabled === false ? "Off" : `${skillPct}%`;
-    const bgmToggle = document.getElementById("bgm-toggle");
-    const bgmSlider = document.getElementById("bgm-volume-slider");
-    const bgmLabel = document.getElementById("bgm-volume-label");
-    const bgmPct = Math.round((soundPrefs.bgmVolume !== undefined ? soundPrefs.bgmVolume : 0.42) * 100);
-    if (bgmToggle) bgmToggle.checked = soundPrefs.bgmEnabled !== false;
-    if (bgmSlider) bgmSlider.value = String(bgmPct);
-    if (bgmLabel) bgmLabel.textContent = soundPrefs.bgmEnabled === false ? "Off" : `${bgmPct}%`;
     syncAudioBusGains();
   }
 
   let ambientBgmIntervalId = null;
-  let ambientBgmStepIdx = 0;
 
   function playAmbientBgmPhrase() {
-    if (!audioCtx || !audioBuses || !audioBuses.bgm || audioCtx.state !== "running") return;
-    if (!state || !isMatchStarted || isTitleScreenVisible || state.winner) return;
-    if (soundPrefs.muted || soundPrefs.bgmEnabled === false || (soundPrefs.bgmVolume ?? 0.42) <= 0.005) return;
-
-    const cycleNum = Math.max(1, Number(state.cycle) || 1);
-    const isNight = cycleNum % 2 === 0;
-    const cycleVariant = Math.floor((cycleNum - 1) / 2) % 3;
-    const transpose = [1.0, 1.05946, 0.94387][cycleVariant]; // subtle harmonic shift each Day/Night pair
-
-    // Odd Cycles (DAY): warm sunlit Lydian/Major chords; Even Cycles (NIGHT): serene nocturnal Dorian/Minor chords
-    const dayChords = [
-      [261.63, 329.63, 392.0, 493.88], // Cmaj7
-      [293.66, 369.99, 440.0, 523.25], // D6/9 shimmer
-      [246.94, 329.63, 392.0, 493.88], // Em7
-      [220.0, 261.63, 329.63, 392.0]   // Am7
-    ];
-    const nightChords = [
-      [196.0, 233.08, 293.66, 349.23], // Gm7
-      [174.61, 220.0, 261.63, 329.63], // Fmaj7
-      [146.83, 174.61, 220.0, 293.66], // Dm9
-      [164.81, 220.0, 246.94, 329.63]  // Asus4/E
-    ];
-
-    const palette = isNight ? nightChords : dayChords;
-    const chord = palette[ambientBgmStepIdx % palette.length];
-    ambientBgmStepIdx++;
-
-    const now = audioCtx.currentTime;
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(isNight ? 820 : 1420, now);
-    filter.Q.setValueAtTime(0.6, now);
-    filter.connect(audioBuses.bgm);
-
-    // Warm soft pad chord
-    chord.forEach((baseHz, i) => {
-      const hz = baseHz * transpose;
-      const osc = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      osc.type = isNight ? "sine" : i % 2 === 0 ? "sine" : "triangle";
-      osc.frequency.setValueAtTime(hz, now);
-      const peak = (isNight ? 0.095 : 0.082) / (1 + i * 0.25);
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.linearRampToValueAtTime(peak, now + 0.55 + i * 0.08);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 3.15);
-      osc.connect(g);
-      g.connect(filter);
-      osc.start(now + i * 0.06);
-      osc.stop(now + 3.25);
-    });
-
-    // Gentle melodic arpeggio droplet (soft harp for Day, distant celesta chime for Night)
-    const melodyNote = chord[(ambientBgmStepIdx + 1) % chord.length] * transpose * 2;
-    const mOsc = audioCtx.createOscillator();
-    const mGain = audioCtx.createGain();
-    mOsc.type = "sine";
-    mOsc.frequency.setValueAtTime(melodyNote, now + 0.85);
-    mGain.gain.setValueAtTime(0.0001, now + 0.85);
-    mGain.gain.linearRampToValueAtTime(isNight ? 0.048 : 0.056, now + 0.96);
-    mGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.35);
-    mOsc.connect(mGain);
-    mGain.connect(filter);
-    mOsc.start(now + 0.85);
-    mOsc.stop(now + 2.45);
+    // Background music disabled for now
   }
 
   function ensureAmbientBgmLoop() {
-    if (ambientBgmIntervalId) return;
-    ambientBgmIntervalId = setInterval(() => {
-      playAmbientBgmPhrase();
-    }, 2800);
-    setTimeout(() => playAmbientBgmPhrase(), 400);
-  }
-
-  function toggleBgm(enabled) {
-    soundPrefs.bgmEnabled = !!enabled;
-    saveSoundPrefs();
-    syncSoundControlUi();
-    if (soundPrefs.bgmEnabled) {
-      ensureAudioCtx(true);
-      ensureAmbientBgmLoop();
-      playAmbientBgmPhrase();
+    if (ambientBgmIntervalId) {
+      clearInterval(ambientBgmIntervalId);
+      ambientBgmIntervalId = null;
     }
   }
 
-  function setBgmVolume(valPct) {
-    const num = Math.max(0, Math.min(100, Number(valPct) || 0));
-    soundPrefs.bgmVolume = num / 100;
-    if (num > 0 && soundPrefs.bgmEnabled === false) soundPrefs.bgmEnabled = true;
-    saveSoundPrefs();
-    syncSoundControlUi();
-    ensureAudioCtx(true);
+  function toggleBgm() {
+    ensureAmbientBgmLoop();
+  }
+
+  function setBgmVolume() {
     ensureAmbientBgmLoop();
   }
 
@@ -5150,6 +5100,7 @@
     if (modal && modal.classList.contains("open") && titleEl && titleEl.dataset && titleEl.dataset.modalKind === "welcome_lobby") {
       return true;
     }
+    if (state && state.isMonsterTurn) return true;
     if (isWalkingAnim || isTileEffectAnimating || tileShuffleState) return true;
     if (diceAnimIntervalId || diceAnimTimeoutId) return true;
     const diceOv = document.getElementById("dice-roll-overlay");
@@ -5163,7 +5114,7 @@
     clearTimeout(autoEndTurnTimerId);
     autoEndTurnTimerId = null;
     if (!isMatchStarted || isTitleScreenVisible) return;
-    if (!state || state.winner || state.activeMinigame) return;
+    if (!state || state.winner || state.activeMinigame || state.isMonsterTurn) return;
     if (isRemoteClient()) return;
     if (state.phaseIndex !== 5) return;
     if (isWalkingAnim || isTileEffectAnimating || tileShuffleState || pendingInteraction) return;
@@ -5172,7 +5123,7 @@
 
     autoEndTurnTimerId = setTimeout(() => {
       autoEndTurnTimerId = null;
-      if (!state || state.winner || state.activeMinigame || isRemoteClient()) return;
+      if (!state || state.winner || state.activeMinigame || state.isMonsterTurn || isRemoteClient()) return;
       if (state.phaseIndex !== 5) return;
       if (isWalkingAnim || isTileEffectAnimating || tileShuffleState || pendingInteraction) return;
       if (state.activeTileModal) return;
@@ -5228,7 +5179,7 @@
   }
 
   function forceExpireCurrentTurn() {
-    if (!state || state.winner || state.activeMinigame || isRemoteClient()) return;
+    if (!state || state.winner || state.activeMinigame || state.isMonsterTurn || isRemoteClient()) return;
     const player = getActivePlayer();
     if (!player) return;
 
@@ -8287,9 +8238,17 @@
     ) {
       lastShownDiceRollEventId = state.lastDiceRollEvent.id;
       const ev = state.lastDiceRollEvent;
-      if (camera.mode !== "wide" && !camera.isDragging && state.players[state.activePlayerIndex]) {
+      if (camera.mode !== "wide" && !camera.isDragging) {
         camera.mode = "follow";
-        focusCameraOnTile(getActivePlayer().tileId, Math.max(camera.zoom, isMobilePortrait() ? 0.72 : 0.96));
+        const focusTid =
+          state.isMonsterTurn && state.activeMonster && state.activeMonster.tileId
+            ? state.activeMonster.tileId
+            : state.players[state.activePlayerIndex]
+            ? getActivePlayer().tileId
+            : null;
+        if (focusTid) {
+          focusCameraOnTile(focusTid, Math.max(camera.zoom, isMobilePortrait() ? 0.72 : 0.96));
+        }
       }
       playDiceRollAnimation(
         {
@@ -8368,7 +8327,36 @@
       state.lastMonsterAlertEvent.id !== lastProcessedMonsterAlertId
     ) {
       lastProcessedMonsterAlertId = state.lastMonsterAlertEvent.id;
+      if (state.isMonsterTurn && state.activeMonster && state.activeMonster.tileId && !camera.isDragging) {
+        camera.mode = "follow";
+        focusCameraOnTile(
+          state.activeMonster.tileId,
+          state.lastMonsterAlertEvent.kind === "spawn"
+            ? (isMobilePortrait() ? 0.84 : 1.12)
+            : (isMobilePortrait() ? 0.78 : 1.0)
+        );
+      }
       showMonsterHorrorAlert(state.lastMonsterAlertEvent);
+    }
+    if (
+      state.isMonsterTurn &&
+      state.activeMonster &&
+      state.activeMonster.tileId &&
+      !camera.isDragging &&
+      camera.mode !== "wide"
+    ) {
+      const mFocusKey = `${state.cycle}:${state.roundInCycle}:${state.activeMonster.id}:${state.activeMonster.tileId}:${state.activeMonster.isHiddenPreSpawn ? 1 : 0}:${state.activeMonster.portalEmerging ? 1 : 0}`;
+      if (renderAll._lastMonsterFocusKey !== mFocusKey) {
+        renderAll._lastMonsterFocusKey = mFocusKey;
+        const mZoom =
+          state.activeMonster.isHiddenPreSpawn || state.activeMonster.portalEmerging
+            ? (isMobilePortrait() ? 0.84 : 1.12)
+            : (isMobilePortrait() ? 0.78 : 1.0);
+        camera.mode = "follow";
+        focusCameraOnTile(state.activeMonster.tileId, mZoom);
+      }
+    } else if (!state.isMonsterTurn) {
+      renderAll._lastMonsterFocusKey = "";
     }
     if (
       state.lastMonsterTargetShuffleEvent &&
@@ -9965,7 +9953,7 @@
       isAdminUnlocked ? 1 : 0,
       state.isMonsterTurn ? 1 : 0,
       state.activeMonster
-        ? `${state.activeMonster.id}:${state.activeMonster.tileId}:${state.activeMonster.portalEmerging ? 1 : 0}:${state.activeMonster.isAirborne ? 1 : 0}:${state.activeMonster.isDiveBombing ? 1 : 0}:${state.activeMonster.diveTargetIndex ?? ""}`
+        ? `${state.activeMonster.id}:${state.activeMonster.tileId}:${state.activeMonster.isHiddenPreSpawn ? 1 : 0}:${state.activeMonster.portalEmerging ? 1 : 0}:${state.activeMonster.isAirborne ? 1 : 0}:${state.activeMonster.isDiveBombing ? 1 : 0}:${state.activeMonster.diveTargetIndex ?? ""}`
         : "",
       state.activeShards.map((s) => `${s.roman}:${s.tileId}`).join(","),
       fadingShards.map((s) => s.fadeId).join(","),
@@ -14090,7 +14078,7 @@
 
   function scheduleMultiplayerBotIfNeeded() {
     clearTimeout(window._mpBotTimer);
-    if (!state || state.winner || isWalkingAnim || isTileEffectAnimating || tileShuffleState) return;
+    if (!state || state.winner || state.isMonsterTurn || isWalkingAnim || isTileEffectAnimating || tileShuffleState) return;
     if (!isMatchStarted || isTitleScreenVisible) return;
     if (state.activeMinigame) {
       scheduleDiceOfFateBotIfNeeded();
@@ -14184,7 +14172,7 @@
   }
 
   function _executeBotStepInternal() {
-    if (!state || state.winner || isWalkingAnim || isTileEffectAnimating || tileShuffleState) return;
+    if (!state || state.winner || state.isMonsterTurn || isWalkingAnim || isTileEffectAnimating || tileShuffleState) return;
     isProcessingRemoteAction = true;
     try {
       if (state.activeMinigame) {
@@ -14337,7 +14325,7 @@
         clearInterval(iv);
         return;
       }
-      if (!isWalkingAnim && !isTileEffectAnimating && !tileShuffleState) {
+      if (!isWalkingAnim && !isTileEffectAnimating && !tileShuffleState && !state.isMonsterTurn) {
         runSmartBotTurn();
         actions++;
       }
@@ -14469,7 +14457,6 @@
   function openSoundSettingsModal() {
     const pct = Math.round((soundPrefs.volume || 0) * 100);
     const skillPct = Math.round((soundPrefs.skillSfxVolume !== undefined ? soundPrefs.skillSfxVolume : 0.75) * 100);
-    const bgmPct = Math.round((soundPrefs.bgmVolume !== undefined ? soundPrefs.bgmVolume : 0.42) * 100);
 
     openInfoModal(
       "Sound Settings &amp; Game Feel",
@@ -14484,15 +14471,6 @@
         </div>
 
         <div class="sound-modal-section">
-          <label class="am-toggle-row">
-            <span>Background Music (Day / Night Cycle)</span>
-            <input id="bgm-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleBgm(this.checked)" />
-          </label>
-          <div class="am-slider-row">
-            <span>Music Volume</span>
-            <input id="bgm-volume-slider" class="sound-volume-slider" type="range" min="0" max="100" value="${bgmPct}" oninput="window.EFT_APP.setBgmVolume(this.value)" />
-            <span id="bgm-volume-label" class="sound-volume-label">${bgmPct}%</span>
-          </div>
           <label class="am-toggle-row">
             <span>Camera Shake (Screen Shake)</span>
             <input id="screen-shake-toggle" type="checkbox" checked onchange="window.EFT_APP.toggleScreenShake(this.checked)" />
@@ -15437,7 +15415,7 @@
   }
 
   function buildMonsterBoardPawnHtml() {
-    if (!state || !state.activeMonster || !state.activeMonster.tileId) return "";
+    if (!state || !state.activeMonster || !state.activeMonster.tileId || state.activeMonster.isHiddenPreSpawn) return "";
     const m = state.activeMonster;
     const tile = TILE_MAP[m.tileId];
     if (!tile) return "";
@@ -15873,9 +15851,13 @@
     const def = (DATA.MONSTERS && DATA.MONSTERS[monsterId]) || null;
     if (!def) return;
     clearMonsterTurnTimers();
+    clearTimeout(window._mpBotTimer);
+    clearTimeout(autoEndTurnTimerId);
+    autoEndTurnTimerId = null;
 
     const spawnTileId = opts.tileId || pickMonsterSpawnTile();
     state.lastSpawnedMonsterId = def.id;
+    state.isMonsterTurn = true;
     state.activeMonster = {
       id: def.id,
       name: def.name,
@@ -15887,54 +15869,45 @@
       prevTileId: null,
       lastDirection: 1,
       spawnedCycle: state.cycle,
-      portalEmerging: true,
+      isHiddenPreSpawn: true,
+      portalEmerging: false,
       isAirborne: false,
       isDiveBombing: false,
       diveTargetIndex: null,
       diveTargetName: ""
     };
-    state.isMonsterTurn = true;
-
-    const spawnEv = {
-      id: `ms_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      monsterId: def.id,
-      name: def.name,
-      title: def.title,
-      tileId: spawnTileId,
-      ts: Date.now()
-    };
-    state.lastMonsterSpawnEvent = spawnEv;
-    lastProcessedMonsterSpawnId = spawnEv.id;
 
     const spawnTile = TILE_MAP[spawnTileId];
     const tileLabel = spawnTile ? spawnTile.name : spawnTileId;
+
+    // Step 1 -> 2: Cycle updated, immediately lock camera onto spawn tile & display Monster title alert first
+    camera.mode = "follow";
+    focusCameraOnTile(spawnTileId, isMobilePortrait() ? 0.84 : 1.12);
+
     if (def.id === "valstrax") {
-      addLog(`ELDER DRAGON SIGHTED: Valstrax (Sky Comet Dragon) crashed onto ${tileLabel} (${spawnTileId}) and claims the first turn!`);
-      playMonsterPortalSpawnAnim(spawnEv);
+      addLog(`ELDER DRAGON SIGHTED: Valstrax (Sky Comet Dragon) is descending upon ${tileLabel} (${spawnTileId}) and claims the first turn!`);
       triggerMonsterHorrorAlert(
         "VALSTRAX",
         "SKY COMET DRAGON · ELDER DRAGON",
-        `A crimson comet crashed down upon ${tileLabel}. The hunt begins first.`,
+        `A crimson comet descends upon ${tileLabel}. The hunt begins first.`,
         "spawn",
         "valstrax"
       );
     } else if (def.id === "mew") {
-      addLog(`MYTHICAL ENCOUNTER: Mew (First Creature) magically appeared at ${tileLabel} (${spawnTileId}) and takes the first turn!`);
-      playMonsterPortalSpawnAnim(spawnEv);
+      addLog(`MYTHICAL ENCOUNTER: Mew (First Creature) is appearing at ${tileLabel} (${spawnTileId}) and takes the first turn!`);
       triggerMonsterHorrorAlert(
         "Mew",
         "FIRST CREATURE HAS APPEARED",
-        `A soft trail of starlight shimmered at ${tileLabel}~ Mew wants to play first!`,
+        `A soft trail of starlight shimmers at ${tileLabel}~ Mew wants to play first!`,
         "spawn",
         "mew"
       );
     } else {
-      addLog(`DARK HOUR: ${def.name} (${def.title}) tore open a portal at ${tileLabel} (${spawnTileId}) and claims the first turn!`);
-      playMonsterPortalSpawnAnim(spawnEv);
+      addLog(`DARK HOUR: ${def.name} (${def.title}) is tearing open a portal at ${tileLabel} (${spawnTileId}) and claims the first turn!`);
       triggerMonsterHorrorAlert(
         "THANATOS",
         "GOD OF DEATH HAS ARRIVED",
-        `A portal tore open at ${tileLabel}. Death walks first.`,
+        `A portal tears open at ${tileLabel}. Death walks first.`,
         "spawn",
         "thanatos"
       );
@@ -15942,15 +15915,36 @@
     renderAll();
     broadcastMultiplayerState();
 
+    // Step 3: Trigger Spawn Animation (Portal / Sky Comet / Magical Appear) with camera locked on spawn tile
     scheduleMonsterTimer(() => {
       if (!state || !state.activeMonster) return;
-      state.activeMonster.portalEmerging = false;
+      state.activeMonster.isHiddenPreSpawn = false;
+      state.activeMonster.portalEmerging = true;
+      const spawnEv = {
+        id: `ms_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        monsterId: def.id,
+        name: def.name,
+        title: def.title,
+        tileId: spawnTileId,
+        ts: Date.now()
+      };
+      state.lastMonsterSpawnEvent = spawnEv;
+      lastProcessedMonsterSpawnId = spawnEv.id;
+      playMonsterPortalSpawnAnim(spawnEv);
       renderAll();
       broadcastMultiplayerState();
-      if (opts.startTurnAfterSpawn !== false && !isRemoteClient()) {
-        runMonsterTurn();
-      }
-    }, 4400);
+
+      // Step 4: Spawn finishes -> Monster executes its 1d8 turn while camera stays focused on Monster
+      scheduleMonsterTimer(() => {
+        if (!state || !state.activeMonster) return;
+        state.activeMonster.portalEmerging = false;
+        renderAll();
+        broadcastMultiplayerState();
+        if (opts.startTurnAfterSpawn !== false && !isRemoteClient()) {
+          runMonsterTurn();
+        }
+      }, 3100);
+    }, 1350);
   }
 
   function runMonsterTurn() {
@@ -15961,6 +15955,9 @@
     if (isRemoteClient()) return;
 
     clearMonsterTurnTimers();
+    clearTimeout(window._mpBotTimer);
+    clearTimeout(autoEndTurnTimerId);
+    autoEndTurnTimerId = null;
     state.isMonsterTurn = true;
     const monster = state.activeMonster;
     const curRound = state.roundInCycle || 1;
@@ -16418,10 +16415,11 @@
     startPlayerTurn(getActivePlayer());
     if (camera.mode !== "wide") {
       camera.mode = "follow";
-      focusCameraOnTile(getActivePlayer().tileId);
+      focusCameraOnTile(getActivePlayer().tileId, isMobilePortrait() ? 0.72 : 0.96);
     }
     renderAll();
     broadcastMultiplayerState();
+    scheduleMultiplayerBotIfNeeded();
   }
 
   function triggerManualMonsterSpawn(monsterId = "thanatos") {
