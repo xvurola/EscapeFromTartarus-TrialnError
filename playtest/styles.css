@@ -11180,6 +11180,473 @@ body {
 }
 
 /* ============================================================================
+   VALSTRAX (MONSTER HUNTER) & MEW (WHIMSICAL) THEMES, SPAWN VFX, & AIRBORNE
+   ============================================================================ */
+.monster-hud-card {
+  border-color: var(--m-color, #22c55e);
+}
+
+.monster-hud-card:hover {
+  border-color: var(--m-color, #4ade80);
+  box-shadow: 0 0 0 1px rgba(var(--m-rgb, 34, 197, 94), 0.4), 0 8px 24px rgba(0, 0, 0, 0.85);
+}
+
+.monster-hud-card.is-active {
+  border-color: var(--m-color, #4ade80);
+  box-shadow: 0 0 0 2px rgba(var(--m-rgb, 34, 197, 94), 0.36), 0 0 22px rgba(var(--m-rgb, 34, 197, 94), 0.34), 0 10px 26px rgba(0, 0, 0, 0.88);
+}
+
+.monster-hud-card .mh-name {
+  color: var(--m-text, #38b000);
+}
+
+.monster-hud-card .mh-hover-tooltip {
+  border-color: rgba(var(--m-rgb, 34, 197, 94), 0.55);
+}
+
+.monster-hud-card .mh-tip-head,
+.monster-hud-card .ph-m-tip-row strong {
+  color: var(--m-color, #4ade80);
+}
+
+.fp-effect-chip.is-dragonblight {
+  background: #2b090b;
+  border-color: #ef4444;
+  color: #fecaca;
+}
+
+.fp-effect-chip.is-mew-buff {
+  background: #3a112c;
+  border-color: #f472b6;
+  color: #fce7f3;
+}
+
+/* Mew Transformed +5 TC Effect Tile */
+.digital-tile.dt-mew-plus5 {
+  --tile-surface: radial-gradient(circle at 32% 28%, #3b1734 0%, #260f23 68%, #160815 100%);
+  --tile-ring: rgba(244, 114, 182, 0.82);
+  --tile-base: #2a0a24;
+  --tile-accent: #f9a8d4;
+  --tile-label: #fdf2f8;
+  --tile-glow: rgba(244, 114, 182, 0.36);
+}
+
+/* Multi-Monster Pawn Aura & Tag Colors */
+.board-monster-pawn.theme-valstrax .monster-chibi-svg {
+  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.88)) drop-shadow(0 0 12px rgba(239, 68, 68, 0.55));
+}
+
+.board-monster-pawn.theme-valstrax .monster-pawn-aura {
+  background: radial-gradient(ellipse at center, rgba(239, 68, 68, 0.58) 0%, rgba(0, 0, 0, 0.85) 58%, transparent 100%);
+}
+
+.board-monster-pawn.theme-valstrax .monster-pawn-tag {
+  color: #f87171;
+}
+
+.board-monster-pawn.theme-mew .monster-chibi-svg {
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.72)) drop-shadow(0 0 14px rgba(244, 114, 182, 0.62));
+}
+
+.board-monster-pawn.theme-mew .monster-pawn-aura {
+  background: radial-gradient(ellipse at center, rgba(244, 114, 182, 0.54) 0%, rgba(168, 85, 247, 0.22) 58%, transparent 100%);
+}
+
+.board-monster-pawn.theme-mew .monster-pawn-tag {
+  color: #f9a8d4;
+}
+
+/* Valstrax Sky Comet Landing + Airborne Hover + Dive Bomb Ambush */
+.board-monster-pawn.is-comet-landing {
+  animation: valstraxCometLand 1.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.board-monster-pawn.is-airborne {
+  transform: translate(-50%, -148%) scale(1.12);
+  z-index: 42;
+}
+
+.board-monster-pawn.is-airborne .monster-pawn-aura {
+  bottom: -74px;
+  width: 96px;
+  height: 28px;
+  opacity: 0.7;
+  filter: blur(4px);
+}
+
+.board-monster-pawn.is-airborne .monster-chibi-svg {
+  animation: valstraxHoverJet 1.35s ease-in-out infinite;
+  filter: drop-shadow(0 28px 22px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 22px rgba(239, 68, 68, 0.82));
+}
+
+.monster-airborne-badge {
+  position: absolute;
+  top: -16px;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #fecaca;
+  text-shadow: 0 2px 8px #000000, 0 0 10px rgba(239, 68, 68, 0.9);
+  pointer-events: none;
+}
+
+.board-monster-pawn.is-dive-bombing {
+  animation: valstraxDiveSlam 0.92s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.valstrax-dive-reticle {
+  position: absolute;
+  width: 116px;
+  height: 116px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vdr-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2.5px dashed rgba(239, 68, 68, 0.88);
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
+  animation: mspSpinCw 3s linear infinite;
+}
+
+.vdr-label {
+  position: absolute;
+  bottom: -18px;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #fca5a5;
+  text-shadow: 0 2px 6px #000000;
+  white-space: nowrap;
+}
+
+/* Valstrax Comet Impact VFX */
+.valstrax-comet-vfx {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 0.55s ease;
+}
+
+.valstrax-comet-vfx.is-closing {
+  opacity: 0;
+}
+
+.vcv-streak {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 460px;
+  transform-origin: bottom center;
+  background: linear-gradient(180deg, transparent 0%, rgba(239, 68, 68, 0.65) 45%, #fef2f2 100%);
+  filter: blur(2px);
+  animation: vcvMeteorStreak 0.68s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.vcv-crater {
+  position: absolute;
+  inset: 26%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(254, 226, 226, 0.9) 0%, rgba(239, 68, 68, 0.72) 44%, rgba(127, 29, 29, 0.25) 72%, transparent 100%);
+  opacity: 0;
+  animation: vcvCraterBurst 1.35s ease-out 0.36s forwards;
+}
+
+.vcv-shockwave-1,
+.vcv-shockwave-2 {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 3.5px solid #ef4444;
+  opacity: 0;
+}
+
+.vcv-shockwave-1 {
+  animation: mspShockExpand 1.05s cubic-bezier(0.16, 1, 0.3, 1) 0.38s forwards;
+}
+
+.vcv-shockwave-2 {
+  border-color: #fca5a5;
+  animation: mspShockExpand 1.25s cubic-bezier(0.16, 1, 0.3, 1) 0.54s forwards;
+}
+
+@keyframes valstraxCometLand {
+  0% { opacity: 0; transform: translate(110%, -320%) scale(0.7) rotate(-24deg); filter: brightness(2.4); }
+  42% { opacity: 1; transform: translate(8%, -92%) scale(1.2) rotate(-8deg); filter: brightness(1.7); }
+  62% { opacity: 1; transform: translate(-50%, -56%) scale(1.06, 0.92) rotate(0deg); }
+  100% { opacity: 1; transform: translate(-50%, -68%) scale(1) rotate(0deg); filter: none; }
+}
+
+@keyframes valstraxHoverJet {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-10px) scale(1.03); }
+}
+
+@keyframes valstraxDiveSlam {
+  0% { transform: translate(-50%, -260%) scale(1.22); filter: brightness(2.2); }
+  52% { transform: translate(-50%, -54%) scale(1.12, 0.88); filter: brightness(1.6); }
+  100% { transform: translate(-50%, -68%) scale(1); filter: none; }
+}
+
+@keyframes vcvMeteorStreak {
+  0% { opacity: 0; transform: translate(-50%, -100%) rotate(32deg) translateY(-280px) scaleY(0.3); }
+  48% { opacity: 1; transform: translate(-50%, -100%) rotate(32deg) translateY(0px) scaleY(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -100%) rotate(32deg) translateY(20px) scaleY(0.1); }
+}
+
+@keyframes vcvCraterBurst {
+  0% { opacity: 0; transform: scale(0.2); }
+  25% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0; transform: scale(1.55); }
+}
+
+/* Mew Magical Stardust Spawn & Appear */
+.board-monster-pawn.is-magic-appear {
+  animation: mewMagicAppear 1.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.mew-magic-vfx {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.mew-magic-vfx.is-closing {
+  opacity: 0;
+}
+
+.mmv-bubble {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.55) 0%, rgba(244, 114, 182, 0.35) 52%, rgba(168, 85, 247, 0.14) 84%, transparent 100%);
+  border: 2px solid rgba(251, 207, 232, 0.78);
+  box-shadow: 0 0 32px rgba(244, 114, 182, 0.55);
+  animation: mmvBubblePop 1.65s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.mmv-ring-1,
+.mmv-ring-2 {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  border: 1.5px solid rgba(249, 168, 212, 0.72);
+}
+
+.mmv-ring-1 {
+  animation: mspShockExpand 1.45s ease-out 0.2s forwards;
+}
+
+.mmv-ring-2 {
+  border-color: rgba(216, 180, 254, 0.68);
+  animation: mspShockExpand 1.65s ease-out 0.45s forwards;
+}
+
+.mmv-stars {
+  position: absolute;
+  inset: 0;
+  animation: mspSpinCw 6s linear infinite;
+}
+
+.mmv-stars span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  margin-top: -7px;
+  background: #fdf2f8;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  box-shadow: 0 0 12px #f472b6;
+}
+
+.mmv-stars span:nth-child(1) { transform: rotate(0deg) translateY(-82px); }
+.mmv-stars span:nth-child(2) { transform: rotate(60deg) translateY(-68px); }
+.mmv-stars span:nth-child(3) { transform: rotate(120deg) translateY(-86px); }
+.mmv-stars span:nth-child(4) { transform: rotate(180deg) translateY(-72px); }
+.mmv-stars span:nth-child(5) { transform: rotate(240deg) translateY(-84px); }
+.mmv-stars span:nth-child(6) { transform: rotate(300deg) translateY(-70px); }
+
+@keyframes mewMagicAppear {
+  0% { opacity: 0; transform: translate(-50%, -52%) scale(0.35); filter: brightness(2.2) blur(6px); }
+  55% { opacity: 1; transform: translate(-50%, -78%) scale(1.08); filter: brightness(1.3) blur(0); }
+  100% { opacity: 1; transform: translate(-50%, -68%) scale(1); filter: none; }
+}
+
+@keyframes mmvBubblePop {
+  0% { opacity: 0; transform: scale(0.18); }
+  46% { opacity: 0.95; transform: scale(1.12); }
+  78% { opacity: 0.65; transform: scale(1.3); }
+  100% { opacity: 0; transform: scale(1.7); }
+}
+
+/* ============================================================================
+   VALSTRAX (MONSTER HUNTER STYLE) & MEW (GENTLE WHIMSICAL) BORDERLESS ALERTS
+   ============================================================================ */
+.monster-horror-alert.theme-valstrax {
+  background: radial-gradient(ellipse at center, rgba(16, 3, 4, 0.78) 0%, rgba(0, 0, 0, 0.28) 52%, rgba(0, 0, 0, 0) 80%);
+}
+
+.monster-horror-alert.theme-valstrax .mha-whisper {
+  color: #fca5a5;
+  letter-spacing: 0.36em;
+}
+
+.monster-horror-alert.theme-valstrax .mha-headline {
+  color: #fef3c7;
+  letter-spacing: 0.22em;
+  padding: 10px 0;
+  text-shadow:
+    0 4px 24px #000000,
+    0 0 32px rgba(185, 28, 28, 0.78),
+    0 0 14px rgba(245, 158, 11, 0.45);
+  animation: mhQuestReveal 1.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.monster-horror-alert.theme-valstrax .mha-headline::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(520px, 78vw);
+  height: 1.5px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent 0%, rgba(251, 191, 36, 0.85) 28%, rgba(239, 68, 68, 0.95) 50%, rgba(251, 191, 36, 0.85) 72%, transparent 100%);
+  filter: none;
+  opacity: 0.9;
+}
+
+.monster-horror-alert.theme-valstrax .mha-headline::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  top: auto;
+  width: min(440px, 68vw);
+  height: 1.5px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent 0%, rgba(239, 68, 68, 0.85) 50%, transparent 100%);
+  filter: none;
+  opacity: 0.85;
+}
+
+.monster-horror-alert.theme-valstrax .mha-detail {
+  font-style: normal;
+  color: #fde68a;
+}
+
+@keyframes mhQuestReveal {
+  0% { opacity: 0; letter-spacing: 0.42em; transform: scale(1.06); filter: blur(5px); }
+  100% { opacity: 1; letter-spacing: 0.22em; transform: scale(1); filter: blur(0); }
+}
+
+/* Mew Gentle Whimsical Borderless Text (Not Scary, Soft & Magical) */
+.monster-horror-alert.theme-mew {
+  background: radial-gradient(ellipse at center, rgba(22, 8, 24, 0.64) 0%, rgba(12, 5, 16, 0.18) 52%, rgba(0, 0, 0, 0) 80%);
+}
+
+.monster-horror-alert.theme-mew .mha-whisper {
+  color: #f9a8d4;
+  letter-spacing: 0.34em;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.85), 0 0 18px rgba(244, 114, 182, 0.45);
+}
+
+.monster-horror-alert.theme-mew .mha-headline {
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0.06em;
+  color: #fff5fa;
+  text-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.88),
+    0 0 26px rgba(244, 114, 182, 0.68),
+    0 0 42px rgba(192, 132, 252, 0.36);
+  animation: mewTextFloatIn 1.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.monster-horror-alert.theme-mew .mha-headline::before,
+.monster-horror-alert.theme-mew .mha-headline::after {
+  display: none;
+}
+
+.monster-horror-alert.theme-mew .mha-detail {
+  color: #fce7f3;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9), 0 0 16px rgba(244, 114, 182, 0.36);
+}
+
+@keyframes mewTextFloatIn {
+  0% { opacity: 0; transform: translateY(14px) scale(0.96); filter: blur(6px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+/* Valstrax & Mew Tarot Shuffle Themes */
+.monster-target-shuffle-overlay.theme-valstrax .m-shuffle-eyebrow {
+  color: #fca5a5;
+}
+
+.monster-target-shuffle-overlay.theme-valstrax .m-shuffle-title {
+  color: #fef3c7;
+  text-shadow: 0 4px 18px #000000, 0 0 22px rgba(239, 68, 68, 0.62);
+}
+
+.monster-target-shuffle-overlay.theme-valstrax .m-tarot-back {
+  background: #100607;
+  border-color: rgba(239, 68, 68, 0.72);
+}
+
+.monster-target-shuffle-overlay.theme-valstrax .m-tarot-numeral,
+.monster-target-shuffle-overlay.theme-valstrax .m-tarot-curse-stamp {
+  color: #f87171;
+}
+
+.monster-target-shuffle-overlay.theme-valstrax .m-tarot-coffin {
+  background: #1f0a0b;
+  border-color: rgba(248, 113, 113, 0.75);
+  clip-path: polygon(50% 0%, 100% 35%, 78% 100%, 22% 100%, 0% 35%);
+}
+
+.monster-target-shuffle-overlay.theme-mew .m-shuffle-eyebrow {
+  color: #f9a8d4;
+}
+
+.monster-target-shuffle-overlay.theme-mew .m-shuffle-title {
+  font-style: italic;
+  text-transform: none;
+  color: #fff5fa;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.88), 0 0 22px rgba(244, 114, 182, 0.58);
+}
+
+.monster-target-shuffle-overlay.theme-mew .m-tarot-back {
+  background: #170a18;
+  border-color: rgba(244, 114, 182, 0.72);
+}
+
+.monster-target-shuffle-overlay.theme-mew .m-tarot-numeral,
+.monster-target-shuffle-overlay.theme-mew .m-tarot-curse-stamp {
+  color: #f9a8d4;
+}
+
+.monster-target-shuffle-overlay.theme-mew .m-tarot-coffin {
+  background: #2b102d;
+  border-color: rgba(249, 168, 212, 0.78);
+  clip-path: polygon(50% 0%, 64% 36%, 100% 50%, 64% 64%, 50% 100%, 36% 64%, 0% 50%, 36% 36%);
+}
+
+/* ============================================================================
    ACCESSIBILITY: RESPECT PREFERS-REDUCED-MOTION (R-39)
    ============================================================================ */
 @media (prefers-reduced-motion: reduce) {

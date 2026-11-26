@@ -741,6 +741,88 @@ window.EFT_DATA = {
           description: "Activates on Round 3. Targets the player with the highest TC, inflicts [Cursed], and teleports them to Thanatos."
         }
       ]
+    },
+    valstrax: {
+      id: "valstrax",
+      orderIndex: 2,
+      totalRoster: 3,
+      name: "Valstrax",
+      title: "Sky Comet Dragon",
+      origin: "Monster Hunter",
+      color: "#ef4444",
+      colorRgb: "239, 68, 68",
+      textColor: "#ef4444",
+      diceSides: 8,
+      passives: [
+        {
+          id: "dragon_smack",
+          name: "Dragon Smack",
+          description: "Every time Valstrax passes a player, they lose 10 TC."
+        },
+        {
+          id: "dragonblight",
+          name: "Dragonblight",
+          description: "Players who start their turn within a 3-block radius from Valstrax suffer [Dragonblight] for 1 round (cannot gain cards)."
+        }
+      ],
+      skills: [
+        {
+          id: "dragon_blast",
+          name: "Dragon Blast",
+          rounds: [3],
+          description: "On Round 3, Valstrax randomly targets 2 players and inflicts [Dragonblight] for 1 round."
+        },
+        {
+          id: "dive_bomb",
+          name: "Dive Bomb",
+          rounds: [2, 4],
+          description: "Round 2: Targets highest-Shard player, discards 2 random cards, and ascends airborne. Round 4: Dive bombs them, stunning for 1 round unless they have > 100 TC."
+        }
+      ]
+    },
+    mew: {
+      id: "mew",
+      orderIndex: 3,
+      totalRoster: 3,
+      name: "Mew",
+      title: "First Creature",
+      origin: "Pokemon",
+      color: "#f472b6",
+      colorRgb: "244, 114, 182",
+      textColor: "#f472b6",
+      diceSides: 8,
+      passives: [
+        {
+          id: "psychokinesis",
+          name: "Psychokinesis",
+          description: "Every time Mew passes a player, they gain 1.5x movement on their next roll."
+        },
+        {
+          id: "psypower",
+          name: "Psypower",
+          description: "Every player who starts their turn within a 3-block radius from Mew gains +1 card use (Max. 1 per round)."
+        }
+      ],
+      skills: [
+        {
+          id: "silly_play",
+          name: "A Little Silly Play",
+          rounds: [2],
+          description: "On Round 2, Mew randomly chooses 2 players and combines & shuffles their decks together until the next Cycle."
+        },
+        {
+          id: "a_little_help",
+          name: "A Little Help",
+          rounds: [3],
+          description: "On Round 3, targets the lowest-value player with [A Little Help] (x2 Dice & x2 TC) for 2 rounds, but they cannot buy Shards (or Joker Ultimate) this Cycle."
+        },
+        {
+          id: "time_to_leave",
+          name: "Time To Leave~ wait... Goodbye~~",
+          rounds: [4],
+          description: "On Round 4, Mew transforms all Positive/Negative Effect tiles into +5 TC tiles for the Cycle and leaves the map."
+        }
+      ]
     }
   }
 };

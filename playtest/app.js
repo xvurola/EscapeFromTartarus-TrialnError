@@ -892,6 +892,35 @@
         playSoftTone(ctx, warmFilter, { startTime: t + 0.22, freq: 622.25, endFreq: 587.33, duration: 0.65, attack: 0.015, gain: 0.14, type: "sine" });
         break;
       }
+      case "valstrax_comet": {
+        // Supersonic jet-wing screech -> crimson comet impact boom
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1850, duration: 0.52, gain: 0.24, q: 1.4 });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 920, endFreq: 180, duration: 0.56, attack: 0.01, gain: 0.22, type: "sawtooth" });
+        playSoftNoise(ctx, warmFilter, { startTime: t + 0.48, filterType: "lowpass", filterFreq: 380, duration: 0.85, gain: 0.34, q: 0.8 });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.48, freq: 98, endFreq: 36, duration: 0.95, attack: 0.012, gain: 0.38, type: "triangle" });
+        break;
+      }
+      case "valstrax_roar": {
+        // Monster Hunter crimson brass horn + jet dragon surge
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 1120, duration: 0.62, gain: 0.20, q: 1.1 });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 146.83, endFreq: 110.0, duration: 0.85, attack: 0.02, gain: 0.30, type: "sawtooth" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.08, freq: 220.0, endFreq: 196.0, duration: 0.72, attack: 0.02, gain: 0.22, type: "triangle" });
+        break;
+      }
+      case "mew_magic": {
+        // Dreamy ascending harp/celesta sparkle arpeggio
+        [659.25, 783.99, 987.77, 1318.51, 1567.98].forEach((hz, idx) => {
+          playSoftTone(ctx, warmFilter, {
+            startTime: t + idx * 0.068,
+            freq: hz,
+            duration: 0.48,
+            attack: 0.012,
+            gain: 0.17,
+            type: "sine"
+          });
+        });
+        break;
+      }
       case "move_skill": {
         const mvChar = String(variant || "").toLowerCase();
         if (mvChar === "bocchi") {
@@ -2589,6 +2618,11 @@
         skipNextTurn: false,
         silencedThisPhase: false,
         cursedRounds: 0,
+        dragonblightRounds: 0,
+        nextMovementMultiplier: 1,
+        psypowerGrantedRound: "",
+        aLittleHelpRounds: 0,
+        cannotBuyShardCycle: 0,
         turnTcMultiplier: 1.0,
         passives: [],
         cooldowns: {}
@@ -2612,9 +2646,12 @@
       boardTokens: [],
       activeMonster: null,
       isMonsterTurn: false,
+      lastSpawnedMonsterId: null,
+      mewEffectTilesToPlus5Tc: false,
       lastMonsterSpawnEvent: null,
       lastMonsterAlertEvent: null,
       lastMonsterTargetShuffleEvent: null,
+      lastMonsterActionVfx: null,
       activeGlobalEvent: null,
       lastOpponentSkillUsed: null,
       recentOpponentSkills: [],
@@ -2809,6 +2846,9 @@
       if (player.turnTcMultiplier && player.turnTcMultiplier > 1) {
         amount *= player.turnTcMultiplier;
       }
+      if (player.aLittleHelpRounds > 0) {
+        amount *= 2;
+      }
       amount = applyRounding(amount, state.rules);
       if (ipcApplied && rawAmount > 0) {
         addLog(`IPC Gems (${ipcPassive.multiplier || 1.3}x): ${player.name} gained +${amount} TC (from base ${rawAmount} TC).`);
@@ -2844,6 +2884,11 @@
   }
 
   function drawCards(player, count) {
+    if (!isInitializingMatch && player && player.dragonblightRounds > 0) {
+      addLog(`[Dragonblight]: ${player.name} cannot gain card(s) while afflicted with Dragonblight!`);
+      playSfx("card_drag_deny");
+      return [];
+    }
     const drawn = [];
     for (let i = 0; i < count; i++) {
       if (player.deck.length === 0) {
@@ -3841,6 +3886,9 @@
       numDice += player.nextPhaseDiceMod;
       player.nextPhaseDiceMod = 0;
     }
+    if (player.aLittleHelpRounds > 0) {
+      numDice *= 2;
+    }
     numDice = Math.max(1, numDice);
 
     let rolls = [];
@@ -3864,6 +3912,11 @@
     }
     if (state.activeGlobalEvent && state.activeGlobalEvent.card.multiplierSteps) {
       totalSteps = applyRounding(totalSteps * state.activeGlobalEvent.card.multiplierSteps, state.rules);
+    }
+    if (player.nextMovementMultiplier && player.nextMovementMultiplier > 1) {
+      totalSteps = applyRounding(totalSteps * player.nextMovementMultiplier, state.rules);
+      addLog(`Psychokinesis (${player.nextMovementMultiplier}x): ${player.name} surged to ${totalSteps} steps!`);
+      player.nextMovementMultiplier = 1;
     }
     if (player.nextRollMaxCap !== null) {
       totalSteps = Math.min(totalSteps, player.nextRollMaxCap);
@@ -4189,18 +4242,22 @@
     // Check Pass-By Tartarus Shard
     const shardIdx = state.activeShards.findIndex((s) => s.tileId === nextTileId);
     if (shardIdx !== -1 && player.tc >= state.rules.shardCost) {
-      isWalkingAnim = false;
-      pendingInteraction = {
-        type: "prompt_shard_buy",
-        player,
-        shard: state.activeShards[shardIdx],
-        stepsLeft,
-        direction,
-        activateFinalTile
-      };
-      renderAll();
-      broadcastMultiplayerState();
-      return;
+      if (player.cannotBuyShardCycle === state.cycle) {
+        addLog(`[A Little Help]: ${player.name} cannot purchase a Tartarus Shard during Cycle ${state.cycle}!`);
+      } else {
+        isWalkingAnim = false;
+        pendingInteraction = {
+          type: "prompt_shard_buy",
+          player,
+          shard: state.activeShards[shardIdx],
+          stepsLeft,
+          direction,
+          activateFinalTile
+        };
+        renderAll();
+        broadcastMultiplayerState();
+        return;
+      }
     }
 
     // Check Pass-By River Entry
@@ -4848,6 +4905,11 @@
         return false;
       }
       case "pos_effect": {
+        if (state.mewEffectTilesToPlus5Tc) {
+          const g = modifyPlayerTC(player, 5, "tile");
+          addLog(`Mew's Farewell Blessing: ${player.name} landed on transformed Effect Tile -> +${g} TC!`);
+          return false;
+        }
         let jokerPassiveNote = "";
         if (hasPassive(player, "passive_awaken_arsene") && !player.awakenArseneUsedThisTurn) {
           player.awakenArseneUsedThisTurn = true;
@@ -4868,6 +4930,11 @@
         });
       }
       case "neg_effect": {
+        if (state.mewEffectTilesToPlus5Tc) {
+          const g = modifyPlayerTC(player, 5, "tile");
+          addLog(`Mew's Farewell Blessing: ${player.name} landed on transformed Effect Tile -> +${g} TC!`);
+          return false;
+        }
         let jokerPassiveNote = "";
         if (hasPassive(player, "passive_awaken_arsene") && !player.awakenArseneUsedThisTurn) {
           player.awakenArseneUsedThisTurn = true;
@@ -5304,18 +5371,44 @@
       return;
     }
 
-    // Thanatos Passive 2 - Fear Me: start turn within 3-block radius -> lose 1 dice
-    if (state.activeMonster && state.activeMonster.id === "thanatos" && state.activeMonster.tileId) {
+    // Boss Monster Turn-Start Passives (3-block radius)
+    if (state.activeMonster && state.activeMonster.tileId) {
+      const mId = state.activeMonster.id;
       const mDist = getTileDistance(player.tileId, state.activeMonster.tileId);
-      if (mDist <= 3) {
+      if (mId === "thanatos" && mDist <= 3) {
         player.nextTurnDiceMod = Math.max(-1, (player.nextTurnDiceMod || 0) - 1);
         addLog(`Fear Me (Thanatos): ${player.name} started within 3 blocks of Thanatos (${mDist} steps) and loses 1 dice!`);
         triggerMonsterHorrorAlert(
           "FEAR ME",
           "THANATOS · PASSIVE",
           `${player.name} trembles inside Thanatos's 3-block shadow (-1 Dice).`,
-          "passive"
+          "passive",
+          "thanatos"
         );
+      } else if (mId === "valstrax" && mDist <= 3) {
+        player.dragonblightRounds = Math.max(player.dragonblightRounds || 0, 1);
+        addLog(`Dragonblight (Valstrax): ${player.name} started within 3 blocks of Valstrax and suffers [Dragonblight] for 1 round (cannot gain cards)!`);
+        triggerMonsterHorrorAlert(
+          "DRAGONBLIGHT",
+          "VALSTRAX · SKY COMET DRAGON",
+          `${player.name} is scorched by crimson energy — cannot gain cards for 1 round.`,
+          "passive",
+          "valstrax"
+        );
+      } else if (mId === "mew" && mDist <= 3) {
+        const roundKey = `${state.cycle}:${state.roundInCycle}`;
+        if (player.psypowerGrantedRound !== roundKey) {
+          player.psypowerGrantedRound = roundKey;
+          player.maxSkillsThisTurn = (player.maxSkillsThisTurn || state.rules.maxSkillsPerTurn) + 1;
+          addLog(`Psypower (Mew): ${player.name} started within 3 blocks of Mew -> +1 Card Use this turn!`);
+          triggerMonsterHorrorAlert(
+            "Psypower~",
+            "MEW · FIRST CREATURE",
+            `${player.name} feels a gentle psychic breeze (+1 Card Use this turn).`,
+            "passive",
+            "mew"
+          );
+        }
       }
     }
     state.phaseIndex = 1;
@@ -5328,9 +5421,10 @@
     state.shops = createShopState(state.rules);
     state.recentOpponentSkills = [];
     state.lastOpponentSkillUsed = null;
+    state.mewEffectTilesToPlus5Tc = false;
 
     if (state.activeMonster && state.cycle % 2 !== 0) {
-      addLog(`${state.activeMonster.name} receded back into the abyssal portal as Cycle ${state.cycle} (Day) began.`);
+      addLog(`${state.activeMonster.name} left the board as Cycle ${state.cycle} (Day) began.`);
       state.activeMonster = null;
       state.isMonsterTurn = false;
     }
@@ -5393,13 +5487,19 @@
 
   function advanceRoundAfterMinigame() {
     if (!state) return;
-    // Decrement 1-round [Cursed] status inflicted by Thanatos
+    // Decrement round-based monster statuses ([Cursed], [Dragonblight], [A Little Help])
     state.players.forEach((p) => {
       if (p.cursedRounds > 0) {
         p.cursedRounds--;
-        if (p.cursedRounds === 0) {
-          addLog(`[Cursed] lifted from ${p.name}.`);
-        }
+        if (p.cursedRounds === 0) addLog(`[Cursed] lifted from ${p.name}.`);
+      }
+      if (p.dragonblightRounds > 0) {
+        p.dragonblightRounds--;
+        if (p.dragonblightRounds === 0) addLog(`[Dragonblight] faded from ${p.name}.`);
+      }
+      if (p.aLittleHelpRounds > 0) {
+        p.aLittleHelpRounds--;
+        if (p.aLittleHelpRounds === 0) addLog(`[A Little Help] faded from ${p.name}.`);
       }
     });
 
@@ -5425,7 +5525,7 @@
 
     // Monster spawns every 2 cycles starting at Cycle 2 (Cycle 2, 4, 6...) and ALWAYS takes the very first turn
     if (state.cycle >= 2 && state.cycle % 2 === 0 && !state.activeMonster) {
-      spawnCycleMonster("thanatos", { startTurnAfterSpawn: true });
+      spawnCycleMonster(pickRandomCycleMonsterId(), { startTurnAfterSpawn: true });
       return;
     }
     if (state.activeMonster) {
@@ -8278,6 +8378,14 @@
       lastProcessedMonsterShuffleId = state.lastMonsterTargetShuffleEvent.id;
       playMonsterTargetShuffle(state.lastMonsterTargetShuffleEvent, null);
     }
+    if (
+      state.lastMonsterActionVfx &&
+      state.lastMonsterActionVfx.id &&
+      state.lastMonsterActionVfx.id !== lastProcessedMonsterActionVfxId
+    ) {
+      lastProcessedMonsterActionVfxId = state.lastMonsterActionVfx.id;
+      playMonsterActionVfx(state.lastMonsterActionVfx);
+    }
     if (state.lastBoardVfxEvent && state.lastBoardVfxEvent.id && state.lastBoardVfxEvent.id !== lastProcessedBoardVfxId) {
       lastProcessedBoardVfxId = state.lastBoardVfxEvent.id;
       spawnLocalBoardVfx(state.lastBoardVfxEvent.tileIds, state.lastBoardVfxEvent.kind);
@@ -9053,7 +9161,7 @@
       mp.mySeat,
       geSig,
       state.isMonsterTurn ? 1 : 0,
-      state.activeMonster ? `${state.activeMonster.id}:${state.activeMonster.tileId}` : "",
+      state.activeMonster ? `${state.activeMonster.id}:${state.activeMonster.tileId}:${state.activeMonster.isAirborne ? 1 : 0}` : "",
       ...state.players.map((p) =>
         [
           p.name,
@@ -9072,6 +9180,10 @@
           p.skipNextTurn ? 1 : 0,
           p.silencedThisPhase ? 1 : 0,
           p.cursedRounds || 0,
+          p.dragonblightRounds || 0,
+          p.aLittleHelpRounds || 0,
+          p.cannotBuyShardCycle || 0,
+          p.nextMovementMultiplier || 1,
           p.safeZoneImmune ? 1 : 0,
           (p.passives || []).map((ps) => `${ps.key}:${ps.remainingTurns}:${ps.expiresOnCycleEnd ? 1 : 0}`).join(",")
         ].join("~")
@@ -9100,6 +9212,8 @@
       if (p.turnTcMultiplier > 1) chips.push(`<span class="fp-effect-chip is-buff">x${p.turnTcMultiplier} TC</span>`);
       if (p.nextTurnDiceMod > 0) chips.push(`<span class="fp-effect-chip is-buff">+${p.nextTurnDiceMod} Dice</span>`);
       if (p.nextPhaseDiceMod > 0) chips.push(`<span class="fp-effect-chip is-buff">+${p.nextPhaseDiceMod} Roll</span>`);
+      if (p.nextMovementMultiplier > 1) chips.push(`<span class="fp-effect-chip is-buff is-mew-buff">x${p.nextMovementMultiplier} Move</span>`);
+      if (p.aLittleHelpRounds > 0) chips.push(`<span class="fp-effect-chip is-buff is-mew-buff">A Little Help (${p.aLittleHelpRounds}R)</span>`);
 
       // Red = Debuffs
       if (p.nextTurnDiceMod < 0) chips.push(`<span class="fp-effect-chip is-debuff">${p.nextTurnDiceMod} Dice</span>`);
@@ -9109,6 +9223,8 @@
       if (p.skipNextTurn) chips.push(`<span class="fp-effect-chip is-debuff">Skip Turn</span>`);
       if (p.silencedThisPhase) chips.push(`<span class="fp-effect-chip is-debuff">Silenced</span>`);
       if (p.cursedRounds > 0) chips.push(`<span class="fp-effect-chip is-debuff is-cursed">Cursed</span>`);
+      if (p.dragonblightRounds > 0) chips.push(`<span class="fp-effect-chip is-debuff is-dragonblight">Dragonblight</span>`);
+      if (p.cannotBuyShardCycle === state.cycle) chips.push(`<span class="fp-effect-chip is-debuff">No Shard</span>`);
 
       // Purple = World Event with turn duration
       if (worldEventLabel) {
@@ -9339,7 +9455,8 @@
       river_top: "RIVER",
       river_bottom: "EXIT"
     };
-    const lbl = labels[t.type] !== undefined ? labels[t.type] : getCleanTileLabel(t);
+    const isMewConverted = Boolean(state && state.mewEffectTilesToPlus5Tc && (t.type === "pos_effect" || t.type === "neg_effect"));
+    const lbl = isMewConverted ? "+5 TC" : labels[t.type] !== undefined ? labels[t.type] : getCleanTileLabel(t);
     const tokenSubHtml = activeToken
       ? (() => {
           const tm = getTrapTileMeta(activeToken);
@@ -9728,6 +9845,7 @@
 
     const tilesSig = [
       localCanAct ? 1 : 0,
+      state.mewEffectTilesToPlus5Tc ? 1 : 0,
       state.activeShards.map((s) => `${s.roman}:${s.tileId}`).join(","),
       state.boardTokens
         .map((tok) => `${tok.id}:${tok.type}:${tok.tileId}:${tok.ownerIndex}:${(tok.coveredTileIds || []).join(".")}`)
@@ -9762,6 +9880,9 @@
 
       const tilesHtml = DATA.BOARD_TILES.map((t) => {
         const classes = ["digital-tile", `dt-${t.type}`];
+        if (state.mewEffectTilesToPlus5Tc && (t.type === "pos_effect" || t.type === "neg_effect")) {
+          classes.push("dt-mew-plus5");
+        }
         if (t.shopArrow) classes.push(`shop-arrow-${t.shopArrow}`);
         const effectMeta = TILE_EFFECT_META[t.type] || null;
         const hasShard = shardTileSet.has(t.id);
@@ -9844,7 +9965,7 @@
       isAdminUnlocked ? 1 : 0,
       state.isMonsterTurn ? 1 : 0,
       state.activeMonster
-        ? `${state.activeMonster.id}:${state.activeMonster.tileId}:${state.activeMonster.portalEmerging ? 1 : 0}`
+        ? `${state.activeMonster.id}:${state.activeMonster.tileId}:${state.activeMonster.portalEmerging ? 1 : 0}:${state.activeMonster.isAirborne ? 1 : 0}:${state.activeMonster.isDiveBombing ? 1 : 0}:${state.activeMonster.diveTargetIndex ?? ""}`
         : "",
       state.activeShards.map((s) => `${s.roman}:${s.tileId}`).join(","),
       fadingShards.map((s) => s.fadeId).join(","),
@@ -12563,6 +12684,14 @@
     saveSnapshot();
 
     if (itemType === "ultimate") {
+      if (player.dragonblightRounds > 0) {
+        alert("Dragonblight prevents you from gaining cards this round.");
+        return;
+      }
+      if (ultDef && ultDef.effectKey === "grant_meta_shard" && player.cannotBuyShardCycle === state.cycle) {
+        alert(`Mew's [A Little Help] prevents buying Meta-Shard (Ultimate) during Cycle ${state.cycle}.`);
+        return;
+      }
       if (ultDef && ultDef.effectKey === "grant_meta_shard" && (player.metaShardBought || player.metaShard >= 1)) {
         alert("Meta-Shard can only be purchased once per match.");
         return;
@@ -12588,6 +12717,10 @@
       player.hand.push({ ...ultDef, uid: `${ultDef.id}_${Date.now()}`, charId: player.charId });
       addLog(`Shop ${shopId}: ${player.name} purchased Ultimate Card [${ultDef.name}].`);
     } else if (itemType === "draw") {
+      if (player.dragonblightRounds > 0) {
+        alert("Dragonblight prevents you from gaining cards this round.");
+        return;
+      }
       if (shop.drawStock <= 0 || pBuys.draw >= state.rules.drawShopPlayerLimit || player.tc < state.rules.drawShopCost) {
         alert("Cannot purchase Card Draw (check stock, player limit, or TC).");
         return;
@@ -15016,15 +15149,24 @@
   }
 
   // ============================================================================
-  // PVE MONSTER ENGINE (THANATOS - GOD OF DEATH 1/3)
+  // PVE MONSTER ENGINE (THANATOS 1/3, VALSTRAX 2/3, MEW 3/3)
   // ============================================================================
   let lastProcessedMonsterSpawnId = null;
   let lastProcessedMonsterAlertId = null;
   let lastProcessedMonsterShuffleId = null;
+  let lastProcessedMonsterActionVfxId = null;
   let monsterTurnTimers = [];
   let monsterAlertFadeTimer = null;
   let monsterAlertHideTimer = null;
   let monsterShuffleTimers = [];
+
+  function pickRandomCycleMonsterId() {
+    const ids = Object.keys((DATA && DATA.MONSTERS) || { thanatos: {} });
+    if (ids.length <= 1) return ids[0] || "thanatos";
+    const pool = state && state.lastSpawnedMonsterId ? ids.filter((id) => id !== state.lastSpawnedMonsterId) : ids;
+    const list = pool.length > 0 ? pool : ids;
+    return list[Math.floor(Math.random() * list.length)];
+  }
 
   function clearMonsterTurnTimers() {
     monsterTurnTimers.forEach((tid) => clearTimeout(tid));
@@ -15053,18 +15195,153 @@
     lastProcessedMonsterSpawnId = null;
     lastProcessedMonsterAlertId = null;
     lastProcessedMonsterShuffleId = null;
+    lastProcessedMonsterActionVfxId = null;
     const portalLayer = document.getElementById("board-monster-portal-layer");
     if (portalLayer) portalLayer.innerHTML = "";
     const alertEl = document.getElementById("monster-horror-alert");
     if (alertEl) {
-      alertEl.classList.remove("is-visible", "is-fading", "tone-spawn", "tone-skill", "tone-death", "tone-passive");
+      alertEl.classList.remove(
+        "is-visible",
+        "is-fading",
+        "tone-spawn",
+        "tone-skill",
+        "tone-death",
+        "tone-passive",
+        "theme-thanatos",
+        "theme-valstrax",
+        "theme-mew"
+      );
       alertEl.innerHTML = "";
     }
     const shufEl = document.getElementById("monster-target-shuffle-overlay");
     if (shufEl) {
-      shufEl.classList.remove("is-visible", "is-fading");
+      shufEl.classList.remove("is-visible", "is-fading", "phase-shuffle", "phase-reveal", "theme-thanatos", "theme-valstrax", "theme-mew");
       shufEl.innerHTML = "";
     }
+  }
+
+  function buildValstraxPortraitSvg() {
+    return `
+      <svg class="thanatos-placeholder-svg" viewBox="0 0 140 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="vxAura" cx="46%" cy="52%" r="56%">
+            <stop offset="0%" stop-color="#ef4444" stop-opacity="0.44"/>
+            <stop offset="65%" stop-color="#7f1d1d" stop-opacity="0.14"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="140" height="120" fill="url(#vxAura)"/>
+        <!-- Swept Silver Jet Wings with Crimson Exhaust -->
+        <path d="M8 22 L56 48 L36 66 L4 44 Z" fill="#1e293b" stroke="#cbd5e1" stroke-width="1.4"/>
+        <path d="M132 22 L84 48 L104 66 L136 44 Z" fill="#1e293b" stroke="#cbd5e1" stroke-width="1.4"/>
+        <path d="M6 26 L44 50 L28 58 L2 38 Z" fill="#ef4444" fill-opacity="0.65"/>
+        <path d="M134 26 L96 50 L112 58 L138 38 Z" fill="#ef4444" fill-opacity="0.65"/>
+        <path d="M22 68 L54 74 L26 98 Z" fill="#ef4444" fill-opacity="0.52"/>
+        <path d="M118 68 L86 74 L114 98 Z" fill="#ef4444" fill-opacity="0.52"/>
+        <!-- Silver Armored Neck & Chest -->
+        <path d="M46 116 L54 68 L70 58 L86 68 L94 116 Z" fill="#334155" stroke="#94a3b8" stroke-width="1.5"/>
+        <path d="M60 76 L70 96 L80 76" stroke="#ef4444" stroke-width="2" fill="none"/>
+        <!-- Horned Elder Dragon Head -->
+        <path d="M46 32 L62 42 L70 28 L78 42 L94 32 L82 58 L70 68 L58 58 Z" fill="#e2e8f0" stroke="#0f172a" stroke-width="1.5"/>
+        <path d="M58 50 L66 53 L60 56 Z" fill="#ef4444"/>
+        <path d="M82 50 L74 53 L80 56 Z" fill="#ef4444"/>
+      </svg>`;
+  }
+
+  function buildValstraxChibiSvg() {
+    return `
+      <svg class="monster-chibi-svg" viewBox="0 0 120 116" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="vxPawnGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#ef4444" stop-opacity="0.48"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="60" cy="56" r="50" fill="url(#vxPawnGlow)"/>
+        <!-- Jet Exhaust Plumes -->
+        <path d="M12 24 L42 46 L16 62 L4 44 Z" fill="#ef4444" fill-opacity="0.72"/>
+        <path d="M108 24 L78 46 L104 62 L116 44 Z" fill="#ef4444" fill-opacity="0.72"/>
+        <!-- Metallic Crescent Jet Wings -->
+        <path d="M16 32 L50 50 L36 74 L12 56 Z" fill="#1e293b" stroke="#e2e8f0" stroke-width="1.7"/>
+        <path d="M104 32 L70 50 L84 74 L108 56 Z" fill="#1e293b" stroke="#e2e8f0" stroke-width="1.7"/>
+        <!-- Dragon Torso -->
+        <path d="M44 96 L48 64 L60 58 L72 64 L76 96 L60 88 Z" fill="#334155" stroke="#cbd5e1" stroke-width="1.6"/>
+        <circle cx="60" cy="74" r="5" fill="#ef4444"/>
+        <!-- Horned Dragon Head -->
+        <path d="M38 30 L52 40 L60 24 L68 40 L82 30 L74 56 L60 66 L46 56 Z" fill="#e2e8f0" stroke="#0f172a" stroke-width="1.8"/>
+        <path d="M49 48 L57 51 L51 54 Z" fill="#ef4444"/>
+        <path d="M71 48 L63 51 L69 54 Z" fill="#ef4444"/>
+      </svg>`;
+  }
+
+  function buildMewPortraitSvg() {
+    return `
+      <svg class="thanatos-placeholder-svg" viewBox="0 0 140 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="mewAura" cx="48%" cy="50%" r="54%">
+            <stop offset="0%" stop-color="#f472b6" stop-opacity="0.42"/>
+            <stop offset="65%" stop-color="#a855f7" stop-opacity="0.14"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="140" height="120" fill="url(#mewAura)"/>
+        <!-- Psychic Bubble Ring -->
+        <circle cx="66" cy="58" r="46" stroke="#f9a8d4" stroke-opacity="0.55" stroke-width="1.5" fill="rgba(244,114,182,0.08)"/>
+        <!-- Long Curled Ribbon Tail -->
+        <path d="M78 82 C104 82, 114 48, 96 34 C84 26, 86 14, 102 18" stroke="#f9a8d4" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+        <circle cx="104" cy="18" r="5" fill="#fbcfe8"/>
+        <!-- Delicate Floating Body -->
+        <ellipse cx="64" cy="80" rx="16" ry="20" fill="#fbcfe8" stroke="#f472b6" stroke-width="1.4"/>
+        <!-- Mew Head & Cat-like Ears -->
+        <path d="M44 46 L46 28 L58 38 L70 38 L82 28 L84 46 C86 60, 76 68, 64 68 C52 68, 42 60, 44 46 Z" fill="#fbcfe8" stroke="#f472b6" stroke-width="1.5"/>
+        <!-- Large Sky-Blue Eyes -->
+        <ellipse cx="56" cy="50" rx="4.2" ry="6" fill="#38bdf8"/>
+        <ellipse cx="72" cy="50" rx="4.2" ry="6" fill="#38bdf8"/>
+        <circle cx="57" cy="48" r="1.8" fill="#ffffff"/>
+        <circle cx="73" cy="48" r="1.8" fill="#ffffff"/>
+        <!-- Starlight Sparkles -->
+        <path d="M24 34 L27 26 L30 34 L38 37 L30 40 L27 48 L24 40 L16 37 Z" fill="#fdf2f8" fill-opacity="0.85"/>
+        <circle cx="116" cy="78" r="2.5" fill="#f9a8d4"/>
+      </svg>`;
+  }
+
+  function buildMewChibiSvg() {
+    return `
+      <svg class="monster-chibi-svg" viewBox="0 0 116 116" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="mewPawnGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#f472b6" stop-opacity="0.46"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="58" cy="56" r="46" fill="url(#mewPawnGlow)"/>
+        <circle cx="58" cy="56" r="40" stroke="#f9a8d4" stroke-opacity="0.52" stroke-width="1.6" fill="rgba(244,114,182,0.09)"/>
+        <!-- Curled Tail -->
+        <path d="M68 78 C92 78, 100 44, 86 30 C76 22, 80 12, 92 16" stroke="#f9a8d4" stroke-width="4.2" stroke-linecap="round" fill="none"/>
+        <circle cx="94" cy="17" r="4.5" fill="#fbcfe8"/>
+        <!-- Body -->
+        <ellipse cx="56" cy="74" rx="14" ry="17" fill="#fbcfe8" stroke="#f472b6" stroke-width="1.5"/>
+        <!-- Head & Ears -->
+        <path d="M38 44 L40 26 L51 36 L61 36 L72 26 L74 44 C76 56, 67 64, 56 64 C45 64, 36 56, 38 44 Z" fill="#fbcfe8" stroke="#f472b6" stroke-width="1.6"/>
+        <ellipse cx="49" cy="48" rx="3.8" ry="5.5" fill="#38bdf8"/>
+        <ellipse cx="63" cy="48" rx="3.8" ry="5.5" fill="#38bdf8"/>
+        <circle cx="50" cy="46" r="1.6" fill="#ffffff"/>
+        <circle cx="64" cy="46" r="1.6" fill="#ffffff"/>
+        <!-- Sparkles -->
+        <path d="M22 30 L24 24 L26 30 L32 32 L26 34 L24 40 L22 34 L16 32 Z" fill="#fff1f2"/>
+      </svg>`;
+  }
+
+  function buildMonsterPortraitSvg(monsterId) {
+    if (monsterId === "valstrax") return buildValstraxPortraitSvg();
+    if (monsterId === "mew") return buildMewPortraitSvg();
+    return buildThanatosPortraitSvg();
+  }
+
+  function buildMonsterChibiSvg(monsterId) {
+    if (monsterId === "valstrax") return buildValstraxChibiSvg();
+    if (monsterId === "mew") return buildMewChibiSvg();
+    return buildThanatosChibiSvg();
   }
 
   function buildThanatosPortraitSvg() {
@@ -15134,6 +15411,9 @@
     if (!state || !state.activeMonster) return "";
     const m = state.activeMonster;
     const def = (DATA.MONSTERS && DATA.MONSTERS[m.id]) || {};
+    const mColor = m.color || def.color || "#22c55e";
+    const mRgb = m.colorRgb || def.colorRgb || "34, 197, 94";
+    const mTextColor = m.textColor || def.textColor || mColor;
     const passivesHtml = (def.passives || [])
       .map((ps) => `<div class="ph-m-tip-row"><strong>${escapeHtml(ps.name)}:</strong> ${escapeHtml(ps.description)}</div>`)
       .join("");
@@ -15141,10 +15421,11 @@
       .map((sk) => `<div class="ph-m-tip-row"><strong>${escapeHtml(sk.name)}:</strong> ${escapeHtml(sk.description)}</div>`)
       .join("");
     const activeCls = state.isMonsterTurn ? "is-active" : "";
+    const airborneNote = m.isAirborne && m.diveTargetName ? `<div class="mh-tip-sub" style="color:#fca5a5;">AIRBORNE · TARGET: ${escapeHtml(m.diveTargetName)}</div>` : "";
     return `
-      <div class="monster-hud-card ${activeCls}" onclick="window.EFT_APP.focusCameraOnMonster()" title="Click to focus on ${escapeHtml(m.name)}">
+      <div class="monster-hud-card theme-${escapeHtml(m.id)} ${activeCls}" style="--m-color:${escapeHtml(mColor)};--m-rgb:${escapeHtml(mRgb)};--m-text:${escapeHtml(mTextColor)};" onclick="window.EFT_APP.focusCameraOnMonster()" title="Click to focus on ${escapeHtml(m.name)}">
         <div class="mh-card-clip">
-          <div class="mh-portrait-col">${buildThanatosPortraitSvg()}</div>
+          <div class="mh-portrait-col">${buildMonsterPortraitSvg(m.id)}</div>
           <div class="mh-name-col">
             <span class="mh-name">${escapeHtml(m.name)}</span>
           </div>
@@ -15152,6 +15433,7 @@
         <div class="mh-hover-tooltip" role="tooltip">
           <div class="mh-tip-head">${escapeHtml(m.name)} · ${escapeHtml(m.title || "Boss Monster")} (${def.orderIndex || 1}/${def.totalRoster || 3})</div>
           <div class="mh-tip-sub">Moves with 1d${def.diceSides || 8} · Acts First Every Round</div>
+          ${airborneNote}
           ${passivesHtml}
           ${skillsHtml}
         </div>
@@ -15163,16 +15445,41 @@
     const m = state.activeMonster;
     const tile = TILE_MAP[m.tileId];
     if (!tile) return "";
-    const emergeCls = m.portalEmerging ? "is-emerging" : "";
+    const emergeCls = m.portalEmerging
+      ? m.id === "valstrax"
+        ? "is-comet-landing"
+        : m.id === "mew"
+        ? "is-magic-appear"
+        : "is-emerging"
+      : "";
+    const airborneCls = m.isAirborne ? "is-airborne" : "";
+    const diveCls = m.isDiveBombing ? "is-dive-bombing" : "";
     const activeCls = state.isMonsterTurn ? "is-monster-turn" : "";
+    const mColor = m.color || "#22c55e";
+
+    let reticleHtml = "";
+    if (m.id === "valstrax" && m.isAirborne && typeof m.diveTargetIndex === "number" && state.players[m.diveTargetIndex]) {
+      const targetP = state.players[m.diveTargetIndex];
+      const tTile = TILE_MAP[targetP.tileId];
+      if (tTile) {
+        reticleHtml = `
+          <div class="valstrax-dive-reticle" style="left:${tTile.x}%;top:${tTile.y}%;" aria-hidden="true">
+            <span class="vdr-ring"></span>
+            <span class="vdr-label">DIVE LOCK</span>
+          </div>`;
+      }
+    }
+
     return `
-      <div class="board-monster-pawn ${activeCls} ${emergeCls}"
+      ${reticleHtml}
+      <div class="board-monster-pawn theme-${escapeHtml(m.id)} ${activeCls} ${emergeCls} ${airborneCls} ${diveCls}"
            data-monster-id="${escapeHtml(m.id)}"
-           style="left:${tile.x}%;top:${tile.y}%;"
-           title="${escapeHtml(m.name)} (${escapeHtml(m.title || "God of Death")}) @ ${m.tileId}"
+           style="left:${tile.x}%;top:${tile.y}%;--m-color:${escapeHtml(mColor)};"
+           title="${escapeHtml(m.name)} (${escapeHtml(m.title || "Boss")}) @ ${m.tileId}"
            onclick="event.stopPropagation();window.EFT_APP.focusCameraOnMonster()">
         <div class="monster-pawn-aura" aria-hidden="true"></div>
-        ${buildThanatosChibiSvg()}
+        ${buildMonsterChibiSvg(m.id)}
+        ${m.isAirborne ? `<span class="monster-airborne-badge">AIRBORNE</span>` : ""}
         <span class="monster-pawn-tag">${escapeHtml(m.name)}</span>
       </div>`;
   }
@@ -15190,19 +15497,37 @@
     clearTimeout(monsterAlertHideTimer);
 
     const tone = ev.tone || "skill";
+    const theme = ev.theme || (state && state.activeMonster ? state.activeMonster.id : "thanatos");
     const title = ev.title || "THANATOS";
     const subtitle = ev.subtitle || "GOD OF DEATH";
     const detail = ev.detail || "";
 
-    el.classList.remove("is-visible", "is-fading", "tone-spawn", "tone-skill", "tone-death", "tone-passive");
+    el.classList.remove(
+      "is-visible",
+      "is-fading",
+      "tone-spawn",
+      "tone-skill",
+      "tone-death",
+      "tone-passive",
+      "theme-thanatos",
+      "theme-valstrax",
+      "theme-mew"
+    );
     el.innerHTML = `
       <div class="mha-whisper">${escapeHtml(subtitle)}</div>
       <div class="mha-headline" data-text="${escapeHtml(title)}">${escapeHtml(title)}</div>
       ${detail ? `<div class="mha-detail">${escapeHtml(detail)}</div>` : ""}
     `;
     void el.offsetWidth;
-    el.classList.add("is-visible", `tone-${tone}`);
-    playSfx(tone === "spawn" ? "monster_portal" : "monster_skill");
+    el.classList.add("is-visible", `tone-${tone}`, `theme-${theme}`);
+
+    if (theme === "valstrax") {
+      playSfx(tone === "spawn" || tone === "death" ? "valstrax_comet" : "valstrax_roar");
+    } else if (theme === "mew") {
+      playSfx("mew_magic");
+    } else {
+      playSfx(tone === "spawn" ? "monster_portal" : "monster_skill");
+    }
 
     const holdMs =
       tone === "spawn"
@@ -15216,7 +15541,7 @@
       el.classList.add("is-fading");
     }, holdMs);
     monsterAlertHideTimer = setTimeout(() => {
-      el.classList.remove("is-visible", "is-fading", `tone-${tone}`);
+      el.classList.remove("is-visible", "is-fading", `tone-${tone}`, `theme-${theme}`);
       el.innerHTML = "";
     }, holdMs + 950);
   }
@@ -15229,13 +15554,22 @@
     }
     clearMonsterShuffleTimers();
 
+    const theme = ev.theme || (state && state.activeMonster ? state.activeMonster.id : "thanatos");
+    const stampText = ev.stampText || (theme === "valstrax" ? "DRAGONBLIGHT" : theme === "mew" ? "CHOSEN" : "CURSED");
     const candidates = Array.isArray(ev.candidates) && ev.candidates.length > 0 ? ev.candidates : [];
-    const chosenIdx = Math.max(0, Math.min(candidates.length - 1, Number(ev.chosenCandIdx) || 0));
+    const chosenSet = new Set(
+      Array.isArray(ev.chosenCandIndices) && ev.chosenCandIndices.length > 0
+        ? ev.chosenCandIndices.map((n) => Number(n))
+        : [Math.max(0, Math.min(candidates.length - 1, Number(ev.chosenCandIdx) || 0))]
+    );
     const cardCount = Math.max(2, candidates.length);
+
+    const backNumeral = theme === "valstrax" ? "SKY" : theme === "mew" ? "MEW" : "XIII";
+    const backSeal = theme === "valstrax" ? "COMET" : theme === "mew" ? "FIRST" : "DEATH";
 
     const cardsHtml = candidates
       .map((c, idx) => {
-        const isChosen = idx === chosenIdx;
+        const isChosen = chosenSet.has(idx);
         const portraitHtml = c.portraitSrc
           ? `<img class="mts-card-face-img" src="${escapeHtml(c.portraitSrc)}" alt="${escapeHtml(c.name)}" />`
           : `<div class="mts-card-face-fallback">${escapeHtml((c.name || "?").slice(0, 2).toUpperCase())}</div>`;
@@ -15243,33 +15577,32 @@
           <div class="m-tarot-card ${isChosen ? "is-chosen" : "is-other"}" data-slot="${idx}" style="--c-accent:${escapeHtml(c.color || "#22c55e")};">
             <div class="m-tarot-inner">
               <div class="m-tarot-back">
-                <span class="m-tarot-numeral">XIII</span>
+                <span class="m-tarot-numeral">${backNumeral}</span>
                 <span class="m-tarot-coffin" aria-hidden="true"></span>
-                <span class="m-tarot-seal">DEATH</span>
+                <span class="m-tarot-seal">${backSeal}</span>
               </div>
               <div class="m-tarot-front">
                 <div class="m-tarot-portrait">${portraitHtml}</div>
                 <div class="m-tarot-name">${escapeHtml(c.name || "Player")}</div>
-                <div class="m-tarot-curse-stamp">CURSED</div>
+                <div class="m-tarot-curse-stamp">${escapeHtml(stampText)}</div>
               </div>
             </div>
           </div>`;
       })
       .join("");
 
-    overlay.classList.remove("is-visible", "is-fading", "phase-shuffle", "phase-reveal");
+    overlay.classList.remove("is-visible", "is-fading", "phase-shuffle", "phase-reveal", "theme-thanatos", "theme-valstrax", "theme-mew");
     overlay.innerHTML = `
-      <div class="m-shuffle-eyebrow">${escapeHtml(ev.eyebrow || "THANATOS · DRAWING A VESSEL")}</div>
-      <div class="m-shuffle-title">${escapeHtml(ev.skillName || "DEATH WHISPER")}</div>
+      <div class="m-shuffle-eyebrow">${escapeHtml(ev.eyebrow || "CHOOSING TARGET")}</div>
+      <div class="m-shuffle-title">${escapeHtml(ev.skillName || "SKILL")}</div>
       <div class="m-tarot-stage" data-count="${cardCount}">
         ${cardsHtml}
       </div>
     `;
     void overlay.offsetWidth;
-    overlay.classList.add("is-visible", "phase-shuffle");
-    playSfx("monster_skill");
+    overlay.classList.add("is-visible", "phase-shuffle", `theme-${theme}`);
+    playSfx(theme === "valstrax" ? "valstrax_roar" : theme === "mew" ? "mew_magic" : "monster_skill");
 
-    // Animate 6 rapid shuffle swaps with card_shuffle SFX
     const cardEls = Array.from(overlay.querySelectorAll(".m-tarot-card"));
     const spacing = Math.min(138, Math.max(88, Math.floor((window.innerWidth - 100) / Math.max(2, cardCount))));
     const applyOffsets = (orderArr, tilt = 0) => {
@@ -15289,7 +15622,6 @@
     shuffleSteps.forEach((delay, stepIdx) => {
       monsterShuffleTimers.push(
         setTimeout(() => {
-          // Fisher-Yates style shuffle visual
           for (let i = order.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [order[i], order[j]] = [order[j], order[i]];
@@ -15300,21 +15632,20 @@
       );
     });
 
-    // Phase 2: Lock & Flip chosen card at center
     monsterShuffleTimers.push(
       setTimeout(() => {
         overlay.classList.remove("phase-shuffle");
         overlay.classList.add("phase-reveal");
-        cardEls.forEach((el) => {
-          if (el.classList.contains("is-chosen")) {
-            el.style.transform = "translate3d(0px, -10px, 0) scale(1.18) rotate(0deg)";
-          }
+        const chosenEls = cardEls.filter((el) => el.classList.contains("is-chosen"));
+        const cMid = (chosenEls.length - 1) / 2;
+        chosenEls.forEach((el, pos) => {
+          const dx = chosenEls.length > 1 ? (pos - cMid) * 168 : 0;
+          el.style.transform = `translate3d(${dx.toFixed(1)}px, -10px, 0) scale(1.16) rotate(0deg)`;
         });
-        playSfx("card_reveal", "negative");
+        playSfx("card_reveal", theme === "mew" ? "positive" : "negative");
       }, 1720)
     );
 
-    // Phase 3: Fade out & trigger callback
     monsterShuffleTimers.push(
       setTimeout(() => {
         overlay.classList.add("is-fading");
@@ -15322,18 +15653,28 @@
     );
     monsterShuffleTimers.push(
       setTimeout(() => {
-        overlay.classList.remove("is-visible", "is-fading", "phase-shuffle", "phase-reveal");
+        overlay.classList.remove("is-visible", "is-fading", "phase-shuffle", "phase-reveal", "theme-thanatos", "theme-valstrax", "theme-mew");
         overlay.innerHTML = "";
         if (typeof onComplete === "function") onComplete();
       }, 3900)
     );
   }
 
-  function triggerMonsterTargetShuffle(skillName, eyebrow, targets, chosenVictim, onComplete) {
+  function triggerMonsterTargetShuffle(skillName, eyebrow, targets, chosenVictims, optsOrCb, maybeCb) {
+    let opts = {};
+    let onComplete = null;
+    if (typeof optsOrCb === "function") {
+      onComplete = optsOrCb;
+    } else {
+      opts = optsOrCb || {};
+      onComplete = maybeCb || null;
+    }
     if (!state) {
       if (typeof onComplete === "function") onComplete();
       return;
     }
+    const victimList = Array.isArray(chosenVictims) ? chosenVictims : [chosenVictims];
+    const victimIdxSet = new Set(victimList.filter(Boolean).map((v) => v.index));
     const candidates = (targets || []).map((p) => {
       const ch = DATA.CHARACTERS[p.charId] || {};
       const src = (ch.portrait && ch.portrait.src) || ch.menuPortrait || "";
@@ -15344,13 +15685,20 @@
         portraitSrc: src
       };
     });
-    const chosenCandIdx = Math.max(0, candidates.findIndex((c) => c.playerIndex === chosenVictim.index));
+    const chosenCandIndices = candidates
+      .map((c, idx) => (victimIdxSet.has(c.playerIndex) ? idx : -1))
+      .filter((i) => i >= 0);
+    if (chosenCandIndices.length === 0 && candidates.length > 0) chosenCandIndices.push(0);
+
     const ev = {
       id: `msh_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       skillName,
       eyebrow,
+      theme: opts.theme || (state.activeMonster ? state.activeMonster.id : "thanatos"),
+      stampText: opts.stampText || "CURSED",
       candidates,
-      chosenCandIdx,
+      chosenCandIdx: chosenCandIndices[0],
+      chosenCandIndices,
       ts: Date.now()
     };
     state.lastMonsterTargetShuffleEvent = ev;
@@ -15359,7 +15707,7 @@
     playMonsterTargetShuffle(ev, onComplete);
   }
 
-  function triggerMonsterHorrorAlert(title, subtitle, detail, tone = "skill") {
+  function triggerMonsterHorrorAlert(title, subtitle, detail, tone = "skill", theme = null) {
     if (!state) return;
     const ev = {
       id: `ma_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -15367,6 +15715,7 @@
       subtitle,
       detail,
       tone,
+      theme: theme || (state.activeMonster ? state.activeMonster.id : "thanatos"),
       ts: Date.now()
     };
     state.lastMonsterAlertEvent = ev;
@@ -15375,17 +15724,95 @@
     broadcastMultiplayerState();
   }
 
+  function playMonsterActionVfx(vfxEv) {
+    if (!vfxEv || !vfxEv.tileId) return;
+    const tile = TILE_MAP[vfxEv.tileId];
+    const layer = document.getElementById("board-monster-portal-layer");
+    if (!tile || !layer) return;
+
+    if (vfxEv.kind === "valstrax_dive_impact") {
+      camera.mode = "follow";
+      focusCameraOnTile(vfxEv.tileId, isMobilePortrait() ? 0.84 : 1.14);
+      addCameraTrauma(0.75);
+      playSfx("valstrax_comet");
+      const node = document.createElement("div");
+      node.className = "valstrax-comet-vfx";
+      node.style.left = `${tile.x}%`;
+      node.style.top = `${tile.y}%`;
+      node.innerHTML = `
+        <div class="vcv-streak"></div>
+        <div class="vcv-crater"></div>
+        <div class="vcv-shockwave-1"></div>
+        <div class="vcv-shockwave-2"></div>
+      `;
+      layer.appendChild(node);
+      setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 2100);
+    } else if (vfxEv.kind === "mew_farewell") {
+      playSfx("mew_magic");
+      const node = document.createElement("div");
+      node.className = "mew-magic-vfx";
+      node.style.left = `${tile.x}%`;
+      node.style.top = `${tile.y}%`;
+      node.innerHTML = `
+        <div class="mmv-bubble"></div>
+        <div class="mmv-ring-1"></div>
+        <div class="mmv-ring-2"></div>
+        <div class="mmv-stars"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      `;
+      layer.appendChild(node);
+      setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 2200);
+    }
+  }
+
   function playMonsterPortalSpawnAnim(spawnEv) {
     if (!spawnEv || !spawnEv.tileId) return;
     const tile = TILE_MAP[spawnEv.tileId];
     const layer = document.getElementById("board-monster-portal-layer");
     if (!tile || !layer) return;
 
+    const mId = spawnEv.monsterId || "thanatos";
     camera.mode = "follow";
     focusCameraOnTile(spawnEv.tileId, isMobilePortrait() ? 0.84 : 1.12);
+
+    if (mId === "valstrax") {
+      addCameraTrauma(0.72);
+      playSfx("valstrax_comet");
+      const node = document.createElement("div");
+      node.className = "valstrax-comet-vfx";
+      node.style.left = `${tile.x}%`;
+      node.style.top = `${tile.y}%`;
+      node.innerHTML = `
+        <div class="vcv-streak"></div>
+        <div class="vcv-crater"></div>
+        <div class="vcv-shockwave-1"></div>
+        <div class="vcv-shockwave-2"></div>
+      `;
+      layer.appendChild(node);
+      setTimeout(() => node.classList.add("is-closing"), 1850);
+      setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 2500);
+      return;
+    }
+
+    if (mId === "mew") {
+      playSfx("mew_magic");
+      const node = document.createElement("div");
+      node.className = "mew-magic-vfx";
+      node.style.left = `${tile.x}%`;
+      node.style.top = `${tile.y}%`;
+      node.innerHTML = `
+        <div class="mmv-bubble"></div>
+        <div class="mmv-ring-1"></div>
+        <div class="mmv-ring-2"></div>
+        <div class="mmv-stars"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      `;
+      layer.appendChild(node);
+      setTimeout(() => node.classList.add("is-closing"), 1900);
+      setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 2550);
+      return;
+    }
+
     addCameraTrauma(0.55);
     playSfx("monster_portal");
-
     const portalId = `mp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
     const node = document.createElement("div");
     node.className = "monster-spawn-portal";
@@ -15452,6 +15879,7 @@
     clearMonsterTurnTimers();
 
     const spawnTileId = opts.tileId || pickMonsterSpawnTile();
+    state.lastSpawnedMonsterId = def.id;
     state.activeMonster = {
       id: def.id,
       name: def.name,
@@ -15463,7 +15891,11 @@
       prevTileId: null,
       lastDirection: 1,
       spawnedCycle: state.cycle,
-      portalEmerging: true
+      portalEmerging: true,
+      isAirborne: false,
+      isDiveBombing: false,
+      diveTargetIndex: null,
+      diveTargetName: ""
     };
     state.isMonsterTurn = true;
 
@@ -15479,14 +15911,38 @@
     lastProcessedMonsterSpawnId = spawnEv.id;
 
     const spawnTile = TILE_MAP[spawnTileId];
-    addLog(`DARK HOUR: ${def.name} (${def.title}) tore open a portal at ${spawnTile ? spawnTile.name : spawnTileId} (${spawnTileId}) and claims the first turn!`);
-    playMonsterPortalSpawnAnim(spawnEv);
-    triggerMonsterHorrorAlert(
-      "THANATOS",
-      "GOD OF DEATH HAS ARRIVED",
-      `A portal tore open at ${spawnTile ? spawnTile.name : spawnTileId}. Death walks first.`,
-      "spawn"
-    );
+    const tileLabel = spawnTile ? spawnTile.name : spawnTileId;
+    if (def.id === "valstrax") {
+      addLog(`ELDER DRAGON SIGHTED: Valstrax (Sky Comet Dragon) crashed onto ${tileLabel} (${spawnTileId}) and claims the first turn!`);
+      playMonsterPortalSpawnAnim(spawnEv);
+      triggerMonsterHorrorAlert(
+        "VALSTRAX",
+        "SKY COMET DRAGON · ELDER DRAGON",
+        `A crimson comet crashed down upon ${tileLabel}. The hunt begins first.`,
+        "spawn",
+        "valstrax"
+      );
+    } else if (def.id === "mew") {
+      addLog(`MYTHICAL ENCOUNTER: Mew (First Creature) magically appeared at ${tileLabel} (${spawnTileId}) and takes the first turn!`);
+      playMonsterPortalSpawnAnim(spawnEv);
+      triggerMonsterHorrorAlert(
+        "Mew",
+        "FIRST CREATURE HAS APPEARED",
+        `A soft trail of starlight shimmered at ${tileLabel}~ Mew wants to play first!`,
+        "spawn",
+        "mew"
+      );
+    } else {
+      addLog(`DARK HOUR: ${def.name} (${def.title}) tore open a portal at ${tileLabel} (${spawnTileId}) and claims the first turn!`);
+      playMonsterPortalSpawnAnim(spawnEv);
+      triggerMonsterHorrorAlert(
+        "THANATOS",
+        "GOD OF DEATH HAS ARRIVED",
+        `A portal tore open at ${tileLabel}. Death walks first.`,
+        "spawn",
+        "thanatos"
+      );
+    }
     renderAll();
     broadcastMultiplayerState();
 
@@ -15520,7 +15976,9 @@
     const activePool = state.players.filter((p) => !p.hasLeftRoom);
     const targets = activePool.length > 0 ? activePool : state.players;
 
-    // Skill 1 - Death Whisper (Round 2 & Round 4): Card shuffle picks random player -> [Cursed] for 1 round
+    // ------------------------------------------------------------------------
+    // MONSTER 1/3: THANATOS - GOD OF DEATH
+    // ------------------------------------------------------------------------
     if (monster.id === "thanatos" && (curRound === 2 || curRound === 4) && targets.length > 0) {
       const victim = targets[Math.floor(Math.random() * targets.length)];
       triggerMonsterTargetShuffle(
@@ -15528,6 +15986,7 @@
         "THANATOS · DRAWING A VESSEL",
         targets,
         victim,
+        { theme: "thanatos", stampText: "CURSED" },
         () => {
           if (!state || !state.activeMonster || state.winner) return;
           victim.cursedRounds = Math.max(victim.cursedRounds || 0, 1);
@@ -15540,7 +15999,8 @@
             "DEATH WHISPER",
             "THANATOS · GOD OF DEATH",
             `${victim.name} is Cursed for 1 round. No TC can be obtained.`,
-            "skill"
+            "skill",
+            "thanatos"
           );
           renderAll();
           broadcastMultiplayerState();
@@ -15550,7 +16010,6 @@
       return;
     }
 
-    // Skill 2 - I Am Death (Round 3): Card shuffle reveals highest TC player -> [Cursed] + teleported to Thanatos
     if (monster.id === "thanatos" && curRound === 3 && targets.length > 0) {
       const maxTc = Math.max(...targets.map((p) => p.tc || 0));
       const topTargets = targets.filter((p) => (p.tc || 0) === maxTc);
@@ -15560,6 +16019,7 @@
         "THANATOS · JUDGING HIGHEST TC",
         targets,
         victim,
+        { theme: "thanatos", stampText: "CURSED" },
         () => {
           if (!state || !state.activeMonster || state.winner) return;
           victim.cursedRounds = Math.max(victim.cursedRounds || 0, 1);
@@ -15576,13 +16036,250 @@
             "I AM DEATH",
             "THANATOS · GOD OF DEATH",
             `${victim.name} (Highest TC) is Cursed and dragged to Thanatos.`,
-            "death"
+            "death",
+            "thanatos"
           );
           renderAll();
           broadcastMultiplayerState();
           scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 4400);
         }
       );
+      return;
+    }
+
+    // ------------------------------------------------------------------------
+    // MONSTER 2/3: VALSTRAX - SKY COMET DRAGON
+    // ------------------------------------------------------------------------
+    // Round 2: Dive Bomb (Prepare) -> Highest Shard player discards 2 random cards, Valstrax ascends airborne!
+    if (monster.id === "valstrax" && curRound === 2 && targets.length > 0) {
+      const maxShards = Math.max(...targets.map((p) => (p.shards || 0) + (p.metaShard || 0)));
+      const topShardTargets = targets.filter((p) => (p.shards || 0) + (p.metaShard || 0) === maxShards);
+      const victim = topShardTargets[Math.floor(Math.random() * topShardTargets.length)];
+      triggerMonsterTargetShuffle(
+        "DIVE BOMB",
+        "VALSTRAX · LOCKING HIGHEST SHARDS",
+        targets,
+        victim,
+        { theme: "valstrax", stampText: "AMBUSH TARGET" },
+        () => {
+          if (!state || !state.activeMonster || state.winner) return;
+          const disc = discardRandomCards(victim, 2, { kind: "discard", sourceLabel: "Dive Bomb (Valstrax)" });
+          monster.isAirborne = true;
+          monster.diveTargetIndex = victim.index;
+          monster.diveTargetName = victim.name;
+          addLog(`Valstrax prepared [Dive Bomb] on ${victim.name} (Most Shards) -> Discarded ${disc.length} card(s) and ascended airborne!`);
+          addCameraTrauma(0.45);
+          focusCameraOnTile(monster.tileId, isMobilePortrait() ? 0.8 : 1.04);
+          triggerMonsterHorrorAlert(
+            "AMBUSH PREPARED",
+            "VALSTRAX · SKY COMET DRAGON",
+            `${victim.name} lost ${disc.length} card(s). Valstrax ascends into the sky for Round 4 Dive Bomb!`,
+            "skill",
+            "valstrax"
+          );
+          renderAll();
+          broadcastMultiplayerState();
+          scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 4300);
+        }
+      );
+      return;
+    }
+
+    // Round 3: Dragon Blast -> Randomly target 2 players and inflict [Dragonblight] for 1 round
+    if (monster.id === "valstrax" && curRound === 3 && targets.length > 0) {
+      const shuffled = shuffleArray([...targets]);
+      const chosenTwo = shuffled.slice(0, Math.min(2, shuffled.length));
+      triggerMonsterTargetShuffle(
+        "DRAGON BLAST",
+        "VALSTRAX · CRIMSON BARRAGE",
+        targets,
+        chosenTwo,
+        { theme: "valstrax", stampText: "DRAGONBLIGHT" },
+        () => {
+          if (!state || !state.activeMonster || state.winner) return;
+          chosenTwo.forEach((v) => {
+            v.dragonblightRounds = Math.max(v.dragonblightRounds || 0, 1);
+            if (v.tileId && window.EFT_WEBGL_VFX) {
+              window.EFT_WEBGL_VFX.burstAtTile(v.tileId, "debuff", "#ef4444");
+            }
+          });
+          const namesStr = chosenTwo.map((v) => v.name).join(" & ");
+          addLog(`Valstrax unleashed [Dragon Blast] on ${namesStr} -> Inflicted [Dragonblight] for 1 round (cannot gain cards)!`);
+          addCameraTrauma(0.48);
+          triggerMonsterHorrorAlert(
+            "DRAGON BLAST",
+            "VALSTRAX · SKY COMET DRAGON",
+            `${namesStr} suffered [Dragonblight] for 1 round — cannot gain cards.`,
+            "skill",
+            "valstrax"
+          );
+          renderAll();
+          broadcastMultiplayerState();
+          scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 4300);
+        }
+      );
+      return;
+    }
+
+    // Round 4: Dive Bomb Impact! Valstrax dives onto target; stuns 1 round unless target has > 100 TC
+    if (monster.id === "valstrax" && curRound === 4 && targets.length > 0) {
+      let victim =
+        typeof monster.diveTargetIndex === "number" && state.players[monster.diveTargetIndex]
+          ? state.players[monster.diveTargetIndex]
+          : null;
+      if (!victim) {
+        const maxShards = Math.max(...targets.map((p) => (p.shards || 0) + (p.metaShard || 0)));
+        const topShardTargets = targets.filter((p) => (p.shards || 0) + (p.metaShard || 0) === maxShards);
+        victim = topShardTargets[Math.floor(Math.random() * topShardTargets.length)];
+      }
+
+      const targetTileId = victim.tileId && TILE_MAP[victim.tileId] ? victim.tileId : monster.tileId;
+      monster.isAirborne = false;
+      monster.isDiveBombing = true;
+      monster.prevTileId = monster.tileId;
+      monster.tileId = targetTileId;
+      monster.diveTargetIndex = null;
+      monster.diveTargetName = "";
+
+      const resisted = (victim.tc || 0) > 100;
+      if (!resisted) {
+        victim.skipNextTurn = true;
+      }
+
+      const vfxEv = {
+        id: `mvfx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        kind: "valstrax_dive_impact",
+        tileId: targetTileId,
+        ts: Date.now()
+      };
+      state.lastMonsterActionVfx = vfxEv;
+      lastProcessedMonsterActionVfxId = vfxEv.id;
+      playMonsterActionVfx(vfxEv);
+
+      const detailMsg = resisted
+        ? `${victim.name} held > 100 TC (${victim.tc} TC) and withstood the stun!`
+        : `${victim.name} was crushed by Valstrax's Dive Bomb and Stunned for 1 round!`;
+      addLog(`Valstrax executed [Dive Bomb] on ${victim.name} at ${targetTileId}: ${detailMsg}`);
+      triggerMonsterHorrorAlert("DIVE BOMB", "VALSTRAX · SKY COMET AMBUSH", detailMsg, "death", "valstrax");
+      renderAll();
+      broadcastMultiplayerState();
+
+      scheduleMonsterTimer(() => {
+        if (state && state.activeMonster) state.activeMonster.isDiveBombing = false;
+        rollMonster1d8AndWalk();
+      }, 4500);
+      return;
+    }
+
+    // ------------------------------------------------------------------------
+    // MONSTER 3/3: MEW - FIRST CREATURE
+    // ------------------------------------------------------------------------
+    // Round 2: A Little Silly Play -> Randomly choose 2 players, combine & shuffle their decks (restores next cycle)
+    if (monster.id === "mew" && curRound === 2 && targets.length >= 2) {
+      const shuffled = shuffleArray([...targets]);
+      const pair = shuffled.slice(0, 2);
+      triggerMonsterTargetShuffle(
+        "A Little Silly Play~",
+        "MEW · MIXING DECKS",
+        targets,
+        pair,
+        { theme: "mew", stampText: "DECK MIXED" },
+        () => {
+          if (!state || !state.activeMonster || state.winner) return;
+          const [pA, pB] = pair;
+          const taggedA = (pA.deck || []).map((c) => ({ ...c, originalOwnerCharId: c.originalOwnerCharId || pA.charId }));
+          const taggedB = (pB.deck || []).map((c) => ({ ...c, originalOwnerCharId: c.originalOwnerCharId || pB.charId }));
+          const combined = shuffleArray([...taggedA, ...taggedB]);
+          const splitAt = Math.ceil(combined.length / 2);
+          pA.deck = combined.slice(0, splitAt);
+          pB.deck = combined.slice(splitAt);
+          addLog(`Mew used [A Little Silly Play]: Combined & shuffled ${pA.name}'s and ${pB.name}'s decks until next Cycle!`);
+          triggerMonsterHorrorAlert(
+            "A Little Silly Play~",
+            "MEW · FIRST CREATURE",
+            `${pA.name} and ${pB.name}'s decks were combined and shuffled until the next Cycle~`,
+            "skill",
+            "mew"
+          );
+          renderAll();
+          broadcastMultiplayerState();
+          scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 4200);
+        }
+      );
+      return;
+    }
+
+    // Round 3: A Little Help -> Lowest valuable player gets [A Little Help] (x2 Dice & x2 TC) for 2 rounds, cannot buy Shard/Joker Ult this Cycle
+    if (monster.id === "mew" && curRound === 3 && targets.length > 0) {
+      const sortedLow = [...targets].sort((a, b) => {
+        const sA = (a.shards || 0) + (a.metaShard || 0);
+        const sB = (b.shards || 0) + (b.metaShard || 0);
+        if (sA !== sB) return sA - sB;
+        if ((a.tc || 0) !== (b.tc || 0)) return (a.tc || 0) - (b.tc || 0);
+        return (a.hand ? a.hand.length : 0) - (b.hand ? b.hand.length : 0);
+      });
+      const lowestVal = sortedLow[0];
+      const tiedLowest = sortedLow.filter(
+        (p) =>
+          (p.shards || 0) + (p.metaShard || 0) === (lowestVal.shards || 0) + (lowestVal.metaShard || 0) &&
+          (p.tc || 0) === (lowestVal.tc || 0)
+      );
+      const victim = tiedLowest[Math.floor(Math.random() * tiedLowest.length)];
+      triggerMonsterTargetShuffle(
+        "A Little Help~",
+        "MEW · BLESSING THE UNDERDOG",
+        targets,
+        victim,
+        { theme: "mew", stampText: "A LITTLE HELP" },
+        () => {
+          if (!state || !state.activeMonster || state.winner) return;
+          victim.aLittleHelpRounds = Math.max(victim.aLittleHelpRounds || 0, 2);
+          victim.cannotBuyShardCycle = state.cycle;
+          addLog(
+            `Mew blessed ${victim.name} with [A Little Help] for 2 rounds (x2 Dice & x2 TC), but ${victim.name} cannot buy Shards (or Joker Ultimate) during Cycle ${state.cycle}!`
+          );
+          focusCameraOnTile(victim.tileId, isMobilePortrait() ? 0.78 : 1.0);
+          triggerMonsterHorrorAlert(
+            "A Little Help~",
+            "MEW · FIRST CREATURE",
+            `${victim.name} gained x2 Dice & x2 TC for 2 rounds, but cannot buy Shards this Cycle~`,
+            "skill",
+            "mew"
+          );
+          renderAll();
+          broadcastMultiplayerState();
+          scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 4300);
+        }
+      );
+      return;
+    }
+
+    // Round 4: Time To Leave~ wait... Goodbye~~ -> Transform all Effect Tiles into +5 TC and leave the map!
+    if (monster.id === "mew" && curRound === 4) {
+      const farewellTileId = monster.tileId;
+      state.mewEffectTilesToPlus5Tc = true;
+      const vfxEv = {
+        id: `mvfx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        kind: "mew_farewell",
+        tileId: farewellTileId,
+        ts: Date.now()
+      };
+      state.lastMonsterActionVfx = vfxEv;
+      lastProcessedMonsterActionVfxId = vfxEv.id;
+      playMonsterActionVfx(vfxEv);
+
+      addLog(`Mew used [Time To Leave~ wait... Goodbye~~]: All Effect Tiles became +5 TC tiles and Mew vanished in starlight!`);
+      triggerMonsterHorrorAlert(
+        "Time To Leave~ wait... Goodbye~~",
+        "MEW · FIRST CREATURE",
+        "Every Effect Tile turned into +5 TC~ Mew faded away in pink starlight.",
+        "death",
+        "mew"
+      );
+      state.activeMonster = null;
+      renderAll();
+      broadcastMultiplayerState();
+      scheduleMonsterTimer(() => finishMonsterTurn(), 4400);
       return;
     }
 
@@ -15661,7 +16358,7 @@
       focusCameraOnTile(nextTileId);
     }
 
-    // Passive 1 - Coffin's Door: Every time Thanatos passes a player, they lose 1 card
+    // Monster Pass-By Passives (Coffin's Door / Dragon Smack / Psychokinesis)
     if (monster.id === "thanatos") {
       state.players.forEach((p) => {
         if (p.inSpawn || p.tileId !== nextTileId || coffinHitSet.has(p.index)) return;
@@ -15672,7 +16369,36 @@
           "COFFIN'S DOOR",
           "THANATOS · PASSIVE",
           `${p.name} crossed Thanatos's path and lost ${disc.length} card.`,
-          "passive"
+          "passive",
+          "thanatos"
+        );
+      });
+    } else if (monster.id === "valstrax") {
+      state.players.forEach((p) => {
+        if (p.inSpawn || p.tileId !== nextTileId || coffinHitSet.has(p.index)) return;
+        coffinHitSet.add(p.index);
+        modifyPlayerTC(p, -10, "monster");
+        addLog(`Dragon Smack (Valstrax): Passed ${p.name} -> ${p.name} lost 10 TC!`);
+        triggerMonsterHorrorAlert(
+          "DRAGON SMACK",
+          "VALSTRAX · SKY COMET DRAGON",
+          `${p.name} was clipped by Valstrax's jet wing (-10 TC).`,
+          "passive",
+          "valstrax"
+        );
+      });
+    } else if (monster.id === "mew") {
+      state.players.forEach((p) => {
+        if (p.inSpawn || p.tileId !== nextTileId || coffinHitSet.has(p.index)) return;
+        coffinHitSet.add(p.index);
+        p.nextMovementMultiplier = 1.5;
+        addLog(`Psychokinesis (Mew): Passed ${p.name} -> ${p.name} gained 1.5x movement on their next roll!`);
+        triggerMonsterHorrorAlert(
+          "Psychokinesis~",
+          "MEW · FIRST CREATURE",
+          `${p.name} is lifted by Mew's psychic breeze (1.5x Movement next roll).`,
+          "passive",
+          "mew"
         );
       });
     }
@@ -15702,12 +16428,13 @@
     broadcastMultiplayerState();
   }
 
-  function triggerManualMonsterSpawn() {
+  function triggerManualMonsterSpawn(monsterId = "thanatos") {
     if (!isAdminUnlocked) {
       openAdminModal();
       return;
     }
-    spawnCycleMonster("thanatos", { startTurnAfterSpawn: true });
+    const validId = DATA && DATA.MONSTERS && DATA.MONSTERS[monsterId] ? monsterId : "thanatos";
+    spawnCycleMonster(validId, { startTurnAfterSpawn: true });
   }
 
   function openNewMatchSetupModal() {
