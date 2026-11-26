@@ -173,7 +173,7 @@
     <!-- Bottom-Left Resume Slot & Version -->
     <div class="mts-bottom-left-corner">
       <div id="mts-resume-slot" class="mts-resume-slot"></div>
-      <div id="mts-version-corner" class="mts-version-corner">Beta V.1.4.3</div>
+      <div id="mts-version-corner" class="mts-version-corner">Beta V.2.0.0</div>
     </div>
   </div>
 
@@ -273,6 +273,9 @@
       <!-- DRAMATIC SKILL ACTIVATION CUT-IN OVERLAY -->
       <div id="skill-dramatic-overlay" class="skill-dramatic-overlay" onclick="window.EFT_APP.dismissSkillPopup()"></div>
 
+      <!-- BORDERLESS HORROR MONSTER ALERT OVERLAY (PURE CREEPY TYPOGRAPHY) -->
+      <div id="monster-horror-alert" class="monster-horror-alert" aria-live="assertive" aria-hidden="true"></div>
+
       <!-- TILE EFFECT CARD SHUFFLE & REVEAL OVERLAY -->
       <div id="tile-effect-shuffle-overlay" class="tile-effect-shuffle-overlay" onclick="window.EFT_APP.onTileEffectOverlayClick()"></div>
 
@@ -361,6 +364,7 @@
           <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualMinigame()">Run Minigame (FFA)</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualVersusMinigame()">Test Versus (1v1)</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.triggerRandomGlobalEvent()">Draw World Event</button>
+          <button class="btn btn-sm" onclick="window.EFT_APP.triggerManualMonsterSpawn()">Spawn Thanatos</button>
           <button class="btn btn-sm" onclick="window.EFT_APP.openMerchantModal(2, true)">Open Shop 2</button>
         </div>
         <button class="btn btn-danger btn-sm" onclick="window.EFT_APP.lockAdminMode()">Lock Admin Mode</button>
@@ -434,6 +438,7 @@
           </div>
           <svg id="map-svg-overlay" class="board-connections-svg" viewBox="0 0 2970 1998"></svg>
           <div id="map-nodes-layer" style="position:absolute;inset:0;width:100%;height:100%;"></div>
+          <div id="board-monster-portal-layer" class="board-monster-portal-layer" aria-hidden="true"></div>
           <div id="board-chat-bubbles-layer" class="board-chat-bubbles-layer" aria-hidden="true"></div>
         </div>
       </div>

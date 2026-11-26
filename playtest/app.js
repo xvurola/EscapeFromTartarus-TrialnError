@@ -875,6 +875,23 @@
           playSoftTone(ctx, warmFilter, { startTime: t + idx * 0.07, freq: hz, duration: 0.34, attack: 0.018, gain: 0.26, type: "sine" });
         });
         break;
+      case "monster_portal": {
+        // Dark Hour ominous midnight bell toll + abyssal tear
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "bandpass", filterFreq: 420, duration: 0.95, gain: 0.26, q: 0.9 });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 65.41, endFreq: 48.99, duration: 1.5, attack: 0.04, gain: 0.34, type: "triangle" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.12, freq: 130.81, endFreq: 123.47, duration: 1.35, attack: 0.015, gain: 0.28, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.14, freq: 277.18, endFreq: 261.63, duration: 1.15, attack: 0.01, gain: 0.20, type: "triangle" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.52, freq: 523.25, endFreq: 493.88, duration: 0.95, attack: 0.012, gain: 0.15, type: "sine" });
+        break;
+      }
+      case "monster_skill": {
+        // Whispering dread chime + hollow sub-drone
+        playSoftNoise(ctx, warmFilter, { startTime: t, filterType: "highpass", filterFreq: 1650, duration: 0.55, gain: 0.14, q: 1.2 });
+        playSoftTone(ctx, warmFilter, { startTime: t, freq: 73.42, endFreq: 61.74, duration: 0.95, attack: 0.03, gain: 0.30, type: "triangle" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.08, freq: 311.13, endFreq: 293.66, duration: 0.72, attack: 0.012, gain: 0.20, type: "sine" });
+        playSoftTone(ctx, warmFilter, { startTime: t + 0.22, freq: 622.25, endFreq: 587.33, duration: 0.65, attack: 0.015, gain: 0.14, type: "sine" });
+        break;
+      }
       case "move_skill": {
         const mvChar = String(variant || "").toLowerCase();
         if (mvChar === "bocchi") {
@@ -2571,6 +2588,7 @@
         reverseNextRoll: false,
         skipNextTurn: false,
         silencedThisPhase: false,
+        cursedRounds: 0,
         turnTcMultiplier: 1.0,
         passives: [],
         cooldowns: {}
@@ -2592,6 +2610,10 @@
       players,
       activeShards: [],
       boardTokens: [],
+      activeMonster: null,
+      isMonsterTurn: false,
+      lastMonsterSpawnEvent: null,
+      lastMonsterAlertEvent: null,
       activeGlobalEvent: null,
       lastOpponentSkillUsed: null,
       recentOpponentSkills: [],
@@ -2627,6 +2649,7 @@
     if (chatLogEl) chatLogEl.innerHTML = "";
     const chatBubblesEl = document.getElementById("board-chat-bubbles-layer");
     if (chatBubblesEl) chatBubblesEl.innerHTML = "";
+    if (typeof clearMonsterRuntimeUi === "function") clearMonsterRuntimeUi();
     ensureAmbientBgmLoop();
     lastProcessedBoardVfxId = null;
     lastProcessedSkillMoveAnimId = null;
@@ -2762,6 +2785,13 @@
   function modifyPlayerTC(player, rawAmount, source = "tile") {
     let amount = rawAmount;
     if (amount > 0) {
+      if (player && player.cursedRounds > 0) {
+        if (!isInitializingMatch) {
+          addLog(`[Cursed]: ${player.name} cannot obtain +${Math.round(amount)} TC while Cursed!`);
+          playSfx("card_drag_deny");
+        }
+        return 0;
+      }
       if (
         state.activeGlobalEvent &&
         state.activeGlobalEvent.card.multiplierTC &&
@@ -3589,6 +3619,7 @@
 
   function canLocalPlayerAct() {
     if (isProcessingRemoteAction) return true;
+    if (state && state.isMonsterTurn) return false;
     if (mp.mode === "local" || mp.mySeat === -1) {
       if (state && Array.isArray(state.players)) {
         const expectedSeat = getExpectedActingSeat();
@@ -3945,7 +3976,11 @@
         const disc = discardRandomCards(other, 1, { kind: "discard", sourceLabel: "Unpredictable Tricks" });
         const stolen = Math.min(5, other.tc);
         other.tc -= stolen;
-        mover.tc += stolen;
+        if (!(mover.cursedRounds > 0)) {
+          mover.tc += stolen;
+        } else if (stolen > 0) {
+          addLog(`[Cursed]: ${mover.name} could not obtain ${stolen} TC from Unpredictable Tricks!`);
+        }
         addLog(`Unpredictable Tricks: ${mover.name} passed ${other.name} -> ${other.name} lost ${disc.length} card(s) & paid ${stolen} TC.`);
         triggerDramaticSkillEvent({
           charId: mover.charId,
@@ -3965,7 +4000,11 @@
         const disc = discardRandomCards(mover, 1, { kind: "discard", sourceLabel: "Unpredictable Tricks" });
         const stolen = Math.min(5, mover.tc);
         mover.tc -= stolen;
-        other.tc += stolen;
+        if (!(other.cursedRounds > 0)) {
+          other.tc += stolen;
+        } else if (stolen > 0) {
+          addLog(`[Cursed]: ${other.name} could not obtain ${stolen} TC from Unpredictable Tricks!`);
+        }
         addLog(`Unpredictable Tricks (${other.name}): ${mover.name} passed ${other.name} -> ${mover.name} lost ${disc.length} card(s) & paid ${stolen} TC.`);
         triggerDramaticSkillEvent({
           charId: other.charId,
@@ -4103,8 +4142,12 @@
       } else {
         const allTc = targetPlayer.tc;
         targetPlayer.tc = 0;
-        player.tc += allTc;
-        addLog(`ULTIMATE [Forced All-In]: ${player.name} won (${myRoll} vs ${oppRoll}) and seized all ${allTc} TC from ${targetPlayer.name}!`);
+        if (!(player.cursedRounds > 0)) {
+          player.tc += allTc;
+          addLog(`ULTIMATE [Forced All-In]: ${player.name} won (${myRoll} vs ${oppRoll}) and seized all ${allTc} TC from ${targetPlayer.name}!`);
+        } else {
+          addLog(`ULTIMATE [Forced All-In]: ${player.name} won (${myRoll} vs ${oppRoll}), but [Cursed] blocked gaining ${allTc} TC!`);
+        }
       }
     }
     renderAll();
@@ -5259,6 +5302,21 @@
       state.phaseIndex = 5;
       return;
     }
+
+    // Thanatos Passive 2 - Fear Me: start turn within 3-block radius -> lose 1 dice
+    if (state.activeMonster && state.activeMonster.id === "thanatos" && state.activeMonster.tileId) {
+      const mDist = getTileDistance(player.tileId, state.activeMonster.tileId);
+      if (mDist <= 3) {
+        player.nextTurnDiceMod = Math.max(-1, (player.nextTurnDiceMod || 0) - 1);
+        addLog(`Fear Me (Thanatos): ${player.name} started within 3 blocks of Thanatos (${mDist} steps) and loses 1 dice!`);
+        triggerMonsterHorrorAlert(
+          "FEAR ME",
+          "THANATOS · PASSIVE",
+          `${player.name} trembles inside Thanatos's 3-block shadow (-1 Dice).`,
+          "passive"
+        );
+      }
+    }
     state.phaseIndex = 1;
   }
 
@@ -5269,6 +5327,12 @@
     state.shops = createShopState(state.rules);
     state.recentOpponentSkills = [];
     state.lastOpponentSkillUsed = null;
+
+    if (state.activeMonster && state.cycle % 2 !== 0) {
+      addLog(`${state.activeMonster.name} receded back into the abyssal portal as Cycle ${state.cycle} (Day) began.`);
+      state.activeMonster = null;
+      state.isMonsterTurn = false;
+    }
 
     // Return any stolen/foreign cards back to their original owners BEFORE reshuffling Cycle decks
     returnAllForeignCardsBeforeReshuffle();
@@ -5326,32 +5390,60 @@
     startDiceOfFateMinigame(opts.reasonTitle || "Minigame", opts.afterAction || "none");
   }
 
+  function advanceRoundAfterMinigame() {
+    if (!state) return;
+    // Decrement 1-round [Cursed] status inflicted by Thanatos
+    state.players.forEach((p) => {
+      if (p.cursedRounds > 0) {
+        p.cursedRounds--;
+        if (p.cursedRounds === 0) {
+          addLog(`[Cursed] lifted from ${p.name}.`);
+        }
+      }
+    });
+
+    if (state.activeGlobalEvent) {
+      const curRem =
+        typeof state.activeGlobalEvent.remainingRounds === "number"
+          ? state.activeGlobalEvent.remainingRounds
+          : Number(state.activeGlobalEvent.remainingTurns || 1);
+      const nextRem = curRem - 1;
+      state.activeGlobalEvent.remainingRounds = nextRem;
+      if (nextRem <= 0) {
+        addLog(`Global Event [${state.activeGlobalEvent.card.name}] expired after 2 rounds.`);
+        state.activeGlobalEvent = null;
+      }
+    }
+
+    state.activePlayerIndex = 0;
+    if (state.roundInCycle < state.rules.turnsPerCycle) {
+      state.roundInCycle++;
+    } else {
+      completeFullCycle();
+    }
+
+    // Monster spawns every 2 cycles starting at Cycle 2 (Cycle 2, 4, 6...) and ALWAYS takes the very first turn
+    if (state.cycle >= 2 && state.cycle % 2 === 0 && !state.activeMonster) {
+      spawnCycleMonster("thanatos", { startTurnAfterSpawn: true });
+      return;
+    }
+    if (state.activeMonster) {
+      state.isMonsterTurn = true;
+      runMonsterTurn();
+      return;
+    }
+
+    startPlayerTurn(getActivePlayer());
+    if (camera.mode !== "wide") {
+      camera.mode = "follow";
+      focusCameraOnTile(getActivePlayer().tileId);
+    }
+  }
+
   function onMinigameClosed(afterAction, closedMg = null) {
     if (!state) return;
     if (afterAction === "advance_round") {
-      if (state.activeGlobalEvent) {
-        const curRem =
-          typeof state.activeGlobalEvent.remainingRounds === "number"
-            ? state.activeGlobalEvent.remainingRounds
-            : Number(state.activeGlobalEvent.remainingTurns || 1);
-        const nextRem = curRem - 1;
-        state.activeGlobalEvent.remainingRounds = nextRem;
-        if (nextRem <= 0) {
-          addLog(`Global Event [${state.activeGlobalEvent.card.name}] expired after 2 rounds.`);
-          state.activeGlobalEvent = null;
-        }
-      }
-      state.activePlayerIndex = 0;
-      if (state.roundInCycle < state.rules.turnsPerCycle) {
-        state.roundInCycle++;
-      } else {
-        completeFullCycle();
-      }
-      startPlayerTurn(getActivePlayer());
-      if (camera.mode !== "wide") {
-        camera.mode = "follow";
-        focusCameraOnTile(getActivePlayer().tileId);
-      }
+      advanceRoundAfterMinigame();
     } else if (afterAction === "forced_all_in" && closedMg && closedMg.data && closedMg.data.forcedAllInChoice) {
       const { challengerIndex, opponentIndex } = closedMg.data.forcedAllInChoice;
       const winnerP = state.players[challengerIndex];
@@ -5699,17 +5791,7 @@
     state.activeMinigame = null;
 
     if (afterAction === "advance_round") {
-      state.activePlayerIndex = 0;
-      if (state.roundInCycle < state.rules.turnsPerCycle) {
-        state.roundInCycle++;
-      } else {
-        completeFullCycle();
-      }
-      startPlayerTurn(getActivePlayer());
-      if (camera.mode !== "wide") {
-        camera.mode = "follow";
-        focusCameraOnTile(getActivePlayer().tileId);
-      }
+      advanceRoundAfterMinigame();
     }
 
     playSfx("click");
@@ -8171,6 +8253,22 @@
       triggerShardFadeOut(state.lastPurchasedShard);
     }
     syncInGameChatFromState();
+    if (
+      state.lastMonsterSpawnEvent &&
+      state.lastMonsterSpawnEvent.id &&
+      state.lastMonsterSpawnEvent.id !== lastProcessedMonsterSpawnId
+    ) {
+      lastProcessedMonsterSpawnId = state.lastMonsterSpawnEvent.id;
+      playMonsterPortalSpawnAnim(state.lastMonsterSpawnEvent);
+    }
+    if (
+      state.lastMonsterAlertEvent &&
+      state.lastMonsterAlertEvent.id &&
+      state.lastMonsterAlertEvent.id !== lastProcessedMonsterAlertId
+    ) {
+      lastProcessedMonsterAlertId = state.lastMonsterAlertEvent.id;
+      showMonsterHorrorAlert(state.lastMonsterAlertEvent);
+    }
     if (state.lastBoardVfxEvent && state.lastBoardVfxEvent.id && state.lastBoardVfxEvent.id !== lastProcessedBoardVfxId) {
       lastProcessedBoardVfxId = state.lastBoardVfxEvent.id;
       spawnLocalBoardVfx(state.lastBoardVfxEvent.tileIds, state.lastBoardVfxEvent.kind);
@@ -8184,6 +8282,7 @@
       : "";
     if (
       !state.activeMinigame &&
+      !state.isMonsterTurn &&
       !state.winner &&
       !isInitializingMatch &&
       isMatchStarted &&
@@ -8583,6 +8682,8 @@
       state.activePlayerIndex,
       activeP.name,
       activeP.color,
+      state.isMonsterTurn ? 1 : 0,
+      state.activeMonster ? state.activeMonster.id : "",
       state.phaseIndex,
       activeP.skillsUsedThisTurn,
       activeP.maxSkillsThisTurn,
@@ -8597,8 +8698,13 @@
 
     const turnEl = document.getElementById("turn-player-label");
     if (turnEl) {
-      turnEl.textContent = activeP.name;
-      turnEl.style.borderBottom = `2px solid ${activeP.color}`;
+      if (state.isMonsterTurn && state.activeMonster) {
+        turnEl.textContent = state.activeMonster.name;
+        turnEl.style.borderBottom = `2px solid ${state.activeMonster.color || "#22c55e"}`;
+      } else {
+        turnEl.textContent = activeP.name;
+        turnEl.style.borderBottom = `2px solid ${activeP.color}`;
+      }
     }
     const cycleEl = document.getElementById("metric-cycle");
     if (cycleEl) cycleEl.textContent = toRomanNumeral(state.cycle);
@@ -8937,6 +9043,8 @@
       mp.mode,
       mp.mySeat,
       geSig,
+      state.isMonsterTurn ? 1 : 0,
+      state.activeMonster ? `${state.activeMonster.id}:${state.activeMonster.tileId}` : "",
       ...state.players.map((p) =>
         [
           p.name,
@@ -8954,6 +9062,7 @@
           p.reverseNextRoll ? 1 : 0,
           p.skipNextTurn ? 1 : 0,
           p.silencedThisPhase ? 1 : 0,
+          p.cursedRounds || 0,
           p.safeZoneImmune ? 1 : 0,
           (p.passives || []).map((ps) => `${ps.key}:${ps.remainingTurns}:${ps.expiresOnCycleEnd ? 1 : 0}`).join(",")
         ].join("~")
@@ -8990,6 +9099,7 @@
       if (p.reverseNextRoll) chips.push(`<span class="fp-effect-chip is-debuff">Reverse</span>`);
       if (p.skipNextTurn) chips.push(`<span class="fp-effect-chip is-debuff">Skip Turn</span>`);
       if (p.silencedThisPhase) chips.push(`<span class="fp-effect-chip is-debuff">Silenced</span>`);
+      if (p.cursedRounds > 0) chips.push(`<span class="fp-effect-chip is-debuff is-cursed">Cursed</span>`);
 
       // Purple = World Event with turn duration
       if (worldEventLabel) {
@@ -9043,7 +9153,8 @@
       </div>`;
     };
 
-    listContainer.innerHTML = state.players.map((p, i) => buildCard(p, i)).join("");
+    const monsterCardHtml = buildMonsterHudCardHtml();
+    listContainer.innerHTML = monsterCardHtml + state.players.map((p, i) => buildCard(p, i)).join("");
   }
 
   function getTileSvgIcon(type) {
@@ -9722,6 +9833,10 @@
       state.activePlayerIndex,
       isWalkingAnim ? 1 : 0,
       isAdminUnlocked ? 1 : 0,
+      state.isMonsterTurn ? 1 : 0,
+      state.activeMonster
+        ? `${state.activeMonster.id}:${state.activeMonster.tileId}:${state.activeMonster.portalEmerging ? 1 : 0}`
+        : "",
       state.activeShards.map((s) => `${s.roman}:${s.tileId}`).join(","),
       fadingShards.map((s) => s.fadeId).join(","),
       activeBoardVfxList.map((v) => v.id).join(","),
@@ -9810,7 +9925,13 @@
       </div>`;
       });
 
-      dynamicLayer.innerHTML = shardHtml.join("") + fadingShardHtml.join("") + boardVfxHtml.join("") + pawnsHtml.join("");
+      const monsterPawnHtml = buildMonsterBoardPawnHtml();
+      dynamicLayer.innerHTML =
+        shardHtml.join("") +
+        fadingShardHtml.join("") +
+        boardVfxHtml.join("") +
+        pawnsHtml.join("") +
+        monsterPawnHtml;
     }
 
     applyBranchPreviewTileClasses();
@@ -14885,6 +15006,524 @@
     });
   }
 
+  // ============================================================================
+  // PVE MONSTER ENGINE (THANATOS - GOD OF DEATH 1/3)
+  // ============================================================================
+  let lastProcessedMonsterSpawnId = null;
+  let lastProcessedMonsterAlertId = null;
+  let monsterTurnTimers = [];
+  let monsterAlertFadeTimer = null;
+  let monsterAlertHideTimer = null;
+
+  function clearMonsterTurnTimers() {
+    monsterTurnTimers.forEach((tid) => clearTimeout(tid));
+    monsterTurnTimers = [];
+  }
+
+  function scheduleMonsterTimer(fn, ms) {
+    const tid = setTimeout(() => {
+      monsterTurnTimers = monsterTurnTimers.filter((id) => id !== tid);
+      fn();
+    }, ms);
+    monsterTurnTimers.push(tid);
+    return tid;
+  }
+
+  function clearMonsterRuntimeUi() {
+    clearMonsterTurnTimers();
+    clearTimeout(monsterAlertFadeTimer);
+    clearTimeout(monsterAlertHideTimer);
+    lastProcessedMonsterSpawnId = null;
+    lastProcessedMonsterAlertId = null;
+    const portalLayer = document.getElementById("board-monster-portal-layer");
+    if (portalLayer) portalLayer.innerHTML = "";
+    const alertEl = document.getElementById("monster-horror-alert");
+    if (alertEl) {
+      alertEl.classList.remove("is-visible", "is-fading", "tone-spawn", "tone-skill", "tone-death", "tone-passive");
+      alertEl.innerHTML = "";
+    }
+  }
+
+  function buildThanatosPortraitSvg() {
+    return `
+      <svg class="thanatos-placeholder-svg" viewBox="0 0 140 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="thAura" cx="46%" cy="52%" r="54%">
+            <stop offset="0%" stop-color="#22c55e" stop-opacity="0.34"/>
+            <stop offset="68%" stop-color="#052e16" stop-opacity="0.12"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="140" height="120" fill="url(#thAura)"/>
+        <!-- Fan of Persona 3 Thanatos Floating Coffins -->
+        <g stroke="#4ade80" stroke-width="1.35" fill="#07131a">
+          <polygon points="10,48 22,22 36,28 28,60 15,62" transform="rotate(-18 22 42)"/>
+          <polygon points="28,12 48,4 58,20 44,44 30,36" transform="rotate(-8 42 22)"/>
+          <polygon points="74,6 96,14 98,38 78,46 68,26" transform="rotate(14 84 26)"/>
+          <polygon points="94,40 124,28 134,50 112,72 90,62" transform="rotate(8 112 52)"/>
+          <polygon points="4,72 26,64 34,88 18,104 4,94"/>
+        </g>
+        <!-- Chains linking coffins -->
+        <path d="M26 42 Q46 30 62 46 Q82 32 104 46" stroke="#64748b" stroke-width="2.2" stroke-dasharray="3 3" fill="none"/>
+        <!-- Cloaked torso & gauntlets -->
+        <path d="M36 116 C38 82, 48 68, 64 68 C80 68, 88 84, 92 116 Z" fill="#091318" stroke="#1e293b" stroke-width="1.5"/>
+        <path d="M52 74 L64 90 L76 74" stroke="#22c55e" stroke-opacity="0.55" stroke-width="1.4" fill="none"/>
+        <!-- Iconic Pale Bone Skull Mask -->
+        <path d="M48 44 C48 30, 76 30, 76 44 L73 60 L66 68 L58 68 L51 60 Z" fill="#d6e2dd" stroke="#0f172a" stroke-width="1.6"/>
+        <path d="M53 46 L60 49 L55 53 Z" fill="#020617"/>
+        <path d="M71 46 L64 49 L69 53 Z" fill="#020617"/>
+        <circle cx="56.5" cy="49.5" r="1.4" fill="#4ade80"/>
+        <circle cx="67.5" cy="49.5" r="1.4" fill="#4ade80"/>
+        <path d="M57 59 L67 59 M59 57 L59 63 M62 57 L62 64 M65 57 L65 63" stroke="#0f172a" stroke-width="1.3"/>
+      </svg>`;
+  }
+
+  function buildThanatosChibiSvg() {
+    return `
+      <svg class="monster-chibi-svg" viewBox="0 0 110 116" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="thPawnGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#22c55e" stop-opacity="0.45"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="55" cy="58" r="46" fill="url(#thPawnGlow)"/>
+        <!-- Orbiting Mini Coffins -->
+        <g fill="#08131a" stroke="#4ade80" stroke-width="1.6">
+          <polygon points="10,44 20,24 30,30 24,52 14,54"/>
+          <polygon points="80,30 90,24 100,44 96,54 86,52"/>
+          <polygon points="34,12 48,8 52,26 40,32 32,22"/>
+          <polygon points="62,8 76,12 78,22 70,32 58,26"/>
+        </g>
+        <!-- Dark cloak body -->
+        <path d="M35 98 C37 70, 44 62, 55 62 C66 62, 73 70, 75 98 L65 92 L55 100 L45 92 Z" fill="#060c10" stroke="#22c55e" stroke-width="1.4"/>
+        <!-- Pale Skull Helmet -->
+        <path d="M38 44 C38 26, 72 26, 72 44 L68 62 L60 69 L50 69 L42 62 Z" fill="#dce7e2" stroke="#020617" stroke-width="2"/>
+        <path d="M44 46 L52 50 L46 55 Z" fill="#020617"/>
+        <path d="M66 46 L58 50 L64 55 Z" fill="#020617"/>
+        <circle cx="48" cy="50.5" r="2" fill="#4ade80"/>
+        <circle cx="62" cy="50.5" r="2" fill="#4ade80"/>
+        <path d="M49 60 L61 60 M52 58 L52 65 M55 58 L55 66 M58 58 L58 65" stroke="#020617" stroke-width="1.5"/>
+      </svg>`;
+  }
+
+  function buildMonsterHudCardHtml() {
+    if (!state || !state.activeMonster) return "";
+    const m = state.activeMonster;
+    const def = (DATA.MONSTERS && DATA.MONSTERS[m.id]) || {};
+    const passivesHtml = (def.passives || [])
+      .map((ps) => `<div class="ph-m-tip-row"><strong>${escapeHtml(ps.name)}:</strong> ${escapeHtml(ps.description)}</div>`)
+      .join("");
+    const skillsHtml = (def.skills || [])
+      .map((sk) => `<div class="ph-m-tip-row"><strong>${escapeHtml(sk.name)}:</strong> ${escapeHtml(sk.description)}</div>`)
+      .join("");
+    const activeCls = state.isMonsterTurn ? "is-active" : "";
+    return `
+      <div class="monster-hud-card ${activeCls}" onclick="window.EFT_APP.focusCameraOnMonster()" title="Click to focus on ${escapeHtml(m.name)}">
+        <div class="mh-card-clip">
+          <div class="mh-portrait-col">${buildThanatosPortraitSvg()}</div>
+          <div class="mh-name-col">
+            <span class="mh-name">${escapeHtml(m.name)}</span>
+          </div>
+        </div>
+        <div class="mh-hover-tooltip" role="tooltip">
+          <div class="mh-tip-head">${escapeHtml(m.name)} · ${escapeHtml(m.title || "Boss Monster")} (${def.orderIndex || 1}/${def.totalRoster || 3})</div>
+          <div class="mh-tip-sub">Moves with 1d${def.diceSides || 8} · Acts First Every Round</div>
+          ${passivesHtml}
+          ${skillsHtml}
+        </div>
+      </div>`;
+  }
+
+  function buildMonsterBoardPawnHtml() {
+    if (!state || !state.activeMonster || !state.activeMonster.tileId) return "";
+    const m = state.activeMonster;
+    const tile = TILE_MAP[m.tileId];
+    if (!tile) return "";
+    const emergeCls = m.portalEmerging ? "is-emerging" : "";
+    const activeCls = state.isMonsterTurn ? "is-monster-turn" : "";
+    return `
+      <div class="board-monster-pawn ${activeCls} ${emergeCls}"
+           data-monster-id="${escapeHtml(m.id)}"
+           style="left:${tile.x}%;top:${tile.y}%;"
+           title="${escapeHtml(m.name)} (${escapeHtml(m.title || "God of Death")}) @ ${m.tileId}"
+           onclick="event.stopPropagation();window.EFT_APP.focusCameraOnMonster()">
+        <div class="monster-pawn-aura" aria-hidden="true"></div>
+        ${buildThanatosChibiSvg()}
+        <span class="monster-pawn-tag">${escapeHtml(m.name)}</span>
+      </div>`;
+  }
+
+  function focusCameraOnMonster() {
+    if (!state || !state.activeMonster || !state.activeMonster.tileId) return;
+    camera.mode = "follow";
+    focusCameraOnTile(state.activeMonster.tileId, isMobilePortrait() ? 0.78 : 1.04);
+  }
+
+  function showMonsterHorrorAlert(ev) {
+    const el = document.getElementById("monster-horror-alert");
+    if (!el || !ev) return;
+    clearTimeout(monsterAlertFadeTimer);
+    clearTimeout(monsterAlertHideTimer);
+
+    const tone = ev.tone || "skill";
+    const title = ev.title || "THANATOS";
+    const subtitle = ev.subtitle || "GOD OF DEATH";
+    const detail = ev.detail || "";
+
+    el.classList.remove("is-visible", "is-fading", "tone-spawn", "tone-skill", "tone-death", "tone-passive");
+    el.innerHTML = `
+      <div class="mha-whisper">${escapeHtml(subtitle)}</div>
+      <div class="mha-headline" data-text="${escapeHtml(title)}">${escapeHtml(title)}</div>
+      ${detail ? `<div class="mha-detail">${escapeHtml(detail)}</div>` : ""}
+    `;
+    void el.offsetWidth;
+    el.classList.add("is-visible", `tone-${tone}`);
+    playSfx(tone === "spawn" ? "monster_portal" : "monster_skill");
+
+    const holdMs = tone === "spawn" || tone === "death" ? 3200 : 2650;
+    monsterAlertFadeTimer = setTimeout(() => {
+      el.classList.add("is-fading");
+    }, holdMs);
+    monsterAlertHideTimer = setTimeout(() => {
+      el.classList.remove("is-visible", "is-fading", `tone-${tone}`);
+      el.innerHTML = "";
+    }, holdMs + 650);
+  }
+
+  function triggerMonsterHorrorAlert(title, subtitle, detail, tone = "skill") {
+    if (!state) return;
+    const ev = {
+      id: `ma_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      title,
+      subtitle,
+      detail,
+      tone,
+      ts: Date.now()
+    };
+    state.lastMonsterAlertEvent = ev;
+    lastProcessedMonsterAlertId = ev.id;
+    showMonsterHorrorAlert(ev);
+    broadcastMultiplayerState();
+  }
+
+  function playMonsterPortalSpawnAnim(spawnEv) {
+    if (!spawnEv || !spawnEv.tileId) return;
+    const tile = TILE_MAP[spawnEv.tileId];
+    const layer = document.getElementById("board-monster-portal-layer");
+    if (!tile || !layer) return;
+
+    camera.mode = "follow";
+    focusCameraOnTile(spawnEv.tileId, isMobilePortrait() ? 0.84 : 1.12);
+    addCameraTrauma(0.55);
+    playSfx("monster_portal");
+
+    const portalId = `mp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+    const node = document.createElement("div");
+    node.className = "monster-spawn-portal";
+    node.id = portalId;
+    node.style.left = `${tile.x}%`;
+    node.style.top = `${tile.y}%`;
+    node.innerHTML = `
+      <div class="msp-void-rift"></div>
+      <div class="msp-outer-clock"></div>
+      <div class="msp-inner-sigil"></div>
+      <div class="msp-coffin-ring"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="msp-mist-pillar"></div>
+      <div class="msp-shockwave"></div>
+    `;
+    layer.appendChild(node);
+
+    setTimeout(() => {
+      node.classList.add("is-closing");
+    }, 2050);
+    setTimeout(() => {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    }, 2650);
+  }
+
+  function pickMonsterSpawnTile() {
+    const candidates = DATA.BOARD_TILES.filter(
+      (t) => t.id !== "T0" && t.type !== "intersect" && !t.offTrack
+    );
+    if (candidates.length === 0) return "T1";
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+    return chosen.id;
+  }
+
+  function getMonsterNextTile(monster) {
+    if (!monster || !monster.tileId) return "T1";
+    const curTile = TILE_MAP[monster.tileId];
+    if (!curTile) return "T1";
+    let nextIds = Array.isArray(curTile.next) ? [...curTile.next] : [];
+    const resolved = [];
+    const pushResolved = (tid) => {
+      const t = TILE_MAP[tid];
+      if (!t) return;
+      if (t.type === "intersect" && Array.isArray(t.next)) {
+        t.next.forEach((nt) => {
+          if (nt !== monster.tileId && nt !== "T0") resolved.push(nt);
+        });
+      } else if (tid !== "T0") {
+        resolved.push(tid);
+      }
+    };
+    nextIds.forEach(pushResolved);
+    if (resolved.length === 0) {
+      const adj = (ADJ_MAP[monster.tileId] || []).filter((id) => id !== monster.prevTileId && id !== "T0");
+      adj.forEach(pushResolved);
+    }
+    if (resolved.length === 0) return "T1";
+    return resolved[Math.floor(Math.random() * resolved.length)];
+  }
+
+  function spawnCycleMonster(monsterId = "thanatos", opts = {}) {
+    if (!state) return;
+    const def = (DATA.MONSTERS && DATA.MONSTERS[monsterId]) || null;
+    if (!def) return;
+    clearMonsterTurnTimers();
+
+    const spawnTileId = opts.tileId || pickMonsterSpawnTile();
+    state.activeMonster = {
+      id: def.id,
+      name: def.name,
+      title: def.title,
+      color: def.color,
+      colorRgb: def.colorRgb,
+      textColor: def.textColor || def.color,
+      tileId: spawnTileId,
+      prevTileId: null,
+      lastDirection: 1,
+      spawnedCycle: state.cycle,
+      portalEmerging: true
+    };
+    state.isMonsterTurn = true;
+
+    const spawnEv = {
+      id: `ms_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      monsterId: def.id,
+      name: def.name,
+      title: def.title,
+      tileId: spawnTileId,
+      ts: Date.now()
+    };
+    state.lastMonsterSpawnEvent = spawnEv;
+    lastProcessedMonsterSpawnId = spawnEv.id;
+
+    const spawnTile = TILE_MAP[spawnTileId];
+    addLog(`DARK HOUR: ${def.name} (${def.title}) tore open a portal at ${spawnTile ? spawnTile.name : spawnTileId} (${spawnTileId}) and claims the first turn!`);
+    playMonsterPortalSpawnAnim(spawnEv);
+    triggerMonsterHorrorAlert(
+      "THANATOS",
+      "GOD OF DEATH HAS ARRIVED",
+      `A portal tore open at ${spawnTile ? spawnTile.name : spawnTileId}. Death walks first.`,
+      "spawn"
+    );
+    renderAll();
+    broadcastMultiplayerState();
+
+    scheduleMonsterTimer(() => {
+      if (!state || !state.activeMonster) return;
+      state.activeMonster.portalEmerging = false;
+      renderAll();
+      broadcastMultiplayerState();
+      if (opts.startTurnAfterSpawn !== false && !isRemoteClient()) {
+        runMonsterTurn();
+      }
+    }, 2350);
+  }
+
+  function runMonsterTurn() {
+    if (!state || !state.activeMonster || state.winner) {
+      finishMonsterTurn();
+      return;
+    }
+    if (isRemoteClient()) return;
+
+    clearMonsterTurnTimers();
+    state.isMonsterTurn = true;
+    const monster = state.activeMonster;
+    const curRound = state.roundInCycle || 1;
+    camera.mode = "follow";
+    focusCameraOnTile(monster.tileId, isMobilePortrait() ? 0.78 : 1.0);
+    renderAll();
+    broadcastMultiplayerState();
+
+    const activePool = state.players.filter((p) => !p.hasLeftRoom);
+    const targets = activePool.length > 0 ? activePool : state.players;
+
+    // Skill 1 - Death Whisper (Round 2 & Round 4): random player [Cursed] for 1 round
+    if (monster.id === "thanatos" && (curRound === 2 || curRound === 4) && targets.length > 0) {
+      const victim = targets[Math.floor(Math.random() * targets.length)];
+      victim.cursedRounds = Math.max(victim.cursedRounds || 0, 1);
+      addLog(`Thanatos cast [Death Whisper] on ${victim.name} -> Inflicted [Cursed] for 1 round (cannot obtain TC)!`);
+      if (victim.tileId && window.EFT_WEBGL_VFX) {
+        window.EFT_WEBGL_VFX.burstAtTile(victim.tileId, "debuff", "#22c55e");
+      }
+      focusCameraOnTile(victim.tileId, isMobilePortrait() ? 0.78 : 1.0);
+      triggerMonsterHorrorAlert(
+        "DEATH WHISPER",
+        "THANATOS · GOD OF DEATH",
+        `${victim.name} is Cursed for 1 round. No TC can be obtained.`,
+        "skill"
+      );
+      renderAll();
+      broadcastMultiplayerState();
+      scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 2050);
+      return;
+    }
+
+    // Skill 2 - I Am Death (Round 3): highest TC player [Cursed] + teleported to Thanatos
+    if (monster.id === "thanatos" && curRound === 3 && targets.length > 0) {
+      const maxTc = Math.max(...targets.map((p) => p.tc || 0));
+      const topTargets = targets.filter((p) => (p.tc || 0) === maxTc);
+      const victim = topTargets[Math.floor(Math.random() * topTargets.length)];
+      victim.cursedRounds = Math.max(victim.cursedRounds || 0, 1);
+      victim.inSpawn = false;
+      victim.lastTileId = victim.tileId;
+      victim.tileId = monster.tileId;
+      addLog(`Thanatos cast [I Am Death] on ${victim.name} (Highest TC: ${victim.tc}) -> Inflicted [Cursed] and dragged them to ${monster.tileId}!`);
+      addCameraTrauma(0.5);
+      if (monster.tileId && window.EFT_WEBGL_VFX) {
+        window.EFT_WEBGL_VFX.burstAtTile(monster.tileId, "debuff", "#22c55e");
+      }
+      focusCameraOnTile(monster.tileId, isMobilePortrait() ? 0.8 : 1.06);
+      triggerMonsterHorrorAlert(
+        "I AM DEATH",
+        "THANATOS · GOD OF DEATH",
+        `${victim.name} (Highest TC) is Cursed and dragged to Thanatos.`,
+        "death"
+      );
+      renderAll();
+      broadcastMultiplayerState();
+      scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 2250);
+      return;
+    }
+
+    scheduleMonsterTimer(() => rollMonster1d8AndWalk(), 700);
+  }
+
+  function rollMonster1d8AndWalk() {
+    if (!state || !state.activeMonster || state.winner) {
+      finishMonsterTurn();
+      return;
+    }
+    const monster = state.activeMonster;
+    const def = (DATA.MONSTERS && DATA.MONSTERS[monster.id]) || {};
+    const sides = def.diceSides || 8;
+    const roll = Math.floor(Math.random() * sides) + 1;
+    addLog(`${monster.name} rolled 1d${sides}: [${roll}] (${roll} steps).`);
+
+    const diceEvId = `dr_m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    state.lastDiceRollEvent = {
+      id: diceEvId,
+      playerName: monster.name,
+      rolls: [roll],
+      rawTotal: roll,
+      totalSteps: roll,
+      direction: 1,
+      sides,
+      isForced: false,
+      ts: Date.now()
+    };
+    lastShownDiceRollEventId = diceEvId;
+    focusCameraOnTile(monster.tileId, isMobilePortrait() ? 0.78 : 1.0);
+    renderAll();
+    broadcastMultiplayerState();
+
+    playDiceRollAnimation(
+      {
+        player: { name: monster.name },
+        rolls: [roll],
+        rawTotal: roll,
+        totalSteps: roll,
+        direction: 1,
+        sides,
+        isForced: false
+      },
+      () => {
+        stepMonsterForward(roll, new Set());
+      }
+    );
+  }
+
+  function stepMonsterForward(stepsRemaining, coffinHitSet) {
+    if (!state || !state.activeMonster || state.winner || stepsRemaining <= 0) {
+      scheduleMonsterTimer(() => finishMonsterTurn(), 520);
+      return;
+    }
+    const monster = state.activeMonster;
+    const nextTileId = getMonsterNextTile(monster);
+    monster.prevTileId = monster.tileId;
+    monster.tileId = nextTileId;
+    const stepsLeft = stepsRemaining - 1;
+    activeStepsRemaining = stepsLeft;
+    isWalkingAnim = stepsLeft > 0;
+    playSfx("step");
+
+    const stepEvId = `ws_m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    state.lastWalkStepEvent = {
+      id: stepEvId,
+      isMonster: true,
+      tileId: nextTileId,
+      stepsLeft,
+      ts: Date.now()
+    };
+    lastProcessedWalkStepId = stepEvId;
+
+    if (camera.mode === "follow") {
+      focusCameraOnTile(nextTileId);
+    }
+
+    // Passive 1 - Coffin's Door: Every time Thanatos passes a player, they lose 1 card
+    if (monster.id === "thanatos") {
+      state.players.forEach((p) => {
+        if (p.inSpawn || p.tileId !== nextTileId || coffinHitSet.has(p.index)) return;
+        coffinHitSet.add(p.index);
+        const disc = discardRandomCards(p, 1, { kind: "discard", sourceLabel: "Coffin's Door (Thanatos)" });
+        addLog(`Coffin's Door (Thanatos): Passed ${p.name} -> ${p.name} lost ${disc.length} card(s)!`);
+        triggerMonsterHorrorAlert(
+          "COFFIN'S DOOR",
+          "THANATOS · PASSIVE",
+          `${p.name} crossed Thanatos's path and lost ${disc.length} card.`,
+          "passive"
+        );
+      });
+    }
+
+    renderAll();
+    broadcastMultiplayerState();
+
+    if (stepsLeft > 0) {
+      scheduleMonsterTimer(() => stepMonsterForward(stepsLeft, coffinHitSet), 340);
+    } else {
+      scheduleMonsterTimer(() => finishMonsterTurn(), 560);
+    }
+  }
+
+  function finishMonsterTurn() {
+    if (!state) return;
+    state.isMonsterTurn = false;
+    isWalkingAnim = false;
+    activeStepsRemaining = 0;
+    state.activePlayerIndex = 0;
+    startPlayerTurn(getActivePlayer());
+    if (camera.mode !== "wide") {
+      camera.mode = "follow";
+      focusCameraOnTile(getActivePlayer().tileId);
+    }
+    renderAll();
+    broadcastMultiplayerState();
+  }
+
+  function triggerManualMonsterSpawn() {
+    if (!isAdminUnlocked) {
+      openAdminModal();
+      return;
+    }
+    spawnCycleMonster("thanatos", { startTurnAfterSpawn: true });
+  }
+
   function openNewMatchSetupModal() {
     openWelcomeSetupModal("local");
   }
@@ -14908,6 +15547,8 @@
     openInGameChatInput,
     closeInGameChatInput,
     submitInGameChat,
+    focusCameraOnMonster,
+    triggerManualMonsterSpawn,
     toggleDrawer,
     handleRollButton,
     handleEndTurnButton,

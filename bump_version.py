@@ -53,11 +53,14 @@ def get_git_commit_count():
     return None
 
 
+V2_BASE_UPLOAD = 44
+
+
 def format_beta_version(upload_count):
-    n = max(1, int(upload_count))
+    n = max(0, int(upload_count) - V2_BASE_UPLOAD)
     minor = n // 10
     patch = n % 10
-    return f"Beta V.1.{minor}.{patch}"
+    return f"Beta V.2.{minor}.{patch}"
 
 
 def read_existing_count():
@@ -90,12 +93,13 @@ def sync_version(mode="next"):
     version_str = format_beta_version(upload_count)
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    v2_n = max(0, upload_count - V2_BASE_UPLOAD)
     payload = {
         "version": version_str,
         "uploadCount": upload_count,
-        "major": 1,
-        "minor": upload_count // 10,
-        "patch": upload_count % 10,
+        "major": 2,
+        "minor": v2_n // 10,
+        "patch": v2_n % 10,
         "updatedAt": now_iso,
     }
 

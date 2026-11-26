@@ -700,5 +700,47 @@ window.EFT_DATA = {
     { id: "T126", name: "-5 TC",           type: "tc_minus5",   x: 55.8, y: 72.9, next: ["T127"] },
     { id: "T127", name: "Normal Tile",     type: "normal",      x: 53.6, y: 68.3, next: ["T128"] },
     { id: "T128", name: "+10 TC",          type: "tc_plus10",   x: 57.3, y: 65.6, next: ["T114"] }
-  ]
+  ],
+
+  // 7. PVE BOSS MONSTERS (SPAWN EVERY 2 CYCLES STARTING CYCLE 2)
+  MONSTERS: {
+    thanatos: {
+      id: "thanatos",
+      orderIndex: 1,
+      totalRoster: 3,
+      name: "Thanatos",
+      title: "God of Death",
+      origin: "Persona",
+      color: "#22c55e",
+      colorRgb: "34, 197, 94",
+      textColor: "#38b000",
+      diceSides: 8,
+      passives: [
+        {
+          id: "coffins_door",
+          name: "Coffin's Door",
+          description: "Every time Thanatos passes a player, they lose 1 card."
+        },
+        {
+          id: "fear_me",
+          name: "Fear Me",
+          description: "Players who start their turn within a 3-block radius from Thanatos lose 1 dice."
+        }
+      ],
+      skills: [
+        {
+          id: "death_whisper",
+          name: "Death Whisper",
+          rounds: [2, 4],
+          description: "Activates on Round 2 and 4. Randomly chooses a player and inflicts [Cursed] for 1 round (cannot obtain TC)."
+        },
+        {
+          id: "i_am_death",
+          name: "I Am Death",
+          rounds: [3],
+          description: "Activates on Round 3. Targets the player with the highest TC, inflicts [Cursed], and teleports them to Thanatos."
+        }
+      ]
+    }
+  }
 };

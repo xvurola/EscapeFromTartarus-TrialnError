@@ -479,14 +479,24 @@
             } else {
               const allTc = loserP.tc;
               loserP.tc = 0;
-              winnerP.tc += allTc;
-              winnerEntry.rewardDelta = allTc;
-              winnerEntry.rewardNote = `Seized All TC (+${allTc} TC)`;
-              loserEntry.rewardDelta = -allTc;
-              loserEntry.rewardNote = `Lost All TC (-${allTc} TC)`;
-              mg.resultHeadline = `${winnerP.name} Won Forced All-In!`;
-              mg.resultSub = `${winnerP.name} defeated ${loserP.name} in ${mg.name} and seized all 💰 ${allTc} TC!`;
-              hostApi.addLog(`ULTIMATE [Forced All-In] (${mg.name}): ${winnerP.name} defeated ${loserP.name} and seized all 💰 ${allTc} TC!`);
+              if (winnerP.cursedRounds > 0) {
+                winnerEntry.rewardDelta = 0;
+                winnerEntry.rewardNote = "Cursed (Cannot Obtain TC)";
+                loserEntry.rewardDelta = -allTc;
+                loserEntry.rewardNote = `Lost All TC (-${allTc} TC)`;
+                mg.resultHeadline = `${winnerP.name} Won Forced All-In!`;
+                mg.resultSub = `${winnerP.name} defeated ${loserP.name}, but [Cursed] blocked all 💰 ${allTc} TC!`;
+                hostApi.addLog(`ULTIMATE [Forced All-In] (${mg.name}): ${winnerP.name} won, but [Cursed] blocked gaining 💰 ${allTc} TC!`);
+              } else {
+                winnerP.tc += allTc;
+                winnerEntry.rewardDelta = allTc;
+                winnerEntry.rewardNote = `Seized All TC (+${allTc} TC)`;
+                loserEntry.rewardDelta = -allTc;
+                loserEntry.rewardNote = `Lost All TC (-${allTc} TC)`;
+                mg.resultHeadline = `${winnerP.name} Won Forced All-In!`;
+                mg.resultSub = `${winnerP.name} defeated ${loserP.name} in ${mg.name} and seized all 💰 ${allTc} TC!`;
+                hostApi.addLog(`ULTIMATE [Forced All-In] (${mg.name}): ${winnerP.name} defeated ${loserP.name} and seized all 💰 ${allTc} TC!`);
+              }
             }
           } else {
             const taken = Math.min(effectiveBet, loserP.tc);
