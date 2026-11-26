@@ -3114,7 +3114,9 @@
     const pt = ch.portrait || null;
     const portraitHtml =
       pt && pt.src
-        ? `<img src="${pt.src}" alt="${escapeHtml(w.name)}" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
+        ? pt.cover
+          ? `<img src="${pt.src}" alt="${escapeHtml(w.name)}" style="inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 22%;" />`
+          : `<img src="${pt.src}" alt="${escapeHtml(w.name)}" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
         : `<div class="ph-portrait-fallback" style="width:100%;height:100%;"><div class="ph-fallback-icon" style="fill:${escapeHtml(w.color || "#fbbf24")};">${getCharacterSvgIcon(w.charId)}</div></div>`;
 
     const ranked = [...(state.players || [])].sort((a, b) => {
@@ -5756,7 +5758,9 @@
 
         const portraitHtml =
           pt && pt.src
-            ? `<img class="dof-portrait-img" src="${pt.src}" alt="${escapeHtml(entry.name)}" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
+            ? pt.cover
+              ? `<img class="dof-portrait-img is-cover" src="${pt.src}" alt="${escapeHtml(entry.name)}" style="inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 22%;" />`
+              : `<img class="dof-portrait-img" src="${pt.src}" alt="${escapeHtml(entry.name)}" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
             : `<div class="ph-portrait-fallback"><div class="ph-fallback-icon" style="fill:${escapeHtml(entry.color)};">${getCharacterSvgIcon(entry.charId)}</div></div>`;
 
         let numText = "-";
@@ -8994,7 +8998,9 @@
 
       const portraitHtml =
         pt && pt.src
-          ? `<img class="ph-portrait-img" src="${pt.src}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
+          ? pt.cover
+            ? `<img class="ph-portrait-img is-cover" src="${pt.src}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async" />`
+            : `<img class="ph-portrait-img" src="${pt.src}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
           : `<div class="ph-portrait-fallback" style="background:radial-gradient(circle at 50% 42%, ${pColor}55 0%, #07191a 82%);"><div class="ph-fallback-icon" style="fill:${pColor};">${getCharacterSvgIcon(p.charId)}</div></div>`;
 
       const editBtn = isAdminUnlocked
@@ -11249,19 +11255,45 @@
       .catch(() => {});
   }
 
+  function reassignLobbyBotChar(botMember, avoidCharIds) {
+    if (!botMember || !mp.lobby) return;
+    const allowed = getPlayableCharacterIds(mp.lobby.compendiumId);
+    const free = allowed.find((cid) => !avoidCharIds.has(cid));
+    if (free) {
+      botMember.charId = free;
+      const ch = getCharacterForCompendium(free, mp.lobby.compendiumId);
+      botMember.username = `${ch ? ch.name : "Bot"} (Bot)`;
+    }
+  }
+
   function processLobbyJoinAction(d) {
     if (!d || !d.clientId) return;
     const allowed = getPlayableCharacterIds(mp.lobby.compendiumId);
-    const takenByOthers = new Set(
-      mp.lobby.members.filter((m) => m.clientId !== d.clientId).map((m) => m.charId)
+    const takenByHumans = new Set(
+      mp.lobby.members.filter((m) => !m.isBot && m.clientId !== d.clientId).map((m) => m.charId)
     );
     let chosenChar = allowed.includes(d.charId) ? d.charId : allowed[0];
-    if (takenByOthers.has(chosenChar)) {
-      chosenChar = allowed.find((cid) => !takenByOthers.has(cid)) || chosenChar;
+    if (takenByHumans.has(chosenChar)) {
+      chosenChar = allowed.find((cid) => !takenByHumans.has(cid)) || chosenChar;
     }
 
     const existing = mp.lobby.members.find((m) => m.clientId === d.clientId);
     const cleanName = String(d.username || "Player").trim().slice(0, 18) || "Player";
+    if (!existing && mp.lobby.members.length >= 4) {
+      const lastBotIdx = [...mp.lobby.members].reverse().findIndex((m) => m.isBot);
+      if (lastBotIdx !== -1) {
+        const realIdx = mp.lobby.members.length - 1 - lastBotIdx;
+        mp.lobby.members.splice(realIdx, 1);
+      }
+    }
+
+    const botUsingChar = mp.lobby.members.find((m) => m.isBot && m.charId === chosenChar);
+    if (botUsingChar) {
+      const usedSet = new Set(mp.lobby.members.map((m) => m.charId));
+      usedSet.add(chosenChar);
+      reassignLobbyBotChar(botUsingChar, usedSet);
+    }
+
     if (existing) {
       existing.username = cleanName;
       existing.charId = chosenChar;
@@ -11272,6 +11304,7 @@
         username: cleanName,
         charId: chosenChar,
         isHost: d.clientId === mp.lobby.hostClientId,
+        isBot: false,
         ready: !!d.ready
       });
     }
@@ -11338,15 +11371,17 @@
     playSfx("click");
     const target = (mp.lobby.members || []).find((m) => m.clientId === targetClientId);
     mp.lobby.members = (mp.lobby.members || []).filter((m) => m.clientId !== targetClientId);
-    if (!Array.isArray(mp.lobby.kickedIds)) mp.lobby.kickedIds = [];
-    if (!mp.lobby.kickedIds.includes(targetClientId)) {
-      mp.lobby.kickedIds.push(targetClientId);
+    if (!target || !target.isBot) {
+      if (!Array.isArray(mp.lobby.kickedIds)) mp.lobby.kickedIds = [];
+      if (!mp.lobby.kickedIds.includes(targetClientId)) {
+        mp.lobby.kickedIds.push(targetClientId);
+      }
     }
     markRoomRealPlayerActivity(true);
     broadcastLobbyState();
     refreshLobbyModalIfOpen();
     if (target) {
-      showHandDragToast(`Removed ${target.username} from the room.`);
+      showHandDragToast(target.isBot ? `Removed ${target.username}.` : `Removed ${target.username} from the room.`);
     }
   }
 
@@ -11424,15 +11459,39 @@
     }
   }
 
-  function toggleLobbyFillBots(checked) {
+  function addLobbyBot() {
     if (!isMultiplayerHost()) return;
-    mp.lobby.fillWithBots = !!checked;
+    if (!Array.isArray(mp.lobby.members)) mp.lobby.members = [];
+    if (mp.lobby.members.length >= 4) {
+      playSfx("card_drag_deny");
+      showHandDragToast("Room is already full (4/4 players).");
+      return;
+    }
+    playSfx("click");
+    const allowed = getPlayableCharacterIds(mp.lobby.compendiumId);
+    const usedChars = new Set(mp.lobby.members.map((m) => m.charId));
+    const freeChars = allowed.filter((cid) => !usedChars.has(cid));
+    const cid =
+      freeChars.length > 0
+        ? freeChars[Math.floor(Math.random() * freeChars.length)]
+        : allowed[mp.lobby.members.length % allowed.length];
+    const ch = getCharacterForCompendium(cid, mp.lobby.compendiumId);
+    mp.lobby.members.push({
+      clientId: `bot_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      username: `${ch ? ch.name : "Bot"} (Bot)`,
+      charId: cid,
+      isHost: false,
+      isBot: true,
+      ready: true
+    });
+    markRoomRealPlayerActivity(true);
     broadcastLobbyState();
+    refreshLobbyModalIfOpen();
   }
 
   function startMultiplayerMatchFromLobby() {
     if (!isMultiplayerHost()) return;
-    const unreadyGuests = (mp.lobby.members || []).filter((m) => !m.isHost && !m.ready);
+    const unreadyGuests = (mp.lobby.members || []).filter((m) => !m.isHost && !m.isBot && !m.ready);
     if (unreadyGuests.length > 0) {
       playSfx("card_drag_deny");
       showHandDragToast(`Waiting for ${unreadyGuests.map((u) => u.username).join(", ")} to press READY (use Notify!).`);
@@ -11444,28 +11503,12 @@
       charId: allowed.includes(m.charId) ? m.charId : allowed[0],
       username: m.username,
       clientId: m.clientId,
-      isBot: false
+      isBot: !!m.isBot
     }));
-
-    if (mp.lobby.fillWithBots && roster.length < 4) {
-      const usedChars = new Set(roster.map((r) => r.charId));
-      const freeChars = allowed.filter((c) => !usedChars.has(c));
-      let botNum = 1;
-      while (roster.length < 4) {
-        const cid = freeChars.shift() || allowed[(roster.length + botNum) % allowed.length];
-        const ch = getCharacterForCompendium(cid, mp.lobby.compendiumId);
-        roster.push({
-          charId: cid,
-          username: `${ch ? ch.name : "Bot"} (Bot)`,
-          clientId: `bot_${botNum++}`,
-          isBot: true
-        });
-      }
-    }
 
     if (roster.length < 2) {
       playSfx("card_drag_deny");
-      showHandDragToast("Enable 'AI fills in' or wait for at least 1 more player to start.");
+      showHandDragToast("Click '+1 Bot' or wait for at least 1 more player to start.");
       return;
     }
 
@@ -11958,7 +12001,8 @@
     }
 
     if (mp.lobby.status !== "playing") {
-      if (!mp.lobby.members || mp.lobby.members.length === 0) {
+      const remainingHumansInLobby = (mp.lobby.members || []).filter((m) => !m.isBot);
+      if (remainingHumansInLobby.length === 0) {
         const ref = mp.fbRoomRef;
         detachFirebaseListeners();
         deleteFirebaseRoomNow(ref);
@@ -14276,7 +14320,9 @@
       const thumbHtml = menuSrc
         ? `<img class="char-pick-menu-img" src="${menuSrc}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" />`
         : pt && pt.src
-        ? `<img class="ph-portrait-img" src="${pt.src}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
+        ? pt.cover
+          ? `<img class="ph-portrait-img is-cover" src="${pt.src}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" />`
+          : `<img class="ph-portrait-img" src="${pt.src}" alt="${escapeHtml(ch.name)}" loading="lazy" decoding="async" style="width:${pt.widthPct}%;left:${pt.leftPct}%;top:${pt.topPct}%;" />`
         : `<div class="ph-portrait-fallback" style="background:radial-gradient(circle at 50% 42%, ${ch.color}55 0%, #07191a 82%);"><div class="ph-fallback-icon" style="fill:${ch.color};">${getCharacterSvgIcon(cid)}</div></div>`;
       const clickAttr = isTaken ? "" : `onclick="window.EFT_APP.selectSetupChar('${cid}')"`;
       const devBadge = charBase.underDevelopment
@@ -14365,9 +14411,15 @@
     if (mp.mode !== "local" && mp.lobby.status === "waiting") {
       if (isMultiplayerHost()) {
         const me = mp.lobby.members.find((m) => m.clientId === mp.clientId);
-        const taken = mp.lobby.members.some((m) => m.clientId !== mp.clientId && m.charId === charId);
-        if (!taken && me) {
+        const takenByHuman = mp.lobby.members.some((m) => !m.isBot && m.clientId !== mp.clientId && m.charId === charId);
+        if (!takenByHuman && me) {
+          const botHoldingChar = mp.lobby.members.find((m) => m.isBot && m.charId === charId);
           me.charId = charId;
+          if (botHoldingChar) {
+            const usedSet = new Set(mp.lobby.members.map((m) => m.charId));
+            usedSet.add(charId);
+            reassignLobbyBotChar(botHoldingChar, usedSet);
+          }
           broadcastLobbyState();
         }
       } else if (isRemoteClient()) {
@@ -14464,11 +14516,12 @@
     if (inLobbyWaiting) {
       const takenMap = {};
       mp.lobby.members.forEach((m) => {
-        if (m.clientId !== mp.clientId) takenMap[m.charId] = m.username;
+        if (!m.isBot && m.clientId !== mp.clientId) takenMap[m.charId] = m.username;
       });
       const me = mp.lobby.members.find((m) => m.clientId === mp.clientId);
       const isHost = isMultiplayerHost();
       const myName = (me && me.username) || (setupDraft.username || "").trim() || "Player";
+      const isRoomFull = (mp.lobby.members || []).length >= 4;
 
       const rosterHtml = mp.lobby.members
         .map((m) => {
@@ -14478,14 +14531,17 @@
           const pRgb = hexColorToRgbTuple(pColor);
           const imgSrc = base.menuPortrait || (base.portrait && base.portrait.src) || "";
           const orbClass = m.isHost ? "is-host" : m.ready ? "is-ready" : "is-not-ready";
-          const orbTitle = m.isHost ? "Room Master" : m.ready ? "Ready" : "Not Ready";
+          const orbTitle = m.isHost ? "Room Master" : m.isBot ? "Bot Ready" : m.ready ? "Ready" : "Not Ready";
 
           let rmControls = "";
           if (isHost && !m.isHost) {
-            const notifyBtn = !m.ready
-              ? `<button type="button" class="rl2-rm-btn rl2-rm-notify" onclick="window.EFT_APP.notifyLobbyPlayer('${escapeHtml(m.clientId)}')" title="Notify player to Ready up">Notify</button>`
-              : "";
-            const kickBtn = `<button type="button" class="rl2-rm-btn rl2-rm-kick" onclick="window.EFT_APP.kickLobbyPlayer('${escapeHtml(m.clientId)}')" title="Kick player from room">Kick</button>`;
+            const notifyBtn =
+              !m.isBot && !m.ready
+                ? `<button type="button" class="rl2-rm-btn rl2-rm-notify" onclick="window.EFT_APP.notifyLobbyPlayer('${escapeHtml(m.clientId)}')" title="Notify player to Ready up">Notify</button>`
+                : "";
+            const kickLabel = m.isBot ? "Remove" : "Kick";
+            const kickTitle = m.isBot ? "Remove bot from room" : "Kick player from room";
+            const kickBtn = `<button type="button" class="rl2-rm-btn rl2-rm-kick" onclick="window.EFT_APP.kickLobbyPlayer('${escapeHtml(m.clientId)}')" title="${kickTitle}">${kickLabel}</button>`;
             rmControls = `<span class="rl2-rm-actions">${notifyBtn}${kickBtn}</span>`;
           }
 
@@ -14504,11 +14560,10 @@
         .join("");
 
       const footerRightHtml = isHost
-        ? `<label class="rl2-ai-check" title="Automatically fill empty slots with AI bots up to 4 players">
-             <input type="checkbox" ${mp.lobby.fillWithBots ? "checked" : ""} onchange="window.EFT_APP.toggleLobbyFillBots(this.checked)" />
-             <span>AI fills in</span>
-           </label>
-           <button type="button" class="rl2-start-btn" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">START</button>`
+        ? `<div class="rl2-footer-actions">
+             <button type="button" class="rl2-add-bot-btn" ${isRoomFull ? "disabled" : ""} onclick="window.EFT_APP.addLobbyBot()" title="${isRoomFull ? "Room is full (4/4)" : "Add 1 AI Bot to this room"}">+1 Bot</button>
+             <button type="button" class="rl2-start-btn" onclick="window.EFT_APP.startMultiplayerMatchFromLobby()">START</button>
+           </div>`
         : `<div class="rl2-wait-hint">${me && me.ready ? "Ready! Waiting for Room Master..." : "Press READY when you are set"}</div>
            <button type="button" id="rl2-ready-btn" class="rl2-start-btn ${me && me.ready ? "is-ready-active" : ""}" onclick="window.EFT_APP.toggleLobbyReady()">${
              me && me.ready ? "CANCEL READY" : "READY"
@@ -14946,7 +15001,7 @@
     createLobbyRoom,
     joinLobbyRoom,
     toggleLobbyReady,
-    toggleLobbyFillBots,
+    addLobbyBot,
     startMultiplayerMatchFromLobby,
     startFirebaseHostRoom,
     joinFirebaseClientRoom,
