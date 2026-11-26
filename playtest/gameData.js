@@ -808,7 +808,7 @@ window.EFT_DATA = {
           id: "silly_play",
           name: "A Little Silly Play",
           rounds: [2],
-          description: "On Round 2, Mew randomly chooses 2 players and combines & shuffles their decks together until the next Cycle."
+          description: "On Round 2, Mew randomly chooses 2 players, combines & shuffles their decks together, and resets both players' hands from the newly shuffled decks until the next Cycle."
         },
         {
           id: "a_little_help",
@@ -820,7 +820,7 @@ window.EFT_DATA = {
           id: "time_to_leave",
           name: "Time To Leave~ wait... Goodbye~~",
           rounds: [4],
-          description: "On Round 4, Mew transforms all Positive/Negative Effect tiles into +5 TC tiles for the Cycle and leaves the map."
+          description: "On Round 4, Mew transforms all Effect tiles on the board into +5 TC tiles (including their symbols) until the next Cycle and leaves the map."
         }
       ]
     }

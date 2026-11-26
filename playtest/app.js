@@ -4823,9 +4823,33 @@
     }
   }
 
+  const MEW_CONVERTIBLE_TILE_TYPES = new Set([
+    "tc_plus10",
+    "tc_minus5",
+    "card_plus1",
+    "card_minus1",
+    "pos_effect",
+    "neg_effect",
+    "event",
+    "versus",
+    "trading",
+    "warp"
+  ]);
+
+  function isMewConvertedTile(tileOrType) {
+    const tType = typeof tileOrType === "string" ? tileOrType : tileOrType && tileOrType.type;
+    return Boolean(state && state.mewEffectTilesToPlus5Tc && tType && MEW_CONVERTIBLE_TILE_TYPES.has(tType));
+  }
+
   function resolveExactLandingTile(player, tile, meta = {}) {
     if (!tile) return false;
     addLog(`${player.name} landed on [${tile.id}: ${tile.name}].`);
+
+    if (isMewConvertedTile(tile)) {
+      const gained = modifyPlayerTC(player, 5, "tile");
+      addLog(`Mew's Farewell Blessing: ${player.name} landed on transformed tile [${tile.id}] -> +${gained} TC!`);
+      return false;
+    }
 
     switch (tile.type) {
       case "normal": {
@@ -9443,8 +9467,9 @@
       river_top: "RIVER",
       river_bottom: "EXIT"
     };
-    const isMewConverted = Boolean(state && state.mewEffectTilesToPlus5Tc && (t.type === "pos_effect" || t.type === "neg_effect"));
+    const isMewConverted = isMewConvertedTile(t);
     const lbl = isMewConverted ? "+5 TC" : labels[t.type] !== undefined ? labels[t.type] : getCleanTileLabel(t);
+    const iconType = isMewConverted ? "tc_plus10" : t.type;
     const tokenSubHtml = activeToken
       ? (() => {
           const tm = getTrapTileMeta(activeToken);
@@ -9453,7 +9478,7 @@
       : "";
     return `
       <div class="lgr-tile-shell">
-        <div class="lgr-icon">${getTileSvgIcon(t.type)}</div>
+        <div class="lgr-icon">${getTileSvgIcon(iconType)}</div>
         ${lbl ? `<div class="lgr-pill-label">${escapeHtml(lbl)}</div>` : ""}
       </div>
       ${tokenSubHtml}`;
@@ -9868,11 +9893,19 @@
 
       const tilesHtml = DATA.BOARD_TILES.map((t) => {
         const classes = ["digital-tile", `dt-${t.type}`];
-        if (state.mewEffectTilesToPlus5Tc && (t.type === "pos_effect" || t.type === "neg_effect")) {
+        const mewConverted = isMewConvertedTile(t);
+        if (mewConverted) {
           classes.push("dt-mew-plus5");
         }
         if (t.shopArrow) classes.push(`shop-arrow-${t.shopArrow}`);
-        const effectMeta = TILE_EFFECT_META[t.type] || null;
+        const effectMeta = mewConverted
+          ? {
+              title: "Mew's Farewell Tile (+5 TC)",
+              badge: "+5 TC",
+              accent: "#f472b6",
+              effect: "Transformed by Mew until the next Cycle: landing directly on this tile grants +5 Tartarus Coins (💰 TC)."
+            }
+          : TILE_EFFECT_META[t.type] || null;
         const hasShard = shardTileSet.has(t.id);
         const tokOnTile = tokenTileMap[t.id] || null;
         const hasTok = !!tokOnTile;
@@ -12823,7 +12856,14 @@
     const t = TILE_MAP[tileId];
     if (!t) return;
 
-    const effectMeta = TILE_EFFECT_META[t.type] || null;
+    const effectMeta = isMewConvertedTile(t)
+      ? {
+          title: "Mew's Farewell Tile (+5 TC)",
+          badge: "+5 TC",
+          accent: "#f472b6",
+          effect: "Transformed by Mew until the next Cycle: landing directly on this tile grants +5 Tartarus Coins (💰 TC)."
+        }
+      : TILE_EFFECT_META[t.type] || null;
     const shardOnTile = state.activeShards.find((s) => s.tileId === tileId);
     const tokensOnTile = getTokensCoveringTile(tileId);
 
@@ -16167,30 +16207,64 @@
     // ------------------------------------------------------------------------
     // MONSTER 3/3: MEW - FIRST CREATURE
     // ------------------------------------------------------------------------
-    // Round 2: A Little Silly Play -> Randomly choose 2 players, combine & shuffle their decks (restores next cycle)
+    // Round 2: A Little Silly Play -> Randomly choose 2 players, combine & shuffle their decks, then reset their hands from the shuffled decks (restores next cycle)
     if (monster.id === "mew" && curRound === 2 && targets.length >= 2) {
       const shuffled = shuffleArray([...targets]);
       const pair = shuffled.slice(0, 2);
       triggerMonsterTargetShuffle(
         "A Little Silly Play~",
-        "MEW · MIXING DECKS",
+        "MEW · MIXING DECKS & HANDS",
         targets,
         pair,
         { theme: "mew", stampText: "DECK MIXED" },
         () => {
           if (!state || !state.activeMonster || state.winner) return;
           const [pA, pB] = pair;
-          const taggedA = (pA.deck || []).map((c) => ({ ...c, originalOwnerCharId: c.originalOwnerCharId || pA.charId }));
-          const taggedB = (pB.deck || []).map((c) => ({ ...c, originalOwnerCharId: c.originalOwnerCharId || pB.charId }));
-          const combined = shuffleArray([...taggedA, ...taggedB]);
+          const extractPlayerPool = (p) => {
+            const retained = (p.hand || []).filter((c) => c && (c.retain || c.rarity === "Ultimate"));
+            const nonRetainedHand = (p.hand || []).filter((c) => c && !c.retain && c.rarity !== "Ultimate");
+            const prevHandDrawCount = nonRetainedHand.length;
+            const pool = [
+              ...nonRetainedHand,
+              ...(p.deck || []).filter((c) => c && c.rarity !== "Ultimate"),
+              ...(p.discard || []).filter((c) => c && c.rarity !== "Ultimate")
+            ].map((c) => ({
+              ...c,
+              ownerPlayerId: c.ownerPlayerId || p.id,
+              ownerCharId: c.ownerCharId || c.charId || p.charId
+            }));
+            return { retained, prevHandDrawCount, pool };
+          };
+
+          const infoA = extractPlayerPool(pA);
+          const infoB = extractPlayerPool(pB);
+          const combined = shuffleArray([...infoA.pool, ...infoB.pool]);
           const splitAt = Math.ceil(combined.length / 2);
           pA.deck = combined.slice(0, splitAt);
           pB.deck = combined.slice(splitAt);
-          addLog(`Mew used [A Little Silly Play]: Combined & shuffled ${pA.name}'s and ${pB.name}'s decks until next Cycle!`);
+          pA.discard = [];
+          pB.discard = [];
+
+          const resetHandFromShuffledDeck = (p, retained, count) => {
+            p.hand = [...retained];
+            const dealCount = Math.min(count, p.deck.length);
+            for (let i = 0; i < dealCount; i++) {
+              const nextCard = p.deck.shift();
+              if (nextCard) p.hand.push(nextCard);
+            }
+          };
+
+          resetHandFromShuffledDeck(pA, infoA.retained, infoA.prevHandDrawCount);
+          resetHandFromShuffledDeck(pB, infoB.retained, infoB.prevHandDrawCount);
+          playSfx("card_shuffle");
+
+          addLog(
+            `Mew used [A Little Silly Play]: Combined & shuffled ${pA.name}'s and ${pB.name}'s decks and reset both players' hands (${pA.hand.length} / ${pB.hand.length} cards) until next Cycle!`
+          );
           triggerMonsterHorrorAlert(
             "A Little Silly Play~",
             "MEW · FIRST CREATURE",
-            `${pA.name} and ${pB.name}'s decks were combined and shuffled until the next Cycle~`,
+            `${pA.name} and ${pB.name}'s decks were combined, shuffled, and their hands were reset from the new decks~`,
             "skill",
             "mew"
           );
