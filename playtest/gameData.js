@@ -500,17 +500,17 @@ window.EFT_DATA = {
       compPortrait: { src: "assets/portraits/compedium/mostima.webp", objectPosition: "50% 10%" },
       menuPortrait: "assets/menu-portraits/mostima.webp",
       chibi: "assets/chibi/mostima.png",
-      ultCost: 50,
+      ultCost: 70,
       lore: "Wielder of the Black Lock and White Key, Mostima bends the flow of Tartarus by halving opponents' time limits, manipulating round counts, and sealing enemy skill cards and unique passives in frozen chronology.",
       cards: [
         { id: "mostima_c", name: "Time Dilation", rarity: "Common", count: 5, effectKey: "mostima_dilation_choice", description: "Choose between: Teleport 2 blocks forward or Gain 5 TC.", image: "assets/cards/characters/mostima/c.png" },
         { id: "mostima_uc", name: "Time Magic Cast", rarity: "Uncommon", count: 3, targetType: "other_player", effectKey: "mostima_halve_timer", description: "Target 1 player, halved their time limit. (max. 1 for 1 player)", image: "assets/cards/characters/mostima/uc.png" },
         { id: "mostima_r", name: "Time Lock", rarity: "Rare", count: 2, radius: 4, targetType: "opponent_in_radius", effectKey: "mostima_time_lock_mp2", description: "Target 1 player on a 4-block radius, block their skill cards on Main Phase 2. (max. 1 for 1 player)", image: "assets/cards/characters/mostima/r.png" },
         { id: "mostima_e", name: "Lock Of Shattered Time", rarity: "Epic", count: 1, effectKey: "mostima_round_manipulate", description: "Choose between: Lock current rounds count or Fast forward 1 round.", image: "assets/cards/characters/mostima/e.png" },
-        { id: "mostima_uq", name: "Keeper Of The Lock & Keys", rarity: "Unique", count: 1, effectKey: "passive_keeper_lock_keys", durationCycles: 1, description: "Passive: Opponents that start their turn on a 2-block radius away from you cannot use skill cards. (Duration: 1 Full Cycle)", image: "assets/cards/characters/mostima/uq.png" }
+        { id: "mostima_uq", name: "Keeper Of The Lock & Keys", rarity: "Unique", count: 1, effectKey: "passive_keeper_lock_keys", durationCycles: 1, description: "Passive: Opponents starting a phase within a 2-block radius from you cannot use skill cards during that phase. (Duration: 1 Full Cycle)", image: "assets/cards/characters/mostima/uq.png" }
       ],
       ultimate: {
-        id: "mostima_ult", name: "Key Of Chronology", rarity: "Ultimate", cost: 50, retain: true, effectKey: "mostima_key_of_chronology", description: "[50 TC | Retain] Lock all opponents' skill cards and unique passives for 1 round.", image: "assets/cards/characters/mostima/ult.png"
+        id: "mostima_ult", name: "Key Of Chronology", rarity: "Ultimate", cost: 70, retain: true, effectKey: "mostima_key_of_chronology", description: "[Retain] Lock all opponents' skill cards and unique passives for 1 round.", image: "assets/cards/characters/mostima/ult.png"
       }
     },
 

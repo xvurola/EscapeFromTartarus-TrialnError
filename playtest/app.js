@@ -3125,6 +3125,37 @@
     return player.passives.some((p) => p.key === key);
   }
 
+  function getMostimaKeeperOwnerNear(player) {
+    if (!player || !state || !Array.isArray(state.players) || !player.tileId) return null;
+    return (
+      state.players.find(
+        (other) =>
+          other.index !== player.index &&
+          !other.inSpawn &&
+          hasPassive(other, "passive_keeper_lock_keys") &&
+          getTileDistance(player.tileId, other.tileId) <= 2
+      ) || null
+    );
+  }
+
+  function refreshMostimaKeeperLockForPhase(player, phaseLabel = "this phase") {
+    if (!player || !state) return;
+    const keeperOwner = getMostimaKeeperOwnerNear(player);
+    const wasLocked = Boolean(player.mostimaKeeperLockedThisTurn);
+    player.mostimaKeeperLockedThisTurn = Boolean(keeperOwner);
+    if (keeperOwner) {
+      state.lastMostimaLockEvent = {
+        id: `mlock_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        targetIndices: [player.index],
+        kind: "keeper",
+        ts: Date.now()
+      };
+      addLog(`Keeper Of The Lock & Keys (${keeperOwner.name}): ${player.name} is within 2 blocks in ${phaseLabel} and cannot use Skill Cards during this phase!`);
+    } else if (wasLocked) {
+      addLog(`Keeper Of The Lock & Keys: ${player.name} moved outside Mostima's 2-block radius — Skill Cards unlocked for ${phaseLabel}!`);
+    }
+  }
+
   function getPlayerSkillLockState(player) {
     if (!player || !state) return { locked: false, pendingOnly: false, kind: "", badgeText: "", reason: "" };
     if (player.chronologyLockedRounds > 0) {
@@ -3142,7 +3173,7 @@
         pendingOnly: false,
         kind: "keeper",
         badgeText: "KEEPER LOCK",
-        reason: "Locked by Mostima's Keeper of the Lock & Keys (started turn within 2 blocks)."
+        reason: "Locked by Mostima's Keeper of the Lock & Keys during this Phase (within 2 blocks)."
       };
     }
     if (player.timeLockPhase2) {
@@ -4858,12 +4889,15 @@
     if (state.phaseIndex === 2) {
       state.phaseIndex = 3;
       player.silencedThisPhase = false;
+      refreshMostimaKeeperLockForPhase(player, "Main Phase 2");
     } else if (state.phaseIndex === 4) {
       if (player.extraPhasesThisTurn > 0) {
         player.extraPhasesThisTurn--;
         state.phaseIndex = 3;
+        refreshMostimaKeeperLockForPhase(player, "Extra Phase");
         addLog(`${player.name} activated Extra Roll Phase.`);
       } else {
+        player.mostimaKeeperLockedThisTurn = false;
         state.phaseIndex = 5;
       }
     }
@@ -5418,24 +5452,8 @@
       if (player.cooldowns[k] > 0) player.cooldowns[k]--;
     });
 
-    // Mostima Unique Passive: Keeper Of The Lock & Keys (2-block radius at turn start -> cannot use skill cards)
-    const keeperOwner = state.players.find(
-      (other) =>
-        other.index !== player.index &&
-        !other.inSpawn &&
-        hasPassive(other, "passive_keeper_lock_keys") &&
-        getTileDistance(player.tileId, other.tileId) <= 2
-    );
-    if (keeperOwner) {
-      player.mostimaKeeperLockedThisTurn = true;
-      state.lastMostimaLockEvent = {
-        id: `mlock_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        targetIndices: [player.index],
-        kind: "keeper",
-        ts: Date.now()
-      };
-      addLog(`Keeper Of The Lock & Keys (${keeperOwner.name}): ${player.name} started within 2 blocks and cannot use Skill Cards this turn!`);
-    }
+    // Mostima Unique Passive: Keeper Of The Lock & Keys (2-block radius at phase start -> locked only during that phase)
+    refreshMostimaKeeperLockForPhase(player, "Main Phase 1");
 
     if (player.skipNextTurn) {
       player.skipNextTurn = false;
@@ -6240,11 +6258,6 @@
       case "choice_move1_2_or_10tc":
         if (options.choiceValue === "move") {
           return { mode: "forward", minSteps: 1, maxSteps: 2 };
-        }
-        return null;
-      case "mostima_dilation_choice":
-        if (options.choiceValue === "teleport") {
-          return { mode: "forward", minSteps: 2, maxSteps: 2 };
         }
         return null;
       default:
@@ -8173,16 +8186,28 @@
         const mode = options.choiceValue || "tc";
         if (mode === "teleport") {
           const prevTileId = player.tileId;
-          const destId =
-            options.selectedTileId && TILE_MAP[options.selectedTileId]
-              ? options.selectedTileId
-              : advanceTileBySteps(player.tileId, 2, player.lastTileId);
+          let destId = prevTileId;
+          if (options.selectedTileId && TILE_MAP[options.selectedTileId]) {
+            destId = options.selectedTileId;
+          } else {
+            const reachMap = getReachableTilesDirected(prevTileId, 2, 2, 1, player.lastTileId || null);
+            const candidates = Array.from(reachMap.keys());
+            if (candidates.length > 0) {
+              destId = candidates[0];
+            } else {
+              const fallbackMap = getReachableTilesDirected(prevTileId, 1, 2, 1, player.lastTileId || null);
+              const fb = Array.from(fallbackMap.keys());
+              if (fb.length > 0) destId = fb[fb.length - 1];
+            }
+          }
+          const path = buildSkillMovePath(prevTileId, destId, 4);
           player.tileId = destId;
           player.inSpawn = destId === "T0";
-          player.lastTileId = (PREV_MAP[destId] && PREV_MAP[destId][0]) || prevTileId;
-          triggerSkillMoveAnim(player, [prevTileId, destId], "warp");
+          player.lastTileId = path.length >= 2 ? path[path.length - 2] : (PREV_MAP[destId] && PREV_MAP[destId][0]) || prevTileId;
+          triggerSkillMoveAnim(player, path.length >= 2 ? path : [prevTileId, destId], "warp");
           triggerBoardTileVfx([prevTileId, destId], "warp_burst");
-          const msg = `${player.name} warped 2 blocks forward to [${destId}]!`;
+          if (camera.mode === "follow") focusCameraOnTile(destId);
+          const msg = `${player.name} instantly teleported 2 blocks forward to [${destId}]!`;
           addLog(`[Time Dilation]: ${msg}`);
           return msg;
         }
@@ -13695,7 +13720,6 @@
         card.targetType === "any_player" ||
         card.targetType === "other_player" ||
         card.effectKey === "choice_move1_2_or_10tc" ||
-        card.effectKey === "mostima_dilation_choice" ||
         card.effectKey === "copy_last_skill"
     };
 
